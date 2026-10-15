@@ -588,4 +588,4 @@ Allt som skapas, som controllern, watchern och timern, hör till widgeten som an
 - Egna composables är vanliga funktioner som börjar med `use`. De anropas
   ovillkorligt från `setup()`, städar efter sig och returnerar reaktiva värden.
 
-Nästa kapitel: [Provide och inject →](07-provide-inject.md)
+Nästa kapitel: [PocketBase från Flutter →](06-pocketbase-fran-flutter.md)

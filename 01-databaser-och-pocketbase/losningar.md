@@ -3,32 +3,6 @@
 Försök själv innan du tittar här! Det finns ofta fler sätt att skriva en fråga
 som ger samma resultat.
 
-## Kapitel 5 – Bygg Kvittra i PocketBase
-
-**5.1** Det går inte. När du ska välja vilken collection relationsfältet `post`
-ska peka på finns `posts` inte i listan. En relation kan bara peka på något som
-redan finns.
-
-**5.2** Ett unikt index på `follower` ensamt skulle betyda att varje användare
-bara får följa **en** person. Då kan Anna inte följa både Bertil och Cissi. Det
-är **kombinationen** som ska vara unik: Anna får följa Bertil en gång.
-
-## Kapitel 6 – Lägg in data
-
-**6.1** PocketBase säger att värdet måste vara unikt. Det är det unika indexet
-på `post` + `user` i `likes` som stoppar det.
-
-**6.2** Samma sak: det unika indexet på `username` stoppar det.
-
-**6.3** Det går inte, eftersom `title` är **Nonempty** (måste fyllas i).
-
-**6.4** Både inlägget och gillningen försvann. Det beror på **Cascade delete**
-på relationsfälten `posts.author` och `likes.user`.
-
-**6.5** I fältet `author` står användarens **id**, inte namnet. Namnet finns
-bara i `users`. (Har du kryssat i *Presentable* på `username` visar Dashboard
-användarnamnet bredvid, men det som sparas är fortfarande id:t.)
-
 ## Kapitel 7 – SQL och View collections
 
 **7.1** Annas inlägg

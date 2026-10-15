@@ -33,12 +33,11 @@ varandra.
 | [06 – Lägg in data](06-lagg-in-data.md) | Fyller Kvittra med användare, inlägg, kommentarer och likes |
 | [07 – SQL och View collections](07-sql-och-view-collections.md) | Lär dig SQL och testar frågor som View collections |
 
-### Del 3 – Inför apparna
+### Del 3 – Vem får göra vad?
 
 | Kapitel | Vad du gör |
 |---------|------------|
 | [08 – Inloggning och API-regler](08-inloggning-och-api-regler.md) | Bestämmer vem som får göra vad |
-@@DEL@@ Ser hur en Flutter-app pratar med PocketBase (läses när ni börjar med Flutter) |
 
 Lösningsförslag till SQL- och regelövningarna finns i [losningar.md](losningar.md).
 Försök själv först!

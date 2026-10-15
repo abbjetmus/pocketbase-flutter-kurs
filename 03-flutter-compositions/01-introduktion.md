@@ -346,7 +346,7 @@ Widget Function(BuildContext) setup() {
 
 > ⚠️ **Varning:** `setup()` får **inte** vara `async`. Den måste returnera
 > builder-funktionen direkt. Asynkront arbete gör du i `onMounted` eller med
-> `useFuture`/`useAsyncData` (kapitel 4 och 7).
+> `useFuture`/`useAsyncData` (kapitel 4 och 8).
 
 ## 🧪 Prova själv
 

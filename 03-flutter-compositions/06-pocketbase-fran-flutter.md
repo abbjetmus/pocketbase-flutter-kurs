@@ -1,8 +1,12 @@
-# 9. PocketBase från Flutter
+# 6. PocketBase från Flutter
 
-Det här kapitlet läser du när ni har börjat med Flutter
-([modul 02](../02-flutter/README.md)). Det visar hur en Flutter-app pratar
-med din PocketBase med paketet [`pocketbase`](https://pub.dev/packages/pocketbase).
+Nu kopplar vi ihop appen med din PocketBase från
+[modul 01](../01-databaser-och-pocketbase/README.md). Det görs med paketet
+[`pocketbase`](https://pub.dev/packages/pocketbase).
+
+Exemplen i det här kapitlet är vanlig Dart-kod. I nästa kapitel delar vi
+klienten med hela appen via `provide`/`inject`, och i kapitel 8 visar vi datan
+reaktivt med `useAsyncData`.
 
 ## Installera paketet
 
@@ -38,7 +42,7 @@ print(pb.authStore.record?.id);  // Annas id
 ```
 
 `pb.authStore` kommer ihåg vem som är inloggad. Alla anrop efteråt görs som
-Anna, och API-reglerna från [kapitel 8](08-inloggning-och-api-regler.md)
+Anna, och API-reglerna från [modul 01, kapitel 8](../01-databaser-och-pocketbase/08-inloggning-och-api-regler.md)
 gäller.
 
 Logga ut med `pb.authStore.clear()`.
@@ -123,8 +127,4 @@ final unsubscribe = await pb.collection('comments').subscribe('*', (event) {
 await unsubscribe();
 ```
 
-## Vidare
-
-Hur man bygger hela appen, med skärmar, formulär och state, går vi igenom i
-[modul 02 – Flutter](../02-flutter/README.md) och
-[modul 03 – Flutter Compositions](../03-flutter-compositions/README.md).
+Nästa kapitel: [Provide och inject →](07-provide-inject.md)

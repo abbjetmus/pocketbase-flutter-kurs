@@ -1,6 +1,6 @@
 # 10. Arkitektur för en riktig app
 
-Kapitel 1–8 visade byggstenarna. Det här kapitlet visar hur de passar ihop i en app
+Kapitel 1–9 visade byggstenarna. Det här kapitlet visar hur de passar ihop i en app
 av produktionskaraktär: en riktig version av **Kvittra** med inloggning som överlever
 omstart, ett oändligt flöde, gillningar som känns omedelbara, kommentarer i realtid,
 profiler med följare och **grupper med roller** (`admin`, `moderator`, `member`), en

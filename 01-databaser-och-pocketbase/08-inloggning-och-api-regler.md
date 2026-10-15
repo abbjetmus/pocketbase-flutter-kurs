@@ -125,4 +125,6 @@ se, skapa, ändra och ta bort i varje tabell?
 
 Lösningar finns i [losningar.md](losningar.md#kapitel-8--inloggning-och-api-regler).
 
-Nästa kapitel: [PocketBase från Flutter](09-pocketbase-fran-flutter.md)
+Nästa modul: [02 – Flutter](../02-flutter/README.md). Hur en Flutter-app loggar in och
+hämtar data från PocketBase går vi igenom i
+[modul 03, kapitel 6](../03-flutter-compositions/06-pocketbase-fran-flutter.md).
