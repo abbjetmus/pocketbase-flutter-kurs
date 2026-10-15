@@ -28,15 +28,16 @@ När du är klar med modulen ska du kunna:
 4. Använda livscykel­hooks (`onMounted`, `onUnmounted`, `onBuild`) och reaktiva props
    via `widget()`.
 5. Använda inbyggda composables (`useTextEditingController`, `useScrollController`,
-   `useTheme` …) och skriva egna (`useBookingForm`, `useDebounced` …).
+   `useTheme` …) och skriva egna (`useCommentComposer`, `useDebounced` …).
 6. Dela tjänster och state i widgetträdet med `provide`/`inject` och `InjectionKey`.
 7. Hämta data asynkront med `useFuture`/`useAsyncData`, rendera `AsyncValue` med
    `switch` och prenumerera på PocketBase realtime med korrekt städning.
 8. Följa bästa praxis, använda lint-reglerna och skriva tester för composables och
    widgets.
 9. Migrera en befintlig `StatefulWidget` till en `CompositionWidget`.
-10. Strukturera en större app: feature-mappar, stores, sidindelade listor, åtgärdsmenyer,
-    auth-guard och roller, och lägga till en ny feature på egen hand.
+10. Strukturera en större app: feature-mappar, stores, sidindelade listor (oändligt
+    flöde), åtgärdsmenyer, auth-guard och grupproller, och lägga till en ny feature på
+    egen hand.
 
 ## Innehåll
 
@@ -50,25 +51,29 @@ När du är klar med modulen ska du kunna:
 | 6 | [Provide och inject](06-provide-inject.md) | `InjectionKey`, PocketBase-klient och auth i roten, scope, test-överskuggning |
 | 7 | [Asynkron data](07-async-data.md) | `useFuture`, `useAsyncData`, `AsyncValue`, `useStream`, PocketBase realtime |
 | 8 | [Best practices och lints](08-best-practices-och-lints.md) | Regler för `setup()`, ren builder, lints, projektstruktur, tester, migrering |
-| 9 | [Arkitektur för en riktig app](09-arkitektur-for-en-riktig-app.md) | Feature-mappar, stores, `Paginated<T>`, åtgärdsmenyer, auth-guard, roller och föreningar |
+| 9 | [Arkitektur för en riktig app](09-arkitektur-for-en-riktig-app.md) | Feature-mappar, stores, `Paginated<T>`, åtgärdsmenyer, auth-guard, grupper och roller |
 | – | [Övningar](ovningar.md) | Nivå 1–3 |
 | – | [Lösningar](losningar.md) | Lösningsförslag. Försök själv först! |
 
 Räkna med 2–3 dagar. Kapitel 1–4 är grunden. Kapitel 5–7 är det du använder mest i
-vardagen. Kapitel 9 knyter ihop allt till arkitekturen för en riktig föreningsapp, som
-du kan bygga vidare på egen hand.
+vardagen. Kapitel 9 knyter ihop allt till arkitekturen för en riktig version av
+kursens sociala app **Kvittra** (flöde, inlägg, kommentarer, gillningar, följare och
+grupper), som du kan bygga vidare på egen hand.
 
 ## Förkunskaper
 
 - Modul 03: widgets, layout, `StatefulWidget`, `setState`, `go_router`, formulär.
 - Modul 02: PocketBase-collections och Dart-SDK:t
-  ([02 – Dart SDK](../02-pocketbase/06-dart-sdk.md)).
+  ([02 – Dart SDK](../02-pocketbase/06-dart-sdk.md)). Du behöver din egen
+  PocketBase med Kvittras collections (`users`, `posts`, `comments`, `likes`,
+  `follows` och, för kapitel 9, `groups` och `group_members`) som du byggde i modul 02.
 - Vue 3 är **inte** ett krav, men hjälper. Vue-exemplen i modulen använder alltid
   `<script setup>`.
 
 ## Installation
 
-Vi använder version **0.1.x** av paketet, samma som i kursens referensapp.
+Vi använder version **0.1.x** av paketet. All kod i modulen är skriven och kontrollerad
+mot version 0.1.1.
 
 ### 1. Lägg till beroenden
 
@@ -155,20 +160,20 @@ class HelloCompositions extends CompositionWidget {
 
   @override
   Widget Function(BuildContext) setup() {
-    final clicks = ref(0);
+    final likes = ref(0);
 
     return (context) => Scaffold(
-          body: Center(child: Text('Klick: ${clicks.value}')),
+          body: Center(child: Text('Gillningar: ${likes.value}')),
           floatingActionButton: FloatingActionButton(
-            onPressed: () => clicks.value++,
-            child: const Icon(Icons.add),
+            onPressed: () => likes.value++,
+            child: const Icon(Icons.favorite),
           ),
         );
   }
 }
 ```
 
-Kör `flutter run`. Räknaren ökar när du trycker, och du har inte skrivit något
+Kör `flutter run`. Antalet gillningar ökar när du trycker, och du har inte skrivit något
 `setState`. Hur det går till förklaras i [kapitel 1](01-introduktion.md).
 
 ## Snabbreferens: Vue ↔ Flutter Compositions

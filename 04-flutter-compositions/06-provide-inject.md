@@ -2,17 +2,17 @@
 
 ## Problemet: prop drilling
 
-Föreningsappen behöver en PocketBase-klient och information om inloggad användare på
-många ställen: anslagslistan, resurslistan, bokningsformuläret, "mina bokningar" och
-utloggningsknappen. Skickar vi dem som props får vi *prop drilling*:
+Kvittra behöver en PocketBase-klient och information om inloggad användare på många
+ställen: flödet, gilla-knappen, kommentarsfältet, profilsidan och utloggningsknappen.
+Skickar vi dem som props får vi *prop drilling*:
 
 ```dart
 // ❌ Varje mellanliggande widget måste ta emot och skicka vidare pb och auth,
 //    även om den själv aldrig använder dem.
 HomeScreen(pb: pb, auth: auth)
-  └─ ResourcesTab(pb: pb, auth: auth)
-       └─ ResourceList(pb: pb, auth: auth)
-            └─ BookButton(pb: pb, auth: auth)   // det är bara här de behövs
+  └─ FeedTab(pb: pb, auth: auth)
+       └─ PostList(pb: pb, auth: auth)
+            └─ LikeButton(pb: pb, auth: auth)   // det är bara här de behövs
 ```
 
 Lösningen är **dependency injection** med `provide` och `inject`:
@@ -61,7 +61,7 @@ provide(pocketBaseKey, new PocketBase('http://127.0.0.1:8090'))
 ```
 
 ```vue
-<!-- ResourceList.vue (djupt ner i trädet) -->
+<!-- PostList.vue (djupt ner i trädet) -->
 <script setup lang="ts">
 import { inject } from 'vue'
 import { pocketBaseKey } from './keys'
@@ -75,8 +75,8 @@ const pb = inject(pocketBaseKey)!
 const pocketBaseKey = InjectionKey<PocketBase>('pocketBase');
 
 // app.dart
-class ForeningsApp extends CompositionWidget {
-  const ForeningsApp({super.key});
+class KvittraApp extends CompositionWidget {
+  const KvittraApp({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
@@ -85,9 +85,9 @@ class ForeningsApp extends CompositionWidget {
   }
 }
 
-// resource_list.dart (djupt ner i trädet)
-class ResourceList extends CompositionWidget {
-  const ResourceList({super.key});
+// post_list.dart (djupt ner i trädet)
+class PostList extends CompositionWidget {
+  const PostList({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
@@ -152,8 +152,8 @@ const authServiceKey = InjectionKey<AuthService>('authService');
 ### Rot-widgeten
 
 ```dart
-class ForeningsApp extends CompositionWidget {
-  const ForeningsApp({super.key});
+class KvittraApp extends CompositionWidget {
+  const KvittraApp({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
@@ -164,7 +164,7 @@ class ForeningsApp extends CompositionWidget {
     provide(authServiceKey, auth);
 
     return (context) => MaterialApp(
-          title: 'Föreningsappen',
+          title: 'Kvittra',
           home: auth.isLoggedIn.value
               ? const HomeScreen()
               : const LoginScreen(),
@@ -175,7 +175,8 @@ class ForeningsApp extends CompositionWidget {
 
 Lägg märke till `auth.isLoggedIn.value` i builder-funktionen. När användaren loggar in
 ändras `user`, då ändras `isLoggedIn`, och rot-widgeten byggs om och visar `HomeScreen`.
-(I [kapitel 9](09-arkitektur-for-en-riktig-app.md#router-och-auth-guard) ersätter vi det här med `go_router` och en `redirect`.)
+(I [kapitel 9](09-arkitektur-for-en-riktig-app.md#router-och-auth-guard) ersätter vi det här med `go_router` och en `redirect`,
+och delar dessutom en `FeedStore` och flera andra stores på samma sätt.)
 
 ### Hämta i en ättling
 
@@ -207,8 +208,8 @@ något som **ändras** tillhandahåller du en `Ref`:
 ```dart
 const themeModeKey = InjectionKey<Ref<ThemeMode>>('themeMode');
 
-class ForeningsApp extends CompositionWidget {
-  const ForeningsApp({super.key});
+class KvittraApp extends CompositionWidget {
+  const KvittraApp({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
@@ -253,10 +254,10 @@ Ska ättlingar bara **läsa** värdet? Tillhandahåll en `ReadonlyRef` och expon
 ändringar via funktioner. Det är samma princip som Vues `readonly()`:
 
 ```dart
-const cartCountKey = InjectionKey<ReadonlyRef<int>>('cartCount');
+const unreadCountKey = InjectionKey<ReadonlyRef<int>>('unreadCount');
 
-final count = ref(0);
-provide(cartCountKey, count);   // Ref<int> är en ReadonlyRef<int>
+final unread = ref(0);
+provide(unreadCountKey, unread);   // Ref<int> är en ReadonlyRef<int>
 ```
 
 En klass som `AuthService` ovan är ofta det tydligaste sättet att samla state och de
@@ -284,9 +285,9 @@ class DemoArea extends CompositionWidget {
 
   @override
   Widget Function(BuildContext) setup() {
-    // Inom DemoArea används en fejkad bokningstjänst
-    provide(bookingServiceKey, FakeBookingService());
-    return (context) => const ResourcesScreen();
+    // Inom DemoArea används en fejkad inläggstjänst med exempeldata
+    provide(postServiceKey, FakePostService());
+    return (context) => const FeedScreen();
   }
 }
 ```

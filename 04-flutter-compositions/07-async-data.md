@@ -1,7 +1,7 @@
 # 7. Asynkron data
 
-Nästan allt i föreningsappen är asynkront: hämta anslag, hämta resurser, skapa en
-bokning och lyssna på realtidsändringar. Det här kapitlet visar hur du gör det med
+Nästan allt i Kvittra är asynkront: hämta flödet, hämta ett inlägg, skicka en
+kommentar, gilla och lyssna på nya kommentarer i realtid. Det här kapitlet visar hur du gör det med
 Flutter Compositions, utan `FutureBuilder`, `setState` eller `if (mounted)`.
 
 ## Översikt
@@ -55,8 +55,8 @@ class PostsScreen extends CompositionWidget {
     final pb = inject(pocketBaseKey);
 
     final posts = useFuture(() => pb.collection('posts').getFullList(
-          filter: 'published = true',
           sort: '-created',
+          expand: 'author',
         ));
 
     return (context) => switch (posts.value) {
@@ -89,7 +89,7 @@ class _PostsScreenState extends State<PostsScreen> {
   @override
   void initState() {
     super.initState();
-    _future = pb.collection('posts').getFullList(filter: 'published = true');
+    _future = pb.collection('posts').getFullList(sort: '-created');
   }
 
   @override
@@ -134,25 +134,25 @@ Använder du Nuxt känner du igen namnet: Nuxts `useAsyncData` har nästan samma
 
 ```ts
 // Nuxt 3
-const resourceId = ref('tvatt1')
+const postId = ref('abc123')
 const { data, status, error, refresh } = await useAsyncData(
-  'bookings',
-  () => pb.collection('bookings').getFullList({
-    filter: `resource = "${resourceId.value}"`,
+  'comments',
+  () => pb.collection('comments').getFullList({
+    filter: pb.filter('post = {:id}', { id: postId.value }),
   }),
-  { watch: [resourceId] },
+  { watch: [postId] },
 )
 ```
 
 ```dart
 // Flutter Compositions
-final resourceId = ref('tvatt1');
+final postId = ref('abc123');
 
 final (status, refresh) = useAsyncData<List<RecordModel>, String>(
-  (id) => pb.collection('bookings').getFullList(
-    filter: pb.filter('resource = {:id}', {'id': id}),
+  (id) => pb.collection('comments').getFullList(
+    filter: pb.filter('post = {:id}', {'id': id}),
   ),
-  watch: () => resourceId.value,
+  watch: () => postId.value,
 );
 ```
 
@@ -160,28 +160,24 @@ final (status, refresh) = useAsyncData<List<RecordModel>, String>(
 > användardata. Använd `pb.filter('... {:param}', {...})` som escapar värdena (se
 > [02 – Dart SDK](../02-pocketbase/06-dart-sdk.md)).
 
-### Exempel: bokningar för vald resurs
+### Exempel: ett inlägg via id, med refresh
 
 ```dart
-class ResourceBookings extends CompositionWidget {
-  const ResourceBookings({super.key, required this.resourceId});
-  final String resourceId;
+class PostDetail extends CompositionWidget {
+  const PostDetail({super.key, required this.postId});
+  final String postId;
 
   @override
   Widget Function(BuildContext) setup() {
     final pb = inject(pocketBaseKey);
     final props = widget();
 
-    final (status, refresh) = useAsyncData<List<Booking>, String>(
+    final (status, refresh) = useAsyncData<Post, String>(
       (id) async {
-        final records = await pb.collection('bookings').getFullList(
-              filter: pb.filter('resource = {:id} && end >= @now', {'id': id}),
-              sort: 'start',
-              expand: 'resource',
-            );
-        return records.map(Booking.fromRecord).toList();
+        final record = await pb.collection('posts').getOne(id, expand: 'author');
+        return Post.fromRecord(record);
       },
-      watch: () => props.value.resourceId,   // ny resurs → hämta om
+      watch: () => props.value.postId,   // nytt id → hämta om
     );
 
     return (context) => switch (status.value) {
@@ -189,16 +185,19 @@ class ResourceBookings extends CompositionWidget {
             const Center(child: CircularProgressIndicator()),
           AsyncError(:final errorValue) => Column(
               children: [
-                Text('Kunde inte hämta bokningar: $errorValue'),
+                Text('Kunde inte hämta inlägget: $errorValue'),
                 TextButton(onPressed: refresh, child: const Text('Försök igen')),
               ],
             ),
           AsyncData(:final value) => RefreshIndicator(
               onRefresh: () async => refresh(),
               child: ListView(
+                padding: const EdgeInsets.all(16),
                 children: [
-                  for (final b in value)
-                    ListTile(title: Text('${b.start} – ${b.end}')),
+                  Text(value.title, style: const TextStyle(fontSize: 22)),
+                  Text('av ${value.authorName}'),
+                  const SizedBox(height: 12),
+                  Text(value.body),
                 ],
               ),
             ),
@@ -209,36 +208,38 @@ class ResourceBookings extends CompositionWidget {
 
 Saker att lägga märke till:
 
-- `watch: () => props.value.resourceId` ersätter `didUpdateWidget`.
+- `watch: () => props.value.postId` ersätter `didUpdateWidget`. Visar föräldern ett
+  annat inlägg hämtas det nya automatiskt.
 - `refresh` har typen `void Function()`, så den kan skickas direkt till `onPressed`.
   `RefreshIndicator.onRefresh` vill ha en funktion som returnerar en `Future`, så där
   skriver vi `() async => refresh()`.
 - `refresh()` ignoreras om en hämtning redan pågår. Du kan inte råka starta två
   parallella anrop.
 - Vid varje omladdning går statusen till `AsyncLoading`, och den gamla datan visas
-  inte under tiden. Vill du behålla listan medan du laddar om, se avsnittet om
+  inte under tiden. Vill du behålla datan medan du laddar om, se avsnittet om
   realtime nedan.
+- Kastar funktionen (t.ex. 404 för ett inlägg som raderats) blir statusen
+  `AsyncError`.
 
-> 💡 **Tips:** `Booking.fromRecord` är en factory som gör om en PocketBase-`RecordModel`
-> till en typad Dart-klass. Mönstret för modeller visas i
-> [kapitel 9](09-arkitektur-for-en-riktig-app.md#modeller).
+> 💡 **Tips:** `Post.fromRecord` är en factory som gör om en PocketBase-`RecordModel`
+> till en typad Dart-klass, med `authorName` från `expand.author`. Mönstret för modeller
+> visas i [kapitel 9](09-arkitektur-for-en-riktig-app.md#modeller).
 
 ### Dela async-state med ättlingar
 
 ```dart
-const resourcesKey =
-    InjectionKey<ReadonlyRef<AsyncValue<List<Resource>>>>('resources');
+const feedKey = InjectionKey<ReadonlyRef<AsyncValue<List<Post>>>>('feed');
 
 // i en förfader:
-final (resources, _) = useAsyncData<List<Resource>, void>(
-  (_) => service.fetchActiveResources(),
+final (feed, _) = useAsyncData<List<Post>, void>(
+  (_) => service.fetchFeed(),
 );
-provide(resourcesKey, resources);
+provide(feedKey, feed);
 
 // i en ättling:
-final resources = inject(resourcesKey);
-final names = computed(
-  () => resources.value.dataOrNull?.map((r) => r.name).toList() ?? const [],
+final feed = inject(feedKey);
+final titles = computed(
+  () => feed.value.dataOrNull?.map((p) => p.title).toList() ?? const [],
 );
 ```
 
@@ -248,7 +249,7 @@ Vill du hellre ha `data`, `error` och `loading` var för sig, som i många
 Vue-bibliotek:
 
 ```dart
-final (status, refresh) = useAsyncData<List<Post>, void>((_) => service.fetchPosts());
+final (status, refresh) = useAsyncData<List<Post>, void>((_) => service.fetchFeed());
 final (data, error, loading, hasData) = useAsyncValue(status);
 
 final postCount = computed(() => data.value?.length ?? 0);
@@ -297,9 +298,12 @@ UnsubscribeFunc? unsubscribe;
 var disposed = false;
 
 onMounted(() async {
-  final unsub = await pb.collection('bookings').subscribe('*', (e) {
-    debugPrint('${e.action}: ${e.record?.id}');
-  });
+  final unsub = await pb.collection('comments').subscribe(
+    '*',
+    (e) => debugPrint('${e.action}: ${e.record?.id}'),
+    // Bara kommentarer på det här inlägget:
+    filter: pb.filter('post = {:id}', {'id': props.value.postId}),
+  );
   if (disposed) {
     await unsub();          // widgeten hann försvinna, städa direkt
   } else {
@@ -320,16 +324,17 @@ då blinkar listan (statusen går till `AsyncLoading`), och en händelse som kom
 en pågående hämtning ignoreras. Ett robustare mönster:
 
 1. `useAsyncData` gör den första hämtningen (och pull-to-refresh).
-2. En lokal `ref<List<Booking>>` innehåller det som visas.
+2. En lokal `ref<List<Comment>>` innehåller det som visas.
 3. En `watch` kopierar in ny data varje gång en hämtning blir klar.
 4. Realtidshändelser **patchar** den lokala listan (lägg till, ersätt, ta bort).
 
 ```dart
-final (status, refresh) = useAsyncData<List<Booking>, void>(
-  (_) => service.fetchMyBookings(userId),
+final (status, refresh) = useAsyncData<List<Comment>, String>(
+  (postId) => service.fetchComments(postId),
+  watch: () => props.value.postId,
 );
 
-final items = ref(<Booking>[]);
+final items = ref(<Comment>[]);
 
 watch(() => status.value, (s, _) {
   if (s case AsyncData(:final value)) items.value = value;
@@ -338,13 +343,14 @@ watch(() => status.value, (s, _) {
 void applyEvent(RecordSubscriptionEvent e) {
   final record = e.record;
   if (record == null) return;
-  final booking = Booking.fromRecord(record);
+  final comment = Comment.fromRecord(record);
   final current = items.value;
 
   items.value = switch (e.action) {
-    'create' => [...current, booking],
-    'update' => [for (final b in current) b.id == booking.id ? booking : b],
-    'delete' => current.where((b) => b.id != booking.id).toList(),
+    // Kan redan finnas om hämtningen och händelsen korsade varandra
+    'create' => current.any((c) => c.id == comment.id) ? current : [...current, comment],
+    'update' => [for (final c in current) c.id == comment.id ? comment : c],
+    'delete' => current.where((c) => c.id != comment.id).toList(),
     _ => current,
   };
 }
@@ -369,31 +375,74 @@ För *skrivningar* (skapa, uppdatera, ta bort) behövs ingen speciell composable
 en vanlig async-funktion och ett par refs för status:
 
 ```dart
-final saving = ref(false);
+final sending = ref(false);
 final error = ref<String?>(null);
 
-Future<void> save() async {
-  saving.value = true;
+Future<void> sendComment(String body) async {
+  sending.value = true;
   error.value = null;
   try {
-    await pb.collection('bookings').create(body: {
-      'resource': resourceId,
-      'user': userId,
-      'start': start.toUtc().toIso8601String(),
-      'end': end.toUtc().toIso8601String(),
+    await pb.collection('comments').create(body: {
+      'post': props.value.postId,
+      'author': pb.authStore.record!.id,
+      'body': body,
     });
   } on ClientException catch (e) {
-    error.value = e.response['message']?.toString() ?? 'Kunde inte spara';
+    error.value = e.response['message']?.toString() ?? 'Kunde inte skicka';
   } finally {
-    saving.value = false;
+    sending.value = false;
   }
 }
 
-final buttonLabel = computed(() => saving.value ? 'Sparar…' : 'Boka');
+final buttonLabel = computed(() => sending.value ? 'Skickar…' : 'Skicka');
 ```
 
-`ClientException.response` innehåller PocketBase-svaret. Om du har en hook som stoppar
-dubbelbokningar (modul 02) hamnar dess felmeddelande här.
+`ClientException.response` innehåller PocketBase-svaret. Om en regel eller hook på
+servern säger nej (t.ex. för en för lång kommentar) hamnar dess felmeddelande här.
+
+### Optimistisk uppdatering: gilla direkt, ångra vid fel
+
+En gilla-knapp ska kännas omedelbar. Att vänta på servern innan hjärtat blir rött
+känns segt. Ett vanligt mönster är **optimistisk uppdatering**:
+
+1. Uppdatera UI:t direkt, som om anropet redan lyckats.
+2. Skicka anropet.
+3. Om servern svarar med fel: **rulla tillbaka** till det gamla värdet.
+
+```dart
+final liked = ref(props.value.post.likedByMe);
+final likeCount = ref(props.value.post.likeCount);
+
+Future<void> toggleLike() async {
+  final wasLiked = liked.value;
+  final postId = props.value.post.id;
+  final me = pb.authStore.record!.id;
+
+  liked.value = !wasLiked;                    // 1. optimistiskt
+  likeCount.value += wasLiked ? -1 : 1;
+
+  try {                                       // 2. servern
+    final likes = pb.collection('likes');
+    if (wasLiked) {
+      final like = await likes.getFirstListItem(
+        pb.filter('post = {:p} && user = {:u}', {'p': postId, 'u': me}),
+      );
+      await likes.delete(like.id);
+    } else {
+      await likes.create(body: {'post': postId, 'user': me});
+    }
+  } on ClientException catch (e) {            // 3. rulla tillbaka
+    debugPrint('Gilla misslyckades: ${e.statusCode}');
+    liked.value = wasLiked;
+    likeCount.value += wasLiked ? 1 : -1;
+  }
+}
+```
+
+Unikhetsindexet på `likes (post, user)` från modul 02 gör att servern svarar `400` om
+du försöker gilla samma inlägg två gånger. Då rullas UI:t tillbaka. I
+[kapitel 9](09-arkitektur-for-en-riktig-app.md) flyttar vi logiken till en composable,
+`useLikeToggle`, och serveranropet till en store.
 
 ## Vanliga misstag
 
@@ -404,17 +453,18 @@ dubbelbokningar (modul 02) hamnar dess felmeddelande här.
 | Glömt `unsubscribe` | Händelser fortsätter efter att skärmen stängts | `onUnmounted` + `disposed`-flagga |
 | `onUnmounted` inuti `onMounted` | Assertion-fel / läcka | Registrera i `setup()` |
 | `items.value.add(x)` i realtids-callback | UI uppdateras inte | `items.value = [...items.value, x]` |
+| Optimistisk uppdatering utan `catch` | UI:t visar fel värde när servern säger nej | Spara gamla värdet och rulla tillbaka |
 | Stränginterpolerade filter | Säkerhetshål | `pb.filter(..., {...})` |
 
 ## 🧪 Prova själv
 
-1. Bygg en `ResourcesScreen` som hämtar aktiva resurser med `useAsyncData` och visar
-   dem i en lista med pull-to-refresh.
-2. Lägg till en `Switch` "Visa även inaktiva" (`final showInactive = ref(false)`) och
-   låt `watch: () => showInactive.value` styra filtret.
-3. Öppna PocketBase Admin UI, ändra en resurs och dra för att ladda om. Lägg sedan till
-   en realtidsprenumeration som anropar `refresh()` på varje händelse, och se listan
-   uppdateras av sig själv.
+1. Bygg en `PostsScreen` som hämtar inlägg (`expand: 'author'`) med `useAsyncData` och
+   visar dem i en lista med pull-to-refresh.
+2. Lägg till en `Switch` "Bara inlägg med bild" (`final onlyImages = ref(false)`) och
+   låt `watch: () => onlyImages.value` styra filtret (`image != ""`).
+3. Öppna PocketBase Admin UI, ändra rubriken på ett inlägg och dra för att ladda om.
+   Lägg sedan till en realtidsprenumeration på `posts` som anropar `refresh()` på varje
+   händelse, och se listan uppdateras av sig själv.
 
 ## Sammanfattning
 
@@ -426,5 +476,7 @@ dubbelbokningar (modul 02) hamnar dess felmeddelande här.
   (registrerat i `setup()`), plus en `disposed`-flagga.
 - För listor som ändras både av hämtningar och händelser: lokal ref + `watch` +
   patchning.
+- Optimistiska uppdateringar (som gilla) ändrar UI:t direkt och rullas tillbaka vid
+  `ClientException`.
 
 Nästa kapitel: [Best practices och lints →](08-best-practices-och-lints.md)

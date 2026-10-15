@@ -8,7 +8,9 @@ du vad som händer under huven.
 ## REST i korthet
 
 REST betyder att varje "sak" har en adress (URL), och att HTTP-metoden säger vad
-du vill göra med den.
+du vill göra med den. Du känner igen mönstret från
+[JSONPlaceholder](https://jsonplaceholder.typicode.com): `GET /posts`,
+`GET /posts/1`, `POST /posts` och så vidare.
 
 | Metod | Betyder | SQL-motsvarighet |
 |-------|---------|------------------|
@@ -28,6 +30,9 @@ För varje collection skapar PocketBase automatiskt:
 | Skapa | `POST /api/collections/{collection}/records` | Create |
 | Ändra | `PATCH /api/collections/{collection}/records/{id}` | Update |
 | Ta bort | `DELETE /api/collections/{collection}/records/{id}` | Delete |
+
+Jämfört med JSONPlaceholder (`/posts/1`) ligger alltså allt under
+`/api/collections/<namn>/records`.
 
 Övriga användbara endpoints:
 
@@ -53,6 +58,14 @@ TOKEN=$(curl -s -X POST http://127.0.0.1:8090/api/collections/users/auth-with-pa
 echo $TOKEN
 ```
 
+Spara gärna Annas id också – du behöver det när hon skapar saker i sitt namn:
+
+```bash
+ME=$(curl -s -X POST http://127.0.0.1:8090/api/collections/users/auth-refresh \
+  -H "Authorization: $TOKEN" \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["record"]["id"])')
+```
+
 💡 **Tips:** Har du `jq` installerat kan du i stället skriva
 `| jq -r .token`. På Windows fungerar exemplen i Git Bash eller WSL.
 
@@ -61,7 +74,7 @@ echo $TOKEN
 ### Lista
 
 ```bash
-curl -s http://127.0.0.1:8090/api/collections/resources/records \
+curl -s http://127.0.0.1:8090/api/collections/posts/records \
   -H "Authorization: $TOKEN"
 ```
 
@@ -69,39 +82,35 @@ curl -s http://127.0.0.1:8090/api/collections/resources/records \
 {
   "page": 1,
   "perPage": 30,
-  "totalItems": 2,
+  "totalItems": 6,
   "totalPages": 1,
   "items": [
-    { "id": "yj5nd2n7f6ckups", "collectionName": "resources", "name": "Tvättstuga 1",
-      "max_hours": 3, "active": true, "created": "2026-10-09 07:27:06.356Z", ... },
-    { "id": "tjw76ww0o045edu", "name": "Festlokalen", ... }
+    { "id": "jecocasqaz8ls35", "collectionName": "posts", "author": "evw7k9240ep07xd",
+      "title": "Bästa kaffet i stan?", "body": "Jag letar efter ett nytt favoritkafé. Tips?",
+      "image": "", "created": "2026-10-15 08:17:41.461Z", ... },
+    ...
   ]
 }
 ```
 
 Svaret är alltid **paginerat**: du får en sida (`page`) med högst `perPage`
-poster, plus totalt antal.
+poster, plus totalt antal. (JSONPlaceholder skickar en ren lista – PocketBase
+skickar ett objekt med listan i `items`.)
 
 ### Hämta en
 
 ```bash
-curl -s http://127.0.0.1:8090/api/collections/resources/records/yj5nd2n7f6ckups \
+curl -s http://127.0.0.1:8090/api/collections/posts/records/jecocasqaz8ls35 \
   -H "Authorization: $TOKEN"
 ```
 
 ### Skapa
 
 ```bash
-curl -s -X POST http://127.0.0.1:8090/api/collections/bookings/records \
+curl -s -X POST http://127.0.0.1:8090/api/collections/posts/records \
   -H "Authorization: $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "resource": "yj5nd2n7f6ckups",
-    "user": "flskfapcqwu5iun",
-    "start": "2026-10-12 08:00:00.000Z",
-    "end": "2026-10-12 10:00:00.000Z",
-    "note": "Två maskiner"
-  }'
+  -d "{\"author\": \"$ME\", \"title\": \"Fikadags\", \"body\": \"Kanelbullar i fikarummet!\"}"
 ```
 
 Svaret är den skapade posten med nytt `id`, `created` och `updated`.
@@ -111,21 +120,38 @@ Svaret är den skapade posten med nytt `id`, `created` och `updated`.
 Skicka bara de fält som ska ändras:
 
 ```bash
-curl -s -X PATCH http://127.0.0.1:8090/api/collections/bookings/records/awp65on7uxbw5nb \
+curl -s -X PATCH http://127.0.0.1:8090/api/collections/posts/records/INLAGGETS_ID \
   -H "Authorization: $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"note": "Bara en maskin"}'
+  -d '{"body": "Kanelbullar OCH kardemummabullar!"}'
 ```
 
 ### Ta bort
 
 ```bash
-curl -s -X DELETE http://127.0.0.1:8090/api/collections/bookings/records/awp65on7uxbw5nb \
+curl -s -X DELETE http://127.0.0.1:8090/api/collections/posts/records/INLAGGETS_ID \
   -H "Authorization: $TOKEN" -w "%{http_code}\n"
 # 204
 ```
 
 `204 No Content` betyder att det gick bra (det finns inget att skicka tillbaka).
+
+### Gilla och följa
+
+Att gilla ett inlägg är att *skapa* en post i `likes`. Att sluta gilla är att
+*ta bort* den:
+
+```bash
+# Gilla
+curl -s -X POST http://127.0.0.1:8090/api/collections/likes/records \
+  -H "Authorization: $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"post\": \"INLAGGETS_ID\", \"user\": \"$ME\"}"
+
+# Följ Bo
+curl -s -X POST http://127.0.0.1:8090/api/collections/follows/records \
+  -H "Authorization: $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"follower\": \"$ME\", \"following\": \"BOS_ID\"}"
+```
 
 ### Filuppladdning
 
@@ -134,11 +160,13 @@ Filer skickas som `multipart/form-data` i stället för JSON:
 ```bash
 curl -s -X POST http://127.0.0.1:8090/api/collections/posts/records \
   -H "Authorization: $TOKEN" \
-  -F "title=Städdag" -F "author=<ditt id>" -F "published=true" \
-  -F "image=@stadning.jpg"
+  -F "author=$ME" -F "title=Dagens bröd" \
+  -F "image=@brod.jpg"
 ```
 
-(Förutsätter att `posts` har ett file-fält `image`.)
+Bilden hämtas sedan från
+`/api/files/posts/<inläggets id>/<filnamn>`, och en miniatyr med
+`?thumb=400x0`.
 
 ## Felsvar
 
@@ -149,20 +177,26 @@ Alla fel har samma form:
   "status": 400,
   "message": "Failed to create record.",
   "data": {
-    "start": { "code": "validation_required", "message": "Cannot be blank." }
+    "title": { "code": "validation_required", "message": "Cannot be blank." }
   }
 }
 ```
 
 | Status | Betyder | Typisk orsak |
 |--------|---------|--------------|
-| `400` | Bad Request | Valideringsfel, felaktigt filter, create-regeln ej uppfylld |
+| `400` | Bad Request | Valideringsfel, felaktigt filter, create-regeln ej uppfylld, dubbel gillning |
 | `401` | Unauthorized | Endpoint kräver inloggning men ingen/ogiltig token |
 | `403` | Forbidden | Regeln är `null` (bara superusers) |
 | `404` | Not Found | Posten finns inte – eller så får du inte se/ändra den |
-| `429` | Too Many Requests | Rate limit (om påslaget) |
+| `429` | Too Many Requests | Rate limit (om påslaget, eller ditt eget spamskydd i kapitel 7) |
 
 `data` innehåller fel per fält. Det är det appen ska visa vid formuläret.
+Försöker Anna gilla samma inlägg två gånger ser `data` ut så här:
+
+```json
+{ "post": { "code": "validation_not_unique", "message": "Value must be unique." },
+  "user": { "code": "validation_not_unique", "message": "Value must be unique." } }
+```
 
 ## Query-parametrar för listor
 
@@ -170,11 +204,11 @@ Alla fel har samma form:
 |-----------|---------|---------|
 | `page` | `page=2` | Vilken sida (börjar på 1) |
 | `perPage` | `perPage=50` | Poster per sida (standard 30, max 1000) |
-| `sort` | `sort=-start,created` | Sortering. `-` = fallande. Flera fält med komma |
-| `filter` | `filter=active=true` | Villkor (se nedan) |
-| `expand` | `expand=resource,user.apartment` | Hämta relaterade poster (kapitel 3) |
-| `fields` | `fields=id,name,expand.resource.name` | Bara vissa fält i svaret |
-| `skipTotal` | `skipTotal=1` | Räkna inte totalt antal (snabbare). `totalItems` blir `-1` |
+| `sort` | `sort=-created,title` | Sortering. `-` = fallande. Flera fält med komma |
+| `filter` | `filter=title ~ "kaffe"` | Villkor (se nedan) |
+| `expand` | `expand=author,comments_via_post.author` | Hämta relaterade poster (kapitel 3) |
+| `fields` | `fields=id,title,expand.author.username` | Bara vissa fält i svaret |
+| `skipTotal` | `skipTotal=1` | Räkna inte totalt antal (snabbare). `totalItems` och `totalPages` blir `-1` |
 
 ### URL-kodning
 
@@ -182,11 +216,11 @@ Filter innehåller mellanslag, citattecken och `&&`. De måste URL-kodas. Låt
 curl göra det med `-G` och `--data-urlencode`:
 
 ```bash
-curl -s -G http://127.0.0.1:8090/api/collections/bookings/records \
+curl -s -G http://127.0.0.1:8090/api/collections/posts/records \
   -H "Authorization: $TOKEN" \
-  --data-urlencode 'filter=start >= @todayStart && resource.name ~ "Tvätt"' \
-  --data-urlencode 'sort=start' \
-  --data-urlencode 'expand=resource' \
+  --data-urlencode 'filter=title ~ "kaffe" || body ~ "kaffe"' \
+  --data-urlencode 'sort=-created' \
+  --data-urlencode 'expand=author' \
   --data-urlencode 'perPage=10'
 ```
 
@@ -195,7 +229,7 @@ curl -s -G http://127.0.0.1:8090/api/collections/bookings/records \
 ### Paginering
 
 ```
-Totalt 95 bokningar, perPage=30
+Totalt 95 inlägg, perPage=30
 
 page=1  → poster  1–30
 page=2  → poster 31–60
@@ -204,15 +238,15 @@ page=4  → poster 91–95   (totalPages = 4)
 ```
 
 Appen hämtar sida 1, och när användaren scrollar ner hämtar den sida 2 osv.
-`skipTotal=1` är bra för oändlig scroll: det sparar en `COUNT(*)`-fråga, och
-man vet att man är klar när en sida har färre poster än `perPage`.
+`skipTotal=1` är bra för ett oändligt flöde: det sparar en `COUNT(*)`-fråga,
+och man vet att man är klar när en sida har färre poster än `perPage`.
 
 ### Sortering
 
 ```
-sort=start               stigande starttid (tidigast först)
-sort=-created            senast skapade först
-sort=resource.name,start först resursnamn, sedan starttid
+sort=-created            nyaste först (det vanliga för ett flöde)
+sort=created             äldsta först (det vanliga för kommentarer)
+sort=author.name,-created först författarens namn, sedan nyast
 sort=@random             slumpordning
 ```
 
@@ -222,14 +256,14 @@ sortering garanterar databasen ingen ordning.
 ### Fields – hämta bara det du behöver
 
 ```
-fields=id,name
-fields=*,expand.resource.name
-fields=id,title,body:excerpt(200,true)
+fields=id,title
+fields=*,expand.author.username
+fields=id,title,body:excerpt(100,true)
 ```
 
-`:excerpt(200,true)` kortar ner texten till 200 tecken (utan HTML-taggar) och
-lägger till `...`. Perfekt för en lista med anslag där hela texten visas först
-när man klickar.
+`:excerpt(100,true)` kortar ner texten till 100 tecken (utan HTML-taggar) och
+lägger till `...`. Perfekt för ett flöde där hela texten visas först när man
+klickar på inlägget.
 
 ## Filter-syntax
 
@@ -243,71 +277,71 @@ Slutligt resultat = poster där  (list-regel)  OCH  (ditt filter)
 
 ⚠️ **Varning:** `@request.*` (t.ex. `@request.auth.id`) får bara användas i
 **regler**, inte i filter som klienten skickar. Försöker en vanlig användare
-svarar PocketBase `403 Only superusers can filter by @request`. Vill appen ha
-"mina bokningar" skickar den sitt eget id som värde:
-`user = "flskfapcqwu5iun"` (i Dart: `pb.filter('user = {:me}', {'me': myId})`).
+svarar PocketBase `403 Only superusers can filter by @request.`. Vill appen ha
+"mina inlägg" skickar den sitt eget id som värde:
+`author = "ryd2jdczusx4tm4"` (i Dart: `pb.filter('author = {:me}', {'me': myId})`).
 
 ### Operatorer
 
 | Operator | Betyder | Exempel |
 |----------|---------|---------|
-| `=` | Lika med | `active = true` |
-| `!=` | Inte lika med | `role != "member"` |
-| `>` `>=` `<` `<=` | Jämförelse | `max_hours >= 4` |
-| `~` | Innehåller (skiftlägesokänsligt för a–z) | `name ~ "tvätt"` |
+| `=` | Lika med | `author.username = "bo"` |
+| `!=` | Inte lika med | `website != ""` |
+| `>` `>=` `<` `<=` | Jämförelse | `created >= @todayStart` |
+| `~` | Innehåller (skiftlägesokänsligt för a–z) | `title ~ "kaffe"` |
 | `!~` | Innehåller inte | `title !~ "test"` |
-| `?=` `?!=` `?>` `?>=` `?<` `?<=` `?~` `?!~` | Minst ett element uppfyller | `tags.name ?= "fest"` |
-| `&&` | Och | `active = true && max_hours > 2` |
-| `\|\|` | Eller | `role = "styrelse" \|\| role = "admin"` |
+| `?=` `?!=` `?>` `?>=` `?<` `?<=` `?~` `?!~` | Minst ett element uppfyller | `likes_via_post.user ?= "..."` |
+| `&&` | Och | `author.username = "bo" && title ~ "kaffe"` |
+| `\|\|` | Eller | `title ~ "kaffe" \|\| body ~ "kaffe"` |
 | `( )` | Gruppering | `(a = 1 \|\| b = 2) && c = 3` |
 
-`~` lägger automatiskt till `%` runt värdet (`LIKE '%tvätt%'`). Vill du styra
-själv, skriv `%` i värdet: `name ~ "Tvätt%"` betyder "börjar med Tvätt".
+`~` lägger automatiskt till `%` runt värdet (`LIKE '%kaffe%'`). Vill du styra
+själv, skriv `%` i värdet: `title ~ "Kaffe%"` betyder "börjar med Kaffe".
 
 ### Värden
 
 | Typ | Skrivs | Exempel |
 |-----|--------|---------|
-| Text | Inom `"..."` eller `'...'` | `name = "Festlokalen"` |
-| Tal | Som det är | `floor >= 2` |
-| Bool | `true` / `false` | `published = true` |
-| Tomt | `""` | `note != ""` (har en anteckning) |
+| Text | Inom `"..."` eller `'...'` | `username = "anna"` |
+| Tal | Som det är | `likes_count >= 2` (i en view, kapitel 8) |
+| Bool | `true` / `false` | `emailVisibility = true` |
+| Tomt | `""` | `image != ""` (har en bild) |
 | Null | `null` | används för json-fält |
-| Fält | Fältnamn utan citattecken | `end > start` |
+| Fält | Fältnamn utan citattecken | `updated > created` (har redigerats) |
 
-### Exempel från Föreningsappen
+### Exempel från Kvittra
 
 ```
-# Aktiva resurser
-active = true
+# Inlägg som nämner kaffe i titel eller text
+title ~ "kaffe" || body ~ "kaffe"
 
-# Publicerade anslag som nämner "städdag" i titel eller text
-published = true && (title ~ "städdag" || body ~ "städdag")
+# Bos inlägg
+author.username = "bo"
 
-# Lägenheter på våning 2–4 som är större än 60 kvm
-floor >= 2 && floor <= 4 && size_sqm > 60
+# Inlägg med bild
+image != ""
 
-# Styrelsemedlemmar
-role = "styrelse"
+# Inlägg som har redigerats
+updated > created
 
-# Bokningar som har en anteckning
-note != ""
+# Användare som har en hemsida
+website != ""
 
-# Bokningar gjorda av någon i lägenhet 1001
-user.apartment.number = "1001"
+# Kommentarer till inlägg som Bo skrivit
+post.author.username = "bo"            (på comments)
 ```
 
 ## Datum i filter
 
-Datum lagras som text i UTC, `2026-10-12 08:00:00.000Z`. Eftersom formatet
+Datum lagras som text i UTC, `2026-10-15 08:00:00.000Z`. Eftersom formatet
 sorterar rätt som text fungerar vanliga jämförelser:
 
 ```
-# Alla bokningar den 12 oktober (UTC)
-start >= "2026-10-12 00:00:00" && start < "2026-10-13 00:00:00"
+# Inlägg från den 15 oktober (UTC)
+created >= "2026-10-15 00:00:00" && created < "2026-10-16 00:00:00"
 
-# Bokningar från och med 12 oktober
-start >= "2026-10-12"
+# Inlägg från och med 15 oktober
+created >= "2026-10-15"
 ```
 
 ### Datum-makron
@@ -322,59 +356,89 @@ start >= "2026-10-12"
 | `@second`, `@minute`, `@hour`, `@weekday`, `@day`, `@month`, `@year` | Delar av nuvarande tid, som tal |
 
 ```
-# Kommande bokningar
-start >= @now
+# Inlägg från idag
+created >= @todayStart
 
-# Pågående bokningar just nu
-start <= @now && end > @now
+# Inlägg från det senaste dygnet
+created >= @yesterday
 
-# Anslag skapade denna månad
-created >= @monthStart
+# Gillningar denna månad
+created >= @monthStart          (på likes)
 ```
 
 Du kan också använda SQLite-funktionen `strftime`:
 
 ```
-# Bokningar i oktober 2026
-strftime('%Y-%m', start) = "2026-10"
+# Inlägg i oktober 2026
+strftime('%Y-%m', created) = "2026-10"
 ```
 
 ⚠️ **Varning:** Allt är i **UTC**. `@todayStart` är midnatt UTC, vilket är
-kl. 02:00 svensk sommartid (01:00 vintertid). En bokning kl. 00:30 svensk tid
-den 12 oktober ligger alltså den 11 oktober i UTC. För exakta "dagens
-bokningar i Sverige" ska appen räkna ut start och slut på dygnet i lokal tid,
-konvertera till UTC och skicka som vanliga datumvärden. Dart-SDK:n hjälper till
-med det (kapitel 6).
+kl. 02:00 svensk sommartid (01:00 vintertid). Ett inlägg skrivet kl. 00:30
+svensk tid den 15 oktober ligger alltså den 14 oktober i UTC. För exakta
+"dagens inlägg i Sverige" ska appen räkna ut start och slut på dygnet i lokal
+tid, konvertera till UTC och skicka som vanliga datumvärden. Dart-SDK:n
+hjälper till med det (kapitel 6).
 
-## Överlappande tider – ett klassiskt filter
+## Flödet och andra filter över kopplingar
 
-Hur hittar man bokningar som krockar med en ny bokning `[ny_start, ny_slut)`?
-Två intervall överlappar om **det ena börjar innan det andra slutar, och slutar
-efter att det andra börjat**:
-
-```
-          ny_start            ny_slut
-              │                  │
-   ───────────[══════════════════)──────────────
-   [═══════)                                       ingen krock (slutar innan)
-          [════════)                               KROCK
-                    [══════)                       KROCK
-                          [══════════════)         KROCK
-                                 [════════)        ingen krock (börjar när ny slutar)
-```
+De mest användbara filtren i en social app går via kopplings-collections. Här
+är de viktigaste – alla testade mot testdatan i lösningarna (Annas id står som
+`ANNAS_ID`):
 
 ```
-resource = "yj5nd2n7f6ckups" && start < "2026-10-12 11:00:00" && end > "2026-10-12 09:00:00"
+# Flödet: inlägg från dem Anna följer
+author.follows_via_following.follower ?= "ANNAS_ID"
+
+# Inlägg som Anna har gillat
+likes_via_post.user ?= "ANNAS_ID"
+
+# Inlägg som Anna INTE har gillat (även de som ingen gillat)
+likes_via_post.user != "ANNAS_ID"
+
+# Inlägg utan kommentarer
+comments_via_post.id = ""
+
+# Användare som Anna följer (på users)
+follows_via_following.follower ?= "ANNAS_ID"
+
+# Ömsesidiga följare till Bo: följer Bo OCH följs av Bo (på users)
+follows_via_follower.following ?= "BOS_ID" && follows_via_following.follower ?= "BOS_ID"
 ```
 
-Kommer den tillbaka med `totalItems > 0` är tiden upptagen. Vi använder exakt
-detta villkor i en hook i kapitel 7 – för att kontrollen måste göras på
-servern, inte bara i appen.
+Hur ska man läsa `=` och `!=` när vänstersidan ger **flera** värden?
+
+| Skrivsätt | Betyder | Exempel |
+|-----------|---------|---------|
+| `x ?= v` | **minst en** är `v` | gillad av Anna |
+| `x = v` | **alla** är `v` | (sällan det du vill – se varningen i kapitel 3) |
+| `x != v` | **ingen** är `v` | inte gillad av Anna |
+
+Flödet i curl:
+
+```bash
+curl -s -G http://127.0.0.1:8090/api/collections/posts/records \
+  -H "Authorization: $TOKEN" \
+  --data-urlencode "filter=author.follows_via_following.follower ?= \"$ME\"" \
+  --data-urlencode 'sort=-created' \
+  --data-urlencode 'expand=author' \
+  --data-urlencode 'skipTotal=1'
+```
+
+💡 **Tips:** Vill du ta med Annas egna inlägg i flödet? Lägg till
+`|| author = "ANNAS_ID"`. Och kom ihåg: skicka id:t som ett **värde** – inte
+`@request.auth.id`, som är förbjudet i klientens filter.
+
+⚠️ **Varning:** Filterspråket kan inte **räkna**. "Inlägg med minst 10
+gillningar" eller "sortera på antal gillningar" går inte att uttrycka med ett
+filter på `posts` (det finns ingen `COUNT`). Lösningen är en view-collection
+med `likes_count` som du kan filtrera och sortera på – den bygger vi i övning 7
+och kapitel 8.
 
 ## Realtid
 
-Tänk dig att Anna och Bo båda tittar på tvättstugans kalender. Anna bokar
-10–12. Hur får Bos skärm veta det?
+Tänk dig att Anna och Bo båda tittar på samma inlägg. Anna skriver en
+kommentar. Hur får Bos skärm veta det?
 
 **Polling** (fråga var femte sekund) fungerar men är slösaktigt. PocketBase har
 i stället **realtid** via *Server-Sent Events* (SSE): en HTTP-anslutning som
@@ -386,9 +450,9 @@ Bos app                               PocketBase                       Annas app
    │ ◄──── PB_CONNECT {clientId}          │                                │
    │ POST /api/realtime                   │                                │
    │   {clientId, subscriptions:          │                                │
-   │    ["bookings/*"]}                   │                                │
-   │                                      │ ◄──── POST /bookings/records ──│
-   │ ◄──── bookings/* {action:"create",   │                                │
+   │    ["comments/*"]}                   │                                │
+   │                                      │ ◄──── POST /comments/records ──│
+   │ ◄──── comments/* {action:"create",   │                                │
    │        record:{...}}                 │                                │
 ```
 
@@ -401,45 +465,46 @@ curl -N http://127.0.0.1:8090/api/realtime
 ```
 
 ```
-id:cBHE9Vri8J2MpPwGEe4n1sEFHaJqZFiOU5TF68vw
+id:BdRLaggYdVrv4DCy0fm71kW7M5HyYjd42tyfIxdP
 event:PB_CONNECT
-data:{"clientId":"cBHE9Vri8J2MpPwGEe4n1sEFHaJqZFiOU5TF68vw"}
+data:{"clientId":"BdRLaggYdVrv4DCy0fm71kW7M5HyYjd42tyfIxdP"}
 ```
 
-Terminal 2 – prenumerera (byt ut clientId):
+Terminal 2 – prenumerera (byt ut clientId). Svaret är `204`:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8090/api/realtime \
   -H "Authorization: $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"clientId":"cBHE9Vri8J2MpPwGEe4n1sEFHaJqZFiOU5TF68vw","subscriptions":["bookings/*"]}'
+  -d '{"clientId":"BdRLaggYdVrv4DCy0fm71kW7M5HyYjd42tyfIxdP","subscriptions":["comments/*"]}'
 ```
 
-Skapa sedan en bokning (från terminal 2 eller Dashboard). I terminal 1 dyker
+Skapa sedan en kommentar (från terminal 2 eller Dashboard). I terminal 1 dyker
 det upp:
 
 ```
-event:bookings/*
-data:{"record":{"id":"6lsba2w1dz84gbt","resource":"yj5nd2n7f6ckups",...},"action":"create"}
+event:comments/*
+data:{"record":{"author":"ovwg8fdd7tfdfey","body":"Realtid!","id":"bnl6d5swobpmuvh","post":"jecocasqaz8ls35",...},"action":"create"}
 ```
 
 ### Ämnen (topics)
 
 | Topic | Händelser för |
 |-------|---------------|
-| `bookings/*` | Alla poster i `bookings` som du får se |
-| `bookings/awp65on7uxbw5nb` | En enskild post |
+| `comments/*` | Alla poster i `comments` som du får se |
+| `comments/bnl6d5swobpmuvh` | En enskild post |
 
 `action` är `create`, `update` eller `delete`.
 
 ⚠️ **Varning:** Realtid följer reglerna. Med `*` gäller **List**-regeln och
-med ett id gäller **View**-regeln. Anna får alltså inga händelser om Bos
-bokningar om reglerna säger att hon inte får se dem. View-collections skickar
-inga realtidshändelser alls.
+med ett id gäller **View**-regeln. Anna får alltså inga händelser om poster
+hon inte får se. View-collections skickar inga realtidshändelser alls.
 
 💡 **Tips:** I praktiken skriver du aldrig den här koden själv. Dart-SDK:n
-sköter anslutning, prenumeration och återanslutning med ett enda anrop:
-`pb.collection('bookings').subscribe('*', ...)`. Se kapitel 6.
+sköter anslutning, prenumeration och återanslutning med ett enda anrop – och
+kan dessutom filtrera, så att appen bara får kommentarer till *det* inlägg som
+visas: `pb.collection('comments').subscribe('*', ..., filter: ...)`. Se
+kapitel 6.
 
 ## Sammanfattning
 
@@ -447,6 +512,8 @@ sköter anslutning, prenumeration och återanslutning med ett enda anrop:
 - Token skickas i `Authorization`-headern.
 - Listor är paginerade: `page`, `perPage`, `skipTotal`.
 - `filter` använder samma språk som reglerna och kan bara begränsa mer.
+- Flödet: `author.follows_via_following.follower ?= "<mitt id>"`. Använd
+  `?=` för "minst en" och `!=` för "ingen".
 - `sort`, `expand` och `fields` styr ordning, relationer och svarsstorlek.
 - Datum är UTC-text. Använd makron som `@now` och `@todayStart`.
 - Realtid via SSE: prenumerera på `collection/*` eller `collection/id`.

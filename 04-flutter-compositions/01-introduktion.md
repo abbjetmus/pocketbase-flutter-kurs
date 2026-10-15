@@ -2,46 +2,51 @@
 
 ## Vilket problem löser vi?
 
-Titta på en helt vanlig räknare skriven som `StatefulWidget`, alltså det du lärde dig i
-[modul 03](../03-flutter/03-state-och-livscykel.md):
+Titta på en helt vanlig gilla-knapp skriven som `StatefulWidget`, alltså det du lärde
+dig i [modul 03](../03-flutter/03-state-och-livscykel.md):
 
 ```dart
-class Counter extends StatefulWidget {
-  const Counter({super.key});
+class LikeButton extends StatefulWidget {
+  const LikeButton({super.key});
 
   @override
-  State<Counter> createState() => _CounterState();
+  State<LikeButton> createState() => _LikeButtonState();
 }
 
-class _CounterState extends State<Counter> {
-  int _count = 0;
+class _LikeButtonState extends State<LikeButton> {
+  static const _othersLikes = 41; // gillningar från andra
+  bool _liked = false;
 
-  void _increment() {
+  void _toggle() {
     setState(() {
-      _count++;
+      _liked = !_liked;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final likeCount = _othersLikes + (_liked ? 1 : 0);
+    return Row(
       children: [
-        Text('Antal: $_count'),
-        Text('Dubbelt: ${_count * 2}'),
-        ElevatedButton(onPressed: _increment, child: const Text('+1')),
+        IconButton(
+          onPressed: _toggle,
+          icon: Icon(_liked ? Icons.favorite : Icons.favorite_border),
+        ),
+        Text('$likeCount gillningar'),
       ],
     );
   }
 }
 ```
 
-Det går bra så länge widgeten är liten. I riktiga skärmar, som bokningsformuläret i
-föreningsappen, växer det snabbt:
+Det går bra så länge widgeten är liten. I riktiga skärmar, som flödet eller
+kommentarsfältet i Kvittra, växer det snabbt:
 
-- **Två klasser** för varje widget med state (`Counter` + `_CounterState`).
+- **Två klasser** för varje widget med state (`LikeButton` + `_LikeButtonState`).
 - **`setState()` måste komma ihåg att anropas.** Glömmer du det uppdateras inte UI:t.
-- **Härledda värden** (t.ex. "är formuläret giltigt?") räknas om i `build()` varje
-  gång, eller så lagras de i ett eget fält som du måste hålla i synk manuellt.
+- **Härledda värden** (t.ex. "antal gillningar" eller "får kommentaren skickas?")
+  räknas om i `build()` varje gång, eller så lagras de i ett eget fält som du måste
+  hålla i synk manuellt.
 - **Controllers** (`TextEditingController`, `ScrollController`, `AnimationController`)
   ska skapas i `initState` och städas i `dispose`. Glömmer du det läcker minne.
 - **Nya props** från föräldern upptäcks bara om du skriver `didUpdateWidget`.
@@ -53,32 +58,35 @@ Vue-utvecklare har haft samma problem. Vue 2:s "Options API" spred ut logiken ö
 logik som hör ihop skrivs ihop i en `setup`-funktion och kan brytas ut i återanvändbara
 *composables*. `flutter_compositions` gör samma sak för Flutter.
 
-## Samma räknare med Flutter Compositions
+## Samma gilla-knapp med Flutter Compositions
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
-class Counter extends CompositionWidget {
-  const Counter({super.key});
+class LikeButton extends CompositionWidget {
+  const LikeButton({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
     // 1. Reaktivt state
-    final count = ref(0);
+    final liked = ref(false);
 
-    // 2. Härlett värde, räknas om automatiskt när count ändras
-    final doubled = computed(() => count.value * 2);
+    // 2. Härledda värden, räknas om automatiskt när liked ändras
+    final likeCount = computed(() => 41 + (liked.value ? 1 : 0));
+    final label = computed(() => '${likeCount.value} gillningar');
 
     // 3. Vanlig funktion, ingen setState
-    void increment() => count.value++;
+    void toggle() => liked.value = !liked.value;
 
     // 4. Builder-funktionen = "template"
-    return (context) => Column(
+    return (context) => Row(
           children: [
-            Text('Antal: ${count.value}'),
-            Text('Dubbelt: ${doubled.value}'),
-            ElevatedButton(onPressed: increment, child: const Text('+1')),
+            IconButton(
+              onPressed: toggle,
+              icon: Icon(liked.value ? Icons.favorite : Icons.favorite_border),
+            ),
+            Text(label.value),
           ],
         );
   }
@@ -103,11 +111,11 @@ Det här är det viktigaste i hela modulen. Läs det två gånger.
                                                   ▼
             ┌──────────────────────────────────────────┐
             │ builder (context) => Widget              │◄─┐
-            │  • läser count.value, doubled.value …    │  │ körs om automatiskt
+            │  • läser liked.value, label.value …      │  │ körs om automatiskt
             │  • systemet minns VILKA refs som lästes  │  │ när någon av de
             └──────────────────────────────────────────┘  │ lästa refs ändras
                                                           │
-  count.value++ ──────────────────────────────────────────┘
+  liked.value = true ─────────────────────────────────────┘
 ```
 
 1. **`setup()` körs en gång** när widgeten skapas, ungefär som `initState`. Allt du
@@ -128,7 +136,7 @@ idé finns i Vue (`ref`), SolidJS (signals), Preact Signals och Angular Signals.
 Det kallas **finkornig reaktivitet** (fine-grained reactivity). Uppdateringen drivs av
 exakt vilka värden som lästes, inte av att "något i widgeten ändrades".
 
-> 💡 **Tips:** Läser builder-funktionen inte `count.value` körs den inte om när `count`
+> 💡 **Tips:** Läser builder-funktionen inte `liked.value` körs den inte om när `liked`
 > ändras. Det är därför du får prestanda "gratis": widgets som inte bryr sig om ett
 > värde påverkas inte.
 
@@ -153,16 +161,16 @@ En återanvändbar widget-klass med props (fält) och en `setup()`-metod. Det ä
 ersättare för `StatefulWidget`.
 
 ```dart
-class ResourceCard extends CompositionWidget {
-  const ResourceCard({super.key, required this.name});
+class AuthorCard extends CompositionWidget {
+  const AuthorCard({super.key, required this.username});
 
-  final String name;
+  final String username;
 
   @override
   Widget Function(BuildContext) setup() {
     final props = widget(); // reaktiv åtkomst till props, se kapitel 4
-    final title = computed(() => 'Resurs: ${props.value.name}');
-    return (context) => Card(child: Text(title.value));
+    final handle = computed(() => '@${props.value.username}');
+    return (context) => Card(child: Text(handle.value));
   }
 }
 ```
@@ -176,7 +184,7 @@ CompositionBuilder(
   setup: () {
     final open = ref(false);
     return (context) => SwitchListTile(
-          title: const Text('Visa endast lediga tider'),
+          title: const Text('Visa bara inlägg från dem jag följer'),
           value: open.value,
           onChanged: (v) => open.value = v,
         );
@@ -193,7 +201,7 @@ läser ändras. Den används för prestanda.
 @override
 Widget Function(BuildContext) setup() {
   final seconds = ref(0);   // ändras varje sekund
-  final title = ref('Tvättstuga 1');
+  final title = ref('Mitt första inlägg');
 
   // ... en timer ökar seconds ...
 
@@ -201,7 +209,7 @@ Widget Function(BuildContext) setup() {
         children: [
           Text(title.value),           // byggs om när title ändras
           ComputedBuilder(             // byggs om ENDAST när seconds ändras
-            builder: (context) => Text('Tid kvar: ${seconds.value}s'),
+            builder: (context) => Text('Publicerat för ${seconds.value} s sedan'),
           ),
           const ExpensiveChart(),      // const: byggs aldrig om
         ],
@@ -218,25 +226,24 @@ Widget Function(BuildContext) setup() {
 
 ## Vue-jämförelse: samma komponent i båda världarna
 
-Så här ser räknaren ut i Vue 3 med `<script setup>`:
+Så här ser gilla-knappen ut i Vue 3 med `<script setup>`:
 
 ```vue
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 
-const count = ref(0)
-const doubled = computed(() => count.value * 2)
+const liked = ref(false)
+const likeCount = computed(() => 41 + (liked.value ? 1 : 0))
 
-function increment() {
-  count.value++
+function toggle() {
+  liked.value = !liked.value
 }
 </script>
 
 <template>
   <div>
-    <p>Antal: {{ count }}</p>
-    <p>Dubbelt: {{ doubled }}</p>
-    <button @click="increment">+1</button>
+    <button @click="toggle">{{ liked ? '♥' : '♡' }}</button>
+    <span>{{ likeCount }} gillningar</span>
   </div>
 </template>
 ```
@@ -244,22 +251,22 @@ function increment() {
 Och i Flutter Compositions:
 
 ```dart
-class Counter extends CompositionWidget {
-  const Counter({super.key});
+class LikeButton extends CompositionWidget {
+  const LikeButton({super.key});
 
   @override
   Widget Function(BuildContext) setup() {           // ≈ <script setup>
-    final count = ref(0);                            // ≈ const count = ref(0)
-    final doubled = computed(() => count.value * 2); // ≈ computed(...)
-    void increment() => count.value++;               // ≈ function increment()
+    final liked = ref(false);                        // ≈ const liked = ref(false)
+    final likeCount =                                // ≈ computed(...)
+        computed(() => 41 + (liked.value ? 1 : 0));
+    void toggle() => liked.value = !liked.value;     // ≈ function toggle()
 
-    return (context) => Column(children: [           // ≈ <template>
-          Text('Antal: ${count.value}'),             // ≈ {{ count }}
-          Text('Dubbelt: ${doubled.value}'),
-          ElevatedButton(                            // ≈ <button @click=...>
-            onPressed: increment,
-            child: const Text('+1'),
+    return (context) => Row(children: [              // ≈ <template>
+          TextButton(                                // ≈ <button @click=...>
+            onPressed: toggle,
+            child: Text(liked.value ? '♥' : '♡'),    // ≈ {{ liked ? … }}
           ),
+          Text('${likeCount.value} gillningar'),     // ≈ {{ likeCount }}
         ]);
   }
 }
@@ -278,8 +285,8 @@ class Counter extends CompositionWidget {
 | DI-nycklar | `InjectionKey` (Symbol) | `InjectionKey<T>` | Se kapitel 6 |
 
 > ⚠️ **Varning:** Det vanligaste nybörjarfelet för Vue-utvecklare är att glömma
-> `.value` i builder-funktionen. `Text('$count')` skriver ut något i stil med
-> `Instance of 'Ref<int>'` i stället för siffran. I Dart finns ingen template som packar
+> `.value` i builder-funktionen. `Text('$likeCount')` skriver ut något i stil med
+> `Instance of 'ComputedRef<int>'` i stället för siffran. I Dart finns ingen template som packar
 > upp refs åt dig.
 
 ## Villkor och listor i builder-funktionen
@@ -290,10 +297,10 @@ Darts *collection if* och *collection for*:
 ```dart
 @override
 Widget Function(BuildContext) setup() {
-  final resources = ref(<String>['Tvättstuga 1', 'Tvättstuga 2', 'Festlokalen']);
+  final titles = ref(<String>['Hej Kvittra!', 'Min första app', 'Tips om Flutter']);
   final showAll = ref(true);
   final visible = computed(
-    () => showAll.value ? resources.value : resources.value.take(1).toList(),
+    () => showAll.value ? titles.value : titles.value.take(1).toList(),
   );
 
   return (context) => Column(
@@ -303,8 +310,8 @@ Widget Function(BuildContext) setup() {
             value: showAll.value,
             onChanged: (v) => showAll.value = v,
           ),
-          for (final r in visible.value) ListTile(title: Text(r)), // v-for
-          if (visible.value.isEmpty) const Text('Inga resurser'),  // v-if
+          for (final t in visible.value) ListTile(title: Text(t)), // v-for
+          if (visible.value.isEmpty) const Text('Inga inlägg'),    // v-if
         ],
       );
 }
@@ -343,9 +350,11 @@ Widget Function(BuildContext) setup() {
 
 ## 🧪 Prova själv
 
-1. Skapa en `CompositionWidget` `LikeButton` med en ref `likes` och en ref `liked`
-   (bool). Knappen ska växla `liked` och öka eller minska `likes`.
-2. Lägg till en `computed` `label` som blir `"1 gillning"` eller `"N gillningar"`.
+1. Skapa en `CompositionWidget` `FollowButton` med en ref `following` (bool) och en
+   ref `followers` (int, startvärde 12). Knappen ska växla `following` och öka eller
+   minska `followers`.
+2. Lägg till en `computed` `buttonText` som blir `"Följ"` eller `"Sluta följa"`, och en
+   `computed` `followersLabel` som blir `"1 följare"` eller `"12 följare"`.
 3. Lägg till `print('builder körs')` överst i builder-funktionen (använd block-kropp).
    Hur ofta skrivs det ut? Lägg sedan till en ref som inte läses i builder-funktionen
    och ändra den från en knapp. Skrivs något ut?

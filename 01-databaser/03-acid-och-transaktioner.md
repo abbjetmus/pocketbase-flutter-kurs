@@ -7,26 +7,33 @@
 
 ## 3.1 Problemet: saker som måste hända tillsammans
 
-Föreningen vill kunna flytta en bokning från tvättstuga 1 till tvättstuga 2,
-och samtidigt logga att det hänt. Eller tänk på det klassiska bankexemplet:
-Anna swishar 500 kr till föreningen för en festlokalsbokning.
+I Kvittra visar varje inlägg hur många som gillat det. Att räkna alla
+gillningar varje gång flödet visas kan bli dyrt när det finns miljontals
+inlägg, så många appar sparar en **räknare** direkt på inlägget:
+`posts.likes_count`. När någon gillar ett inlägg måste då *två* saker hända:
 
 ```
-1.  UPDATE accounts SET balance = balance - 500 WHERE owner = 'Anna';
-2.  UPDATE accounts SET balance = balance + 500 WHERE owner = 'Föreningen';
+1.  INSERT INTO likes (post, user, created) VALUES (...);
+2.  UPDATE posts SET likes_count = likes_count + 1 WHERE id = ...;
 ```
 
-Vad händer om strömmen går **mellan** rad 1 och rad 2?
+Vad händer om servern kraschar **mellan** rad 1 och rad 2?
 
 ```
-  Anna: 2000 kr                 Anna: 1500 kr                Anna: 1500 kr
-  Föreningen: 10000 kr  ──1──►  Föreningen: 10000 kr  ──⚡──► Föreningen: 10000 kr
-                                                              500 kr har försvunnit!
+  likes: 3 rader                likes: 4 rader                 likes: 4 rader
+  likes_count = 3     ──1──►    likes_count = 3     ──⚡──►    likes_count = 3
+                                                               Räknaren är fel – för alltid!
 ```
 
-Pengarna har lämnat Annas konto men aldrig kommit fram. Vi behöver ett sätt att
-säga: **"antingen händer båda sakerna, eller ingen av dem"**. Det är vad en
-transaktion är.
+Gillningen finns, men räknaren visar fel siffra, och ingen kommer någonsin att
+rätta den. Samma sak gäller många andra flöden i en social app:
+
+- publicera ett inlägg **och** skapa notiser till alla följare,
+- radera ett konto **och** alla användarens inlägg, kommentarer och gillningar,
+- ta bort en gillning **och** minska räknaren.
+
+Vi behöver ett sätt att säga: **"antingen händer alla sakerna, eller ingen av
+dem"**. Det är vad en transaktion är.
 
 ## 3.2 Transaktioner: BEGIN, COMMIT, ROLLBACK
 
@@ -39,52 +46,31 @@ enda odelbar enhet.
 | `COMMIT;` | Spara alla ändringar permanent |
 | `ROLLBACK;` | Ångra **alla** ändringar sedan `BEGIN` |
 
-För att kunna köra bankexemplet behöver vi en liten extratabell. Den hör inte
-till Föreningsappen, så vi skapar den bara för att leka:
-
-```sql
-CREATE TABLE IF NOT EXISTS accounts (
-    id       INTEGER PRIMARY KEY,
-    owner    TEXT    NOT NULL UNIQUE,
-    balance  INTEGER NOT NULL CHECK (balance >= 0)   -- i öre, aldrig negativt
-);
-DELETE FROM accounts;
-INSERT INTO accounts (owner, balance) VALUES
-    ('Anna', 200000),          -- 2 000 kr
-    ('Föreningen', 1000000);   -- 10 000 kr
-```
-
-En lyckad överföring:
+En lyckad gillning med räknare skulle se ut så här:
 
 ```sql
 BEGIN;
-UPDATE accounts SET balance = balance - 50000 WHERE owner = 'Anna';
-UPDATE accounts SET balance = balance + 50000 WHERE owner = 'Föreningen';
+INSERT INTO likes (post, user, created)
+VALUES ((SELECT id FROM posts WHERE title = 'Morgondimma'),
+        (SELECT id FROM users WHERE username = 'evaek'),
+        '2026-10-12 10:00:00.000Z');
+UPDATE posts SET likes_count = likes_count + 1 WHERE title = 'Morgondimma';
 COMMIT;
-
-SELECT owner, balance / 100.0 AS kronor FROM accounts;
 ```
 
-| owner | kronor |
-|-------|--------|
-| Anna | 1500.0 |
-| Föreningen | 10500.0 |
-
-En överföring vi ångrar:
+Och en som vi ångrar:
 
 ```sql
 BEGIN;
-UPDATE accounts SET balance = balance - 50000 WHERE owner = 'Anna';
--- Hoppsan, fel mottagare. Ångra allt!
-ROLLBACK;
-
-SELECT owner, balance / 100.0 AS kronor FROM accounts;   -- Anna har fortfarande 1500
+UPDATE posts SET title = upper(title);   -- hoppsan, alla titlar med VERSALER!
+ROLLBACK;                                -- ångra allt
+SELECT title FROM posts;                 -- titlarna är som förut
 ```
 
 ```
      BEGIN                                       COMMIT
        │  ┌─────────┐  ┌─────────┐  ┌─────────┐    │
- ──────┼─►│ UPDATE  │─►│ UPDATE  │─►│ INSERT  │────┼──► allt sparas
+ ──────┼─►│ INSERT  │─►│ UPDATE  │─►│ INSERT  │────┼──► allt sparas
        │  └─────────┘  └─────────┘  └─────────┘    │
        │                                           │
        │        fel / krasch / ROLLBACK            │
@@ -95,9 +81,48 @@ SELECT owner, balance / 100.0 AS kronor FROM accounts;   -- Anna har fortfarande
 automatiskt en egen liten transaktion (*autocommit*). Ett `UPDATE` som ändrar
 100 rader ändrar alltså alla 100 eller ingen.
 
-🧪 **Prova själv:** Kör `BEGIN;`, sedan `DELETE FROM bookings;` och
-`SELECT COUNT(*) FROM bookings;` (0 rader!). Kör `ROLLBACK;` och räkna igen.
-Det här är ett utmärkt säkerhetsnät innan du kör farliga `UPDATE`/`DELETE`.
+### Prova i PocketBase
+
+Kör det andra exemplet ovan (det med `upper` och `ROLLBACK`) i **SQL console**.
+Den sista `SELECT`:en visar att titlarna är oförändrade.
+
+Tre saker att veta om transaktioner i SQL console:
+
+1. **Hela rutan är allt-eller-inget.** Kör du flera satser utan `BEGIN` och en av
+   dem misslyckas, sparas ingenting från den körningen.
+2. **`BEGIN ... ROLLBACK` i samma körning** är ett säkert sätt att prova en
+   farlig ändring.
+3. ⚠️ **`BEGIN` utan `COMMIT`/`ROLLBACK` i samma körning – eller ett fel efter
+   `BEGIN` – lämnar transaktionen öppen.** Den håller då skrivlåset (se 3.5),
+   och PocketBase kan inte spara något förrän du startar om servern
+   (`Ctrl + C`, sedan `./pocketbase serve`). Vid omstarten ångras den
+   halvfärdiga transaktionen automatiskt – du ser atomicitet i praktiken!
+
+🧪 **Prova själv:** Kör följande i SQL console. Den första satsen är en ny
+gillning (evaek gillar Morgondimma), den andra en dubblett (bertil har redan
+gillat Morgondimma):
+
+```sql
+INSERT INTO likes (post, user, created)
+VALUES ((SELECT id FROM posts WHERE title = 'Morgondimma'),
+        (SELECT id FROM users WHERE username = 'evaek'), '2026-10-12 10:00:00.000Z');
+INSERT INTO likes (post, user, created)
+VALUES ((SELECT id FROM posts WHERE title = 'Morgondimma'),
+        (SELECT id FROM users WHERE username = 'bertil'), '2026-10-12 10:00:00.000Z');
+```
+
+Du får felet `UNIQUE constraint failed: likes.post, likes.user`. Kontrollera
+sedan med en ny körning:
+
+```sql
+SELECT COUNT(*) AS gillningar
+FROM likes l
+JOIN posts p ON p.id = l.post
+WHERE p.title = 'Morgondimma';
+```
+
+Svaret är fortfarande **2**. Evas gillning, som i sig var helt korrekt, sparades
+inte – eftersom körningen som helhet misslyckades.
 
 ## 3.3 ACID
 
@@ -114,28 +139,32 @@ ACID är fyra egenskaper som en pålitlig databas garanterar för transaktioner.
 
 "Atom" betyder odelbar. En transaktion genomförs **helt** eller **inte alls**.
 
-**Exempel i Föreningsappen:** När styrelsen tar bort festlokalen ur bokningssystemet
-vill de flytta alla framtida bokningar till en ny lokal och skicka ett anslag om
-det. Om anslaget misslyckas ska bokningarna inte vara flyttade, och tvärtom.
+**Exempel i Kvittra:** När Anna publicerar ett inlägg ska alla hennes följare få
+en notis. Säg att vi har en tabell `notifications (id, user, post, message,
+created)`:
 
 ```sql
-PRAGMA foreign_keys = ON;
 BEGIN;
-INSERT INTO resources (name, description, max_hours)
-VALUES ('Nya festlokalen', 'Hus B, plan 0.', 12);
+INSERT INTO posts (id, author, title, body, created)
+VALUES ('nyttinlagg0001', (SELECT id FROM users WHERE username = 'anna'),
+        'Söndagsfika', 'Kanelbullar och kaffe på balkongen.', '2026-10-12 15:00:00.000Z');
 
-UPDATE bookings
-SET resource = (SELECT id FROM resources WHERE name = 'Nya festlokalen')
-WHERE resource = (SELECT id FROM resources WHERE name = 'Festlokalen');
-
-INSERT INTO posts (title, body, author, published)
-VALUES ('Festlokalen flyttar', 'Alla bokningar är flyttade till hus B.', 1, 1);
+INSERT INTO notifications (user, post, message, created)
+SELECT f.follower, 'nyttinlagg0001', 'anna har publicerat ett nytt inlägg',
+       '2026-10-12 15:00:00.000Z'
+FROM follows f
+WHERE f.following = (SELECT id FROM users WHERE username = 'anna');
 COMMIT;
 ```
 
-Om något av stegen misslyckas – eller datorn kraschar mitt i – gör man
+Om något av stegen misslyckas – eller datorn kraschar mitt i – blir det
 `ROLLBACK` (och efter en krasch gör databasen det automatiskt när den startar
-igen). Resultatet blir aldrig "halvflyttat".
+igen). Följarna får aldrig en notis om ett inlägg som inte finns, och inlägget
+publiceras aldrig "tyst" utan notiser.
+
+💡 **Tips:** Att radera ett konto med *Cascade delete* i PocketBase är också
+atomärt: användaren och allt innehåll som kaskaden tar bort försvinner i en och
+samma transaktion. Antingen är kontot helt borta, eller så finns allt kvar.
 
 ### C – Konsistens: reglerna gäller alltid
 
@@ -143,66 +172,69 @@ En transaktion tar databasen från ett **giltigt** tillstånd till ett annat
 giltigt tillstånd. "Giltigt" betyder att alla regler du definierat håller:
 `NOT NULL`, `UNIQUE`, `CHECK`, främmande nycklar.
 
-**Exempel:** `accounts.balance` har `CHECK (balance >= 0)`. Anna har 1 500 kr och
-försöker föra över 5 000 kr:
+**Exempel i Kvittra:**
 
-```sql
-BEGIN;
-UPDATE accounts SET balance = balance - 500000 WHERE owner = 'Anna';
--- Error: CHECK constraint failed: balance >= 0
-ROLLBACK;
-```
+| Regel | Skyddar mot |
+|-------|-------------|
+| `UNIQUE (post, user)` på `likes` | att samma person gillar samma inlägg två gånger |
+| `UNIQUE (follower, following)` på `follows` | att man följer samma person två gånger |
+| `CHECK (follower <> following)` | att man följer sig själv |
+| `CHECK (likes_count >= 0)` | en negativ räknare |
+| `REFERENCES posts(id)` | en gillning på ett inlägg som inte finns |
 
-Databasen vägrar ändringen. I Föreningsappen skyddar `CHECK ("end" > "start")` på
-samma sätt mot bokningar som slutar innan de börjar, och den främmande nyckeln
-mot bokningar av resurser som inte finns.
+Som du såg i 🧪-övningen ovan vägrar databasen att spara en dubbelgillning, och
+eftersom körningen var en transaktion ångrades även det som gick bra.
 
 ⚠️ **Varning:** Konsistens i ACID betyder bara att **de regler du har skrivit**
-följs. Om du glömmer `CHECK (balance >= 0)` kan saldot bli negativt utan att
-databasen bryr sig. Regler som "en tvättstuga får bara bokas 3 timmar" måste du
-antingen uttrycka som villkor, triggers eller kontrollera i backend-koden.
+följs. Regeln "`likes_count` ska vara lika med antalet rader i `likes`" står
+ingenstans, så databasen kan inte vakta den. Det är en av anledningarna till att
+härledda värden är riskabla (kapitel 4.9). Och kom ihåg från kapitel 2: i
+PocketBase är bara de **unika indexen** regler i själva databasen – resten
+kontrolleras av PocketBase.
 
 ### I – Isolering: samtidiga transaktioner stör inte varandra
 
 Många användare använder appen samtidigt. **Isolering** betyder att varje
 transaktion ska bete sig *som om* den vore ensam i databasen.
 
-**Exempel: två medlemmar bokar samma tvättid.** Klockan 07:59:59 trycker både
-Bertil och Eva på "Boka" för tvättstuga 1 den 20 oktober kl 07–10. Appen gör så här:
+**Exempel: dubbeltryck på gilla-knappen.** Johan trycker två gånger snabbt på
+"Gilla" (eller har appen öppen på både mobilen och datorn). Appen gör så här:
 
 ```
-1. Kolla om tiden är ledig:  SELECT COUNT(*) FROM bookings WHERE resource = 1 AND ...
-2. Om 0 → boka:              INSERT INTO bookings ...
+1. Har jag redan gillat?  SELECT COUNT(*) FROM likes WHERE post = ? AND user = ?
+2. Om 0 → gilla:          INSERT INTO likes ...
 ```
 
 Utan isolering kan det gå så här:
 
 ```
- tid   Bertil                              Eva
+ tid   Tryck 1                             Tryck 2
  ───   ──────────────────────────────      ──────────────────────────────
-  1    SELECT ... → 0 (ledigt!)
-  2                                        SELECT ... → 0 (ledigt!)
-  3    INSERT bokning
-  4                                        INSERT bokning
-  5    ✓ "Du har bokat!"                   ✓ "Du har bokat!"
+  1    SELECT ... → 0 (inte gillat!)
+  2                                        SELECT ... → 0 (inte gillat!)
+  3    INSERT gillning
+  4                                        INSERT gillning
+  5    ✓ "Gillat!"                         ✓ "Gillat!"
 
-       → Två bokningar på samma tid. Konflikt i tvättstugan.
+       → Två gillningar från samma person. Inlägget får ett hjärta för mycket.
 ```
 
-Båda såg att tiden var ledig, eftersom ingen av dem hade hunnit boka än. Det här
-kallas ett **race condition** (kapplöpning). Lösningar:
+Båda såg att Johan inte hade gillat, eftersom ingen av dem hade hunnit spara än.
+Det här kallas ett **race condition** (kapplöpning). Lösningar:
 
-1. **Låt databasen avgöra med ett villkor.** Ett unikt index gör det omöjligt att
-   spara två bokningar med samma resurs och starttid – den andra `INSERT`:en
-   misslyckas, oavsett timing:
+1. **Låt databasen avgöra med ett villkor.** Det unika indexet på
+   `likes(post, user)` gör det omöjligt att spara två gillningar – den andra
+   `INSERT`:en misslyckas, oavsett timing. Det är därför indexet finns!
+   Vill du slippa felet kan du be databasen att tyst hoppa över dubbletten:
 
    ```sql
-   CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_unique_slot
-   ON bookings(resource, "start");
+   INSERT INTO likes (post, user, created)
+   VALUES (?, ?, ?)
+   ON CONFLICT (post, user) DO NOTHING;
    ```
 
-   (Det fungerar när alla pass har fasta starttider, som 07, 10, 13 … Överlappande
-   fria tider kräver en kontroll i en transaktion, se punkt 2.)
+   Nu är "gilla" **idempotent**: att trycka två gånger ger samma resultat som att
+   trycka en gång.
 
 2. **Gör kontroll + insättning i samma skrivtransaktion.** I SQLite startar
    `BEGIN IMMEDIATE` en transaktion som direkt tar skrivlåset, så ingen annan kan
@@ -210,30 +242,28 @@ kallas ett **race condition** (kapplöpning). Lösningar:
 
    ```sql
    BEGIN IMMEDIATE;
-   SELECT COUNT(*) FROM bookings
-   WHERE resource = 1
-     AND "start" < '2026-10-20 10:00:00'   -- befintlig börjar före min slut
-     AND "end"   > '2026-10-20 07:00:00';  -- och slutar efter min start
-   -- appen ser 0 → det är ledigt
-   INSERT INTO bookings (resource, user, "start", "end")
-   VALUES (1, 2, '2026-10-20 07:00:00', '2026-10-20 10:00:00');
+   SELECT COUNT(*) FROM likes WHERE post = ? AND user = ?;
+   -- appen ser 0 → det är inte gillat
+   INSERT INTO likes (post, user, created) VALUES (?, ?, ?);
    COMMIT;
    ```
 
-   Om Eva försöker samtidigt får hon vänta (eller felet `database is locked`) tills
-   Bertil är klar – och när hon väl får göra sin `SELECT` ser hon Bertils bokning.
+   Om tryck 2 försöker samtidigt får det vänta (eller felet `database is locked`)
+   tills tryck 1 är klart – och när det väl får göra sin `SELECT` ser det
+   gillningen.
 
-💡 **Tips:** Villkoret för att två tidsintervall **överlappar** är
-`a.start < b.end AND a.end > b.start`. Lär dig det utantill – det behövs i
-varje bokningssystem.
+💡 **Tips:** Lösning 1 är nästan alltid bäst när regeln går att uttrycka som ett
+villkor: den gäller all kod som någonsin skriver till tabellen. Lösning 2 behövs
+när regeln är för krånglig för ett villkor, t.ex. "max 100 inlägg per dygn".
 
 ### D – Beständighet: sparat är sparat
 
 När databasen har sagt "COMMIT klart" ska ändringen **finnas kvar**, även om
 strömmen går en millisekund senare, servern kraschar eller appen stängs.
 
-**Exempel:** Anna bokar festlokalen och får "Bokning bekräftad". Sekunden efter
-startar servern om. När den är igång igen måste bokningen finnas där.
+**Exempel:** Cissi publicerar "Halvmaran avklarad" och appen visar "Publicerat!".
+Sekunden efter startar servern om. När den är igång igen måste inlägget finnas
+där.
 
 Databasen åstadkommer det genom att skriva ändringen till en **logg på disken**
 (och be operativsystemet att verkligen skriva till disken, `fsync`) *innan* den
@@ -245,11 +275,11 @@ svarar "klart". Efter en krasch läser den loggen och:
 Det är så atomicitet och beständighet samarbetar efter en krasch:
 
 ```
-  BEGIN ── UPDATE Anna ── UPDATE Föreningen ── COMMIT ✓ ── ⚡ krasch
+  BEGIN ── INSERT like ── UPDATE likes_count ── COMMIT ✓ ── ⚡ krasch
                                                         → båda ändringarna finns kvar (D)
 
-  BEGIN ── UPDATE Anna ── ⚡ krasch
-                          → Annas ändring rullas tillbaka vid omstart (A)
+  BEGIN ── INSERT like ── ⚡ krasch
+                          → gillningen rullas tillbaka vid omstart (A)
 ```
 
 ## 3.4 Isoleringsproblem
@@ -264,9 +294,9 @@ Transaktion B läser något som A har skrivit men **inte** committat. Sedan gör
 `ROLLBACK`. B har då agerat på data som aldrig funnits.
 
 ```
- A: UPDATE resources SET active = 0 WHERE id = 1;     (inte committat)
- B: SELECT active FROM resources WHERE id = 1;  → 0   "Tvättstugan är stängd"
- A: ROLLBACK;                                         (den var aldrig stängd)
+ A: INSERT INTO posts (... 'Hemligt utkast' ...);     (inte committat)
+ B: SELECT ... FROM posts → ser 'Hemligt utkast'      skickar push-notis till följarna!
+ A: ROLLBACK;                                         (inlägget fanns aldrig)
 ```
 
 ### Non-repeatable read – samma fråga, olika svar
@@ -275,23 +305,24 @@ B läser en rad två gånger inom samma transaktion, och A hinner ändra och
 committa raden emellan.
 
 ```
- B: SELECT max_hours FROM resources WHERE id = 3;  → 12
- A: UPDATE resources SET max_hours = 6 WHERE id = 3; COMMIT;
- B: SELECT max_hours FROM resources WHERE id = 3;  → 6   (?!)
+ B: SELECT username FROM users WHERE id = ?;   → 'cissi'
+ A: UPDATE users SET username = 'cissi_springer' WHERE ...; COMMIT;
+ B: SELECT username FROM users WHERE id = ?;   → 'cissi_springer'   (?!)
 ```
 
 ### Phantom read – nya rader dyker upp
 
-B räknar rader som matchar ett villkor två gånger, och A hinner **lägga till**
-en rad som matchar emellan.
+B räknar rader som matchar ett villkor och läser sedan raderna, och A hinner
+**lägga till** en rad som matchar emellan.
 
 ```
- B: SELECT COUNT(*) FROM bookings WHERE resource = 1 AND "start" LIKE '2026-10-20%';  → 0
- A: INSERT INTO bookings (... resource 1, 2026-10-20 07:00 ...); COMMIT;
- B: SELECT COUNT(*) ... → 1   (en "spökrad")
+ B: SELECT COUNT(*) FROM comments WHERE post = ?;   → 3    rubrik: "3 kommentarer"
+ A: INSERT INTO comments (... samma post ...); COMMIT;
+ B: SELECT * FROM comments WHERE post = ?;          → 4 rader (en "spökrad")
 ```
 
-Dubbelbokningen i avsnitt 3.3 är i grunden ett fantomproblem.
+Dubbeltrycket på gilla-knappen i 3.3 är i grunden ett fantomproblem: raden som
+`SELECT` letade efter dök upp först efteråt.
 
 ### Lost update – en uppdatering försvinner
 
@@ -299,21 +330,28 @@ Två transaktioner läser samma värde, räknar fram ett nytt, och skriver tillb
 Den sista skriver över den förstas ändring.
 
 ```
- Räknare: "antal lediga parkeringsplatser" = 5
+ Räknare: likes_count för "Halvmaran avklarad" = 4
 
- A: läser 5                         B: läser 5
- A: skriver 5 - 1 = 4               B: skriver 5 - 1 = 4
-                                    → borde vara 3!
+ Eva gillar:  läser 4                 Johan gillar:  läser 4
+ Eva:         skriver 4 + 1 = 5       Johan:         skriver 4 + 1 = 5
+                                      → borde vara 6!
 ```
 
 Lösningen är ofta att låta databasen räkna i en enda sats i stället för att läsa
 till appen och skriva tillbaka:
 
 ```sql
--- Dåligt (läs i appen, räkna, skriv tillbaka): risk för lost update
--- Bra: en atomär sats
-UPDATE accounts SET balance = balance - 100 WHERE owner = 'Anna';
+-- Dåligt: appen läser likes_count, räknar +1 och skriver tillbaka värdet
+-- Bra: en atomär sats – databasen räknar själv
+UPDATE posts SET likes_count = likes_count + 1 WHERE id = ?;
 ```
+
+Ännu bättre är ibland att inte spara räknaren alls, utan räkna fram den med
+`COUNT(*)` när den behövs. Då finns inget att tappa bort.
+
+Lost update finns även utan räknare: om Anna redigerar sitt inlägg på mobilen och
+datorn samtidigt vinner den som sparar sist, och den andra ändringen försvinner
+tyst.
 
 ### Isoleringsnivåer
 
@@ -333,7 +371,7 @@ PostgreSQL använder **Read Committed** som standard; MySQL (InnoDB) använder
 
 💡 **Tips:** Du behöver inte kunna tabellen utantill. Det viktiga är att veta *att*
 de här problemen finns, så att du känner igen dem – särskilt **lost update** och
-**dubbelbokning**, som är vanliga buggar i riktiga appar.
+**race conditions** som dubbeltryck, som är vanliga buggar i riktiga appar.
 
 ## 3.5 SQLite i praktiken
 
@@ -347,26 +385,30 @@ SQLite är enklare än serverdatabaser på ett sätt som gör isolering lättare
   `database is locked`. Man brukar därför sätta en *busy timeout* så att den väntar
   en stund i stället för att ge upp direkt.
 
+Det är också därför en bortglömd `BEGIN` i SQL console stoppar PocketBase: den
+öppna transaktionen håller det enda skrivlåset, och alla andra som vill skriva
+får vänta.
+
 ### Transaktionstyper i SQLite
 
 | Kommando | När tas skrivlåset? |
 |----------|---------------------|
 | `BEGIN` / `BEGIN DEFERRED` | Först när transaktionen gör sin första skrivning |
-| `BEGIN IMMEDIATE` | Direkt. Bra när du ska läsa-och-sedan-skriva (som bokningskontrollen) |
+| `BEGIN IMMEDIATE` | Direkt. Bra när du ska läsa-och-sedan-skriva (som gilla-kontrollen) |
 | `BEGIN EXCLUSIVE` | Direkt, och blockerar även läsare (i icke-WAL-läge) |
 
 ### WAL – Write-Ahead Logging
 
 Som standard skriver SQLite ändringar direkt i databasfilen och sparar en kopia
 av det gamla innehållet i en *rollback journal*. I **WAL-läge** gör den tvärtom:
-nya ändringar skrivs först till en separat loggfil (`forening.db-wal`), och flyttas
+nya ändringar skrivs först till en separat loggfil (`data.db-wal`), och flyttas
 in i huvudfilen senare (en *checkpoint*).
 
 ```
              Rollback journal (standard)              WAL-läge
            ┌───────────────────────────────┐     ┌───────────────────────────────┐
- skrivare  │ skriver i forening.db,        │     │ lägger till i forening.db-wal │
-           │ läsare måste vänta            │     │ läsare läser forening.db      │
+ skrivare  │ skriver i data.db,            │     │ lägger till i data.db-wal     │
+           │ läsare måste vänta            │     │ läsare läser data.db          │
            │                               │     │ + det committade i WAL        │
            └───────────────────────────────┘     └───────────────────────────────┘
                                                   → läsare och skrivare blockerar
@@ -374,8 +416,8 @@ in i huvudfilen senare (en *checkpoint*).
 ```
 
 ```sql
+PRAGMA journal_mode;         -- visa nuvarande läge (i PocketBase: wal)
 PRAGMA journal_mode = WAL;   -- slå på (sparas i filen, gäller sedan alltid)
-PRAGMA journal_mode;         -- visa nuvarande läge
 PRAGMA busy_timeout = 5000;  -- vänta upp till 5 s på lås i stället för att ge fel
 ```
 
@@ -383,30 +425,33 @@ Fördelar med WAL: läsare blockeras inte av skrivare, och skrivningar blir ofta
 snabbare. Det är därför **PocketBase alltid kör SQLite i WAL-läge**. Om du tittar
 i `pb_data/` ser du filerna `data.db`, `data.db-wal` och `data.db-shm`.
 
+🧪 **Prova själv:** Kör `PRAGMA journal_mode;` i SQL console. Vilket läge kör din
+PocketBase i?
+
 ⚠️ **Varning:** Kopiera aldrig bara `data.db` som backup medan PocketBase kör –
 de senaste ändringarna kan ligga kvar i `-wal`-filen. Använd PocketBase inbyggda
-backup-funktion eller kommandot `.backup` i `sqlite3`.
+backup (**Settings → Backups**), eller stoppa servern först.
 
 ## 3.6 Transaktioner i PocketBase
 
-PocketBase sköter transaktioner åt dig vid vanliga API-anrop: att skapa en
-record är en egen transaktion. Men när du skriver **hooks** (serverkod i
-JavaScript, modul 02) och vill göra flera ändringar som hör ihop, använder du
-`$app.runInTransaction`:
+PocketBase sköter transaktioner åt dig vid vanliga API-anrop: att skapa, ändra
+eller ta bort en record (inklusive *Cascade delete*) är en egen transaktion.
+Men när du skriver **hooks** (serverkod i JavaScript, modul 02) och vill göra
+flera ändringar som hör ihop, använder du `$app.runInTransaction`:
 
 ```javascript
-// pb_hooks/move_bookings.pb.js (förenklat exempel)
+// pb_hooks/like.pb.js (förenklat exempel): gilla + öka räknaren
 $app.runInTransaction((txApp) => {
-    const oldRes = txApp.findFirstRecordByData("resources", "name", "Festlokalen");
-    const newRes = txApp.findFirstRecordByData("resources", "name", "Nya festlokalen");
+    const post = txApp.findRecordById("posts", postId);
 
-    const bookings = txApp.findRecordsByFilter(
-        "bookings", "resource = {:id}", "", 0, 0, { id: oldRes.id });
+    const like = new Record(txApp.findCollectionByNameOrId("likes"));
+    like.set("post", postId);
+    like.set("user", userId);
+    txApp.save(like);              // unika indexet kastar fel vid dubbelgillning
 
-    for (const b of bookings) {
-        b.set("resource", newRes.id);
-        txApp.save(b);          // använd txApp, inte $app, inuti transaktionen!
-    }
+    post.set("likes_count", post.getInt("likes_count") + 1);
+    txApp.save(post);              // använd txApp, inte $app, inuti transaktionen!
+
     // Kastas ett fel någonstans här rullas ALLT tillbaka automatiskt.
 });
 ```
@@ -425,9 +470,9 @@ Annars körs anropet *utanför* transaktionen – och eftersom SQLite bara har e
 skrivare kan det till och med hänga sig (deadlock) när det väntar på låset som
 den egna transaktionen håller.
 
-För dubbelbokningsproblemet i PocketBase använder man typiskt ett **unikt index**
-på collectionen (`resource` + `start`) eller en hook som kontrollerar överlapp
-innan en bokning sparas. Det gör vi i modul 02.
+För dubbelgillningsproblemet räcker det unika indexet på `likes(post, user)` som
+du redan har skapat. I modul 02 ser du hur API-regler och hooks skyddar resten,
+t.ex. att man inte kan följa sig själv.
 
 ## 3.7 Sammanfattning
 
@@ -437,22 +482,26 @@ innan en bokning sparas. Det gör vi i modul 02.
   **I**solering: samtidiga transaktioner stör inte varandra. **D**urability: det
   committade finns kvar efter en krasch.
 - Klassiska samtidighetsproblem: dirty read, non-repeatable read, phantom read och
-  lost update. Dubbelbokning är ett exempel på ett race condition.
-- Skydda dig med **villkor/unika index** och genom att göra kontroll + skrivning i
-  **samma transaktion**.
+  lost update. Dubbeltryck på gilla-knappen är ett race condition.
+- Skydda dig med **villkor/unika index** (gärna med `ON CONFLICT DO NOTHING`), med
+  **atomära satser** (`likes_count = likes_count + 1`) och genom att göra
+  kontroll + skrivning i **samma transaktion**.
 - **SQLite** har en skrivare åt gången och kör i praktiken serialiserbart.
   **WAL** låter läsare och skrivare arbeta samtidigt. PocketBase använder WAL.
-- I PocketBase-hooks använder du `$app.runInTransaction((txApp) => ...)`.
+- I SQL console: avsluta alltid `BEGIN` med `COMMIT` eller `ROLLBACK` i samma
+  körning. I PocketBase-hooks: `$app.runInTransaction((txApp) => ...)`.
 
 ## Kontrollfrågor
 
-1. Vad händer med ändringarna om du kör `BEGIN`, två `UPDATE` och sedan stänger
-   `sqlite3` utan `COMMIT`?
-2. Vilken ACID-egenskap bryts om en överföring drar pengar från ett konto men
-   aldrig sätter in dem på det andra?
-3. Varför räcker det inte att appen först kollar om en tid är ledig och sedan
-   bokar?
+1. Vad händer med ändringarna om en transaktion har gjort två `INSERT` och
+   servern kraschar innan `COMMIT`?
+2. Vilken ACID-egenskap bryts om en gillning sparas men räknaren `likes_count`
+   aldrig ökas?
+3. Varför räcker det inte att appen först kollar om användaren redan gillat och
+   sedan sparar gillningen?
 4. Vad är skillnaden mellan `BEGIN` och `BEGIN IMMEDIATE` i SQLite?
-5. Vilka tre filer hittar du i `pb_data/` för databasen och varför?
+5. Varför kan PocketBase sluta svara om du kör `BEGIN;` i SQL console utan att
+   avsluta transaktionen?
+6. Vilka tre filer hittar du i `pb_data/` för databasen och varför?
 
 Nästa kapitel: [Kapitel 4 – Databasdesign](04-databasdesign.md)

@@ -12,7 +12,7 @@ Reaktivitet bygger på två verktyg:
 ```dart
 final count = ref(0);          // Ref<int>
 final name = ref('Anna');      // Ref<String>
-final selected = ref<String?>(null); // ange typen när startvärdet är null
+final selectedPostId = ref<String?>(null); // ange typen när startvärdet är null
 
 print(count.value);  // läs: 0
 count.value = 5;     // skriv: triggar alla som läst count
@@ -32,16 +32,16 @@ En `Ref<T>` är en låda med ett värde. Allt går via `.value`:
 import { ref } from 'vue'
 
 const count = ref(0)
-const selectedResource = ref<string | null>(null)
+const selectedPostId = ref<string | null>(null)
 
 function choose(id: string) {
-  selectedResource.value = id
+  selectedPostId.value = id
 }
 </script>
 
 <template>
   <p>{{ count }}</p>
-  <p v-if="selectedResource">Vald: {{ selectedResource }}</p>
+  <p v-if="selectedPostId">Valt inlägg: {{ selectedPostId }}</p>
 </template>
 ```
 
@@ -49,15 +49,15 @@ function choose(id: string) {
 @override
 Widget Function(BuildContext) setup() {
   final count = ref(0);
-  final selectedResource = ref<String?>(null);
+  final selectedPostId = ref<String?>(null);
 
-  void choose(String id) => selectedResource.value = id;
+  void choose(String id) => selectedPostId.value = id;
 
   return (context) => Column(
         children: [
           Text('${count.value}'),
-          if (selectedResource.value != null)
-            Text('Vald: ${selectedResource.value}'),
+          if (selectedPostId.value != null)
+            Text('Valt inlägg: ${selectedPostId.value}'),
         ],
       );
 }
@@ -111,21 +111,52 @@ Egenskaper hos `computed`:
 - **Skrivskyddad.** `computed` returnerar en `ReadonlyRef<T>`. Försöker du skriva
   `fullName.value = …` blir det kompileringsfel.
 
-### Exempel: lediga tider för en resurs
+### Exempel: filtrera och sök i flödet
+
+Flödet i Kvittra kan visa alla inlägg, bara inlägg från dem du följer eller bara dina
+egna. Dessutom finns en sökruta. Allt det är *härlett* från tre refs:
 
 ```dart
-final bookedHours = ref(<int>[8, 9, 13]);    // bokade starttimmar idag
-final openingHours = List.generate(14, (i) => i + 7); // 07–20
+enum FeedFilter { all, following, mine }
 
-final freeHours = computed(
-  () => openingHours.where((h) => !bookedHours.value.contains(h)).toList(),
-);
-final freeCount = computed(() => freeHours.value.length);
-final isFullyBooked = computed(() => freeCount.value == 0);
+class Post {
+  const Post({required this.id, required this.author, required this.title});
+  final String id;
+  final String author; // användarnamn
+  final String title;
+}
+
+const me = 'anna';
+
+final posts = ref(<Post>[
+  const Post(id: '1', author: 'anna', title: 'Hej Kvittra!'),
+  const Post(id: '2', author: 'bo', title: 'Flutter är kul'),
+  const Post(id: '3', author: 'cecilia', title: 'Tips om Dart'),
+]);
+final following = ref(<String>{'bo'});
+final filter = ref(FeedFilter.all);
+final search = ref('');
+
+final filtered = computed(() => switch (filter.value) {
+      FeedFilter.all => posts.value,
+      FeedFilter.following =>
+        posts.value.where((p) => following.value.contains(p.author)).toList(),
+      FeedFilter.mine => posts.value.where((p) => p.author == me).toList(),
+    });
+
+final visible = computed(() {
+  final q = search.value.trim().toLowerCase();
+  if (q.isEmpty) return filtered.value;
+  return filtered.value.where((p) => p.title.toLowerCase().contains(q)).toList();
+});
+
+final summary = computed(() => '${visible.value.length} av ${posts.value.length} inlägg');
 ```
 
 Lägg märke till att en `computed` kan bero på en annan `computed`. Det bildar en kedja
-där bara det som påverkas räknas om.
+där bara det som påverkas räknas om. Skriver användaren i sökrutan räknas `visible` och
+`summary` om, men `filtered` återanvänds från cachen eftersom varken `posts`,
+`following` eller `filter` har ändrats.
 
 > 💡 **Tips:** En `computed` ska vara en **ren funktion**: samma indata ger samma utdata
 > och inga sidoeffekter. Inga `print`, inga API-anrop, inga skrivningar till andra refs.
@@ -137,14 +168,15 @@ Ibland vill du ha ett härlett värde som också går att skriva till, t.ex. fö
 tvåvägsbindning. Det finns `writableComputed`:
 
 ```dart
-final minutes = ref(90);
+final username = ref('anna');
 
-final hours = writableComputed<double>(
-  get: () => minutes.value / 60,
-  set: (h) => minutes.value = (h * 60).round(),
+// "@anna" i UI:t, men lagrat utan @
+final handle = writableComputed<String>(
+  get: () => '@${username.value}',
+  set: (h) => username.value = h.startsWith('@') ? h.substring(1) : h,
 );
 
-hours.value = 2; // minutes.value blir 120
+handle.value = '@bo'; // username.value blir 'bo'
 ```
 
 Vue har samma sak: `computed({ get, set })`. Du kommer att använda den sällan. Den
@@ -161,17 +193,17 @@ I Flutter Compositions är reaktiviteten **grund**. Bara själva tilldelningen t
 `.value` triggar. Ändrar du *inuti* objektet märker systemet ingenting.
 
 ```dart
-final items = ref(<String>['Tvättstuga 1']);
+final tags = ref(<String>['#flutter']);
 
 // ❌ Muterar listan, men ingen tilldelning till .value, alltså ingen uppdatering
-items.value.add('Festlokalen');
+tags.value.add('#dart');
 
 // ❌ Samma lista-instans igen; == är sant, alltså ingen uppdatering
-items.value.add('Festlokalen');
-items.value = items.value;
+tags.value.add('#dart');
+tags.value = tags.value;
 
 // ✅ Ny lista, tilldelning, uppdatering
-items.value = [...items.value, 'Festlokalen'];
+tags.value = [...tags.value, '#dart'];
 ```
 
 ### Recept för listor, maps och sets
@@ -179,30 +211,30 @@ items.value = [...items.value, 'Festlokalen'];
 Tänk "ersätt, mutera inte":
 
 ```dart
-final bookings = ref(<Booking>[]);
+final posts = ref(<Post>[]);
 
-// Lägg till
-bookings.value = [...bookings.value, nyBokning];
+// Lägg till (nyast först)
+posts.value = [nyttInlagg, ...posts.value];
 
 // Ta bort
-bookings.value = bookings.value.where((b) => b.id != id).toList();
+posts.value = posts.value.where((p) => p.id != id).toList();
 
 // Ersätt ett element
-bookings.value = [
-  for (final b in bookings.value) b.id == uppdaterad.id ? uppdaterad : b,
+posts.value = [
+  for (final p in posts.value) p.id == uppdaterat.id ? uppdaterat : p,
 ];
 
 // Sortera (sort() muterar, så kopiera först)
-bookings.value = [...bookings.value]..sort((a, b) => a.start.compareTo(b.start));
+posts.value = [...posts.value]..sort((a, b) => a.title.compareTo(b.title));
 
-// Map
-final counts = ref(<String, int>{});
-counts.value = {...counts.value, 'tvatt': 3};
+// Map: antal gillningar per inlägg
+final likeCounts = ref(<String, int>{});
+likeCounts.value = {...likeCounts.value, 'post1': 3};
 
-// Set
-final selectedIds = ref(<String>{});
-selectedIds.value = {...selectedIds.value, 'abc'};
-selectedIds.value = {...selectedIds.value}..remove('abc');
+// Set: vilka användare jag följer
+final following = ref(<String>{});
+following.value = {...following.value, 'bo'};
+following.value = {...following.value}..remove('bo');
 ```
 
 ### Vue ↔ Dart: lägga till en todo
@@ -229,53 +261,62 @@ void add(String t) {
 
 ## Immutabla modeller med `copyWith`
 
-Samma regel gäller för egna klasser. Om en `Ref<Booking>` håller ett objekt och du
+Samma regel gäller för egna klasser. Om en `Ref<Post>` håller ett objekt och du
 ändrar ett fält inuti det triggas ingenting. Gör därför modellerna **immutabla**
 (`final`-fält) och skapa nya instanser med en `copyWith`-metod:
 
 ```dart
-class Booking {
-  const Booking({
+class Post {
+  const Post({
     required this.id,
-    required this.resourceId,
-    required this.start,
-    required this.end,
-    this.note = '',
+    required this.author,
+    required this.title,
+    required this.body,
+    this.likeCount = 0,
+    this.likedByMe = false,
   });
 
   final String id;
-  final String resourceId;
-  final DateTime start;
-  final DateTime end;
-  final String note;
+  final String author;
+  final String title;
+  final String body;
+  final int likeCount;
+  final bool likedByMe;
 
-  Booking copyWith({DateTime? start, DateTime? end, String? note}) => Booking(
+  Post copyWith({String? title, String? body, int? likeCount, bool? likedByMe}) =>
+      Post(
         id: id,
-        resourceId: resourceId,
-        start: start ?? this.start,
-        end: end ?? this.end,
-        note: note ?? this.note,
+        author: author,
+        title: title ?? this.title,
+        body: body ?? this.body,
+        likeCount: likeCount ?? this.likeCount,
+        likedByMe: likedByMe ?? this.likedByMe,
       );
 }
 ```
 
 ```dart
-final draft = ref(Booking(
-  id: 'ny',
-  resourceId: 'tvatt1',
-  start: DateTime(2025, 3, 1, 8),
-  end: DateTime(2025, 3, 1, 10),
+final post = ref(const Post(
+  id: 'p1',
+  author: 'anna',
+  title: 'Hej Kvittra!',
+  body: 'Mitt första inlägg.',
+  likeCount: 41,
 ));
 
 // ❌ Kompilerar inte ens, fälten är final. Bra!
-// draft.value.note = 'Tar med egen tvättmedel';
+// post.value.likedByMe = true;
 
 // ✅ Ny instans
-draft.value = draft.value.copyWith(note: 'Tar med eget tvättmedel');
+void toggleLike() {
+  final p = post.value;
+  post.value = p.copyWith(
+    likedByMe: !p.likedByMe,
+    likeCount: p.likeCount + (p.likedByMe ? -1 : 1),
+  );
+}
 
-final durationHours = computed(
-  () => draft.value.end.difference(draft.value.start).inHours,
-);
+final likeLabel = computed(() => '${post.value.likeCount} gillningar');
 ```
 
 > 💡 **Tips:** I större projekt genererar man ofta `copyWith`, `==` och `hashCode` med
@@ -286,15 +327,18 @@ final durationHours = computed(
 För formulär är det ofta enklare att ha en ref per fält i stället för ett stort objekt:
 
 ```dart
-final date = ref<DateTime?>(null);
-final hours = ref(1);
-final note = ref('');
+final title = ref('');
+final body = ref('');
+final groupId = ref<String?>(null); // valfri grupp
 
-final isValid = computed(() => date.value != null && hours.value <= 4);
+final isValid = computed(
+  () => title.value.trim().length >= 3 && body.value.trim().isNotEmpty,
+);
 ```
 
 Då kan varje fält ändras för sig, och en `computed` ser bara de fält den läser. Vi
-använder det mönstret i bokningsformuläret i [kapitel 5](05-composables.md).
+använder det mönstret i kommentarsfältet i [kapitel 5](05-composables.md) och i
+formuläret för nya inlägg i [kapitel 9](09-arkitektur-for-en-riktig-app.md).
 
 ## Var får jag skapa refs?
 
@@ -338,12 +382,13 @@ final label2 = computed(() => 'Antal ${count.value}'); // ✅
 
 ## 🧪 Prova själv
 
-Bygg en `CompositionWidget` "Tvättlista":
+Bygg en `CompositionWidget` "Tagglista" för hashtaggar till ett inlägg:
 
-1. `final items = ref(<String>[]);` och ett textfält (använd `onSubmitted` tills vidare;
-   i kapitel 5 lär du dig `useTextEditingController`).
+1. `final tags = ref(<String>[]);` och ett textfält (använd `onSubmitted` tills vidare;
+   i kapitel 5 lär du dig `useTextEditingController`). Lägg till `#` först om
+   användaren glömt det.
 2. En `computed` `count` och en `computed` `sorted` som returnerar en sorterad kopia.
-3. En knapp "Ta bort första". Prova först att skriva `items.value.removeAt(0)` och se
+3. En knapp "Ta bort första". Prova först att skriva `tags.value.removeAt(0)` och se
    att ingenting händer. Skriv sedan om det korrekt.
 
 ## Sammanfattning

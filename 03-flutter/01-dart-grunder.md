@@ -14,7 +14,7 @@ Varje Dart-program startar i funktionen `main`:
 
 ```dart
 void main() {
-  print('Hej föreningen!');
+  print('Hej Kvittra!');
 }
 ```
 
@@ -22,19 +22,19 @@ void main() {
 
 ```dart
 void main() {
-  var antal = 3;            // typen (int) räknas ut automatiskt
-  antal = 4;                // OK, var kan ändras
-  // antal = 'fyra';        // FEL: antal är en int
+  var gillningar = 3;          // typen (int) räknas ut automatiskt
+  gillningar = 4;              // OK, var kan ändras
+  // gillningar = 'fyra';      // FEL: gillningar är en int
 
-  final namn = 'Tvättstuga 1'; // kan bara tilldelas en gång
-  // namn = 'Festlokalen';  // FEL
+  final anvandarnamn = 'anna'; // kan bara tilldelas en gång
+  // anvandarnamn = 'bo';      // FEL
 
-  const maxTimmar = 3;      // kompileringstidskonstant
-  final nu = DateTime.now(); // OK med final, värdet räknas ut när programmet kör
+  const maxTecken = 280;       // kompileringstidskonstant
+  final nu = DateTime.now();   // OK med final, värdet räknas ut när programmet kör
   // const nu2 = DateTime.now(); // FEL: inte känt vid kompilering
 
-  String beskrivning = 'Källaren, hus B'; // explicit typ
-  print('$namn: $beskrivning, max $maxTimmar h, antal $antal, $nu');
+  String bio = 'Gillar fika och Flutter'; // explicit typ
+  print('@$anvandarnamn: $bio ($gillningar gillningar, max $maxTecken tecken, $nu)');
 }
 ```
 
@@ -51,13 +51,13 @@ Flutter då kan återanvända samma objekt och slipper bygga om det.
 ## Grundtyper
 
 ```dart
-int vaning = 3;
-double storlek = 74.5;
+int foljare = 128;
+double snittGillningar = 4.5;
 num tal = 5;          // int eller double
-bool aktiv = true;
-String nummer = '1102';
-DateTime start = DateTime(2026, 3, 14, 18, 0);
-Duration langd = const Duration(hours: 2);
+bool gillad = true;
+String anvandarnamn = 'anna';
+DateTime skapad = DateTime(2026, 3, 14, 18, 0);
+Duration sedan = const Duration(minutes: 42);
 dynamic vadSomHelst = 'undvik detta'; // stänger av typkontrollen
 ```
 
@@ -79,37 +79,37 @@ I Dart kan en variabel **inte** vara `null` om du inte uttryckligen säger det m
 ett frågetecken efter typen.
 
 ```dart
-String namn = 'Festlokalen';
+String namn = 'Anna Lind';
 // namn = null;            // FEL: String kan inte vara null
 
-String? notering;          // String? = "String eller null". Startar som null
-notering = 'Ta med egen duk';
-notering = null;           // OK
+String? webbplats;         // String? = "String eller null". Startar som null
+webbplats = 'anna.example.com';
+webbplats = null;          // OK
 ```
 
 Verktygen för att jobba med nullbara värden:
 
 ```dart
-void visaBokning(String? notering) {
-  // 1. Kontroll med if. Efter kontrollen vet Dart att notering inte är null
-  if (notering != null) {
-    print(notering.length); // OK
+void visaProfil(String? bio) {
+  // 1. Kontroll med if. Efter kontrollen vet Dart att bio inte är null
+  if (bio != null) {
+    print(bio.length); // OK
   }
 
   // 2. ?. – anropa bara om inte null (ger null annars)
-  final langd = notering?.length; // int?
+  final langd = bio?.length; // int?
 
   // 3. ?? – reservvärde om null
-  final text = notering ?? 'Ingen notering';
+  final text = bio ?? 'Ingen bio ännu';
 
   // 4. ??= – tilldela bara om variabeln är null
   String? cache;
   cache ??= 'första värdet';
 
   // 5. ! – "jag lovar att det inte är null". Kraschar om du har fel!
-  final saker = notering!.toUpperCase();
+  final versaler = bio!.toUpperCase();
 
-  print('$langd $text $cache $saker');
+  print('$langd $text $cache $versaler');
 }
 ```
 
@@ -123,11 +123,11 @@ Flutter. Föredra `if`, `?.` och `??`.
 Du ser det ofta i Flutter för controllers som skapas i `initState` (kapitel 03).
 
 ```dart
-class BokningsSkarm {
-  late final String resursNamn; // tilldelas senare, men bara en gång
+class ProfilSkarm {
+  late final String anvandarnamn; // tilldelas senare, men bara en gång
 
   void init() {
-    resursNamn = 'Tvättstuga 1';
+    anvandarnamn = 'anna';
   }
 }
 ```
@@ -138,25 +138,26 @@ Om du läser en `late`-variabel innan den har fått ett värde får du ett körf
 ## Strängar
 
 ```dart
-final resurs = 'Tvättstuga 1';
-final timmar = 2;
+final anvandarnamn = 'anna';
+final gillningar = 12;
 
-print('Du har bokat $resurs');                    // enkel variabel
-print('Totalt ${timmar * 60} minuter');           // uttryck kräver {}
-print('Namnet har ${resurs.length} tecken');
+print('Inlägg av @$anvandarnamn');                 // enkel variabel
+print('${gillningar + 1} personer gillar detta');  // uttryck kräver {}
+print('Namnet har ${anvandarnamn.length} tecken');
 
 final flerrader = '''
-Välkommen till föreningen!
-Läs anslagstavlan regelbundet.
+Välkommen till Kvittra!
+Följ några konton för att fylla ditt flöde.
 ''';
 
-final rad = 'Tvätt' + 'stuga';  // fungerar, men interpolation är vanligare
+final rad = 'Kvitt' + 'ra';  // fungerar, men interpolation är vanligare
 final ra = r'C:\temp\$inte_variabel'; // r = raw string, ingen interpolation
 ```
 
 ⚠️ **Varning:** Identifierare (variabel-, funktions- och klassnamn) i Dart får
 bara innehålla engelska bokstäver, siffror, `_` och `$`. Därför skriver vi
-`vaning` och inte `våning` i koden. I strängar går det förstås bra med å, ä och ö.
+`antalFoljare` och inte `antalFöljare`, och `inlagg` i stället för `inlägg`. I
+strängar går det förstås bra med å, ä och ö.
 
 Användbara metoder: `toUpperCase()`, `trim()`, `contains()`, `startsWith()`,
 `split(',')`, `replaceAll('a', 'b')`, `isEmpty`, `isNotEmpty`, `padLeft(2, '0')`.
@@ -168,20 +169,20 @@ världen använder oftast enkla.
 
 ```dart
 // List – ordnad lista (som Array i JS)
-final resurser = <String>['Tvättstuga 1', 'Tvättstuga 2'];
-resurser.add('Festlokalen');
-print(resurser[0]);      // Tvättstuga 1
-print(resurser.length);  // 3
+final anvandare = <String>['anna', 'bo'];
+anvandare.add('cecilia');
+print(anvandare[0]);      // anna
+print(anvandare.length);  // 3
 
 // Map – nyckel/värde (som ett objekt eller Map i JS)
-final vaningar = <String, int>{'1101': 1, '1201': 2};
-vaningar['1301'] = 3;
-print(vaningar['1101']);  // 1
-print(vaningar['9999']);  // null – därför är typen int?
+final gillningarPerInlagg = <int, int>{1: 12, 2: 0};
+gillningarPerInlagg[3] = 5;
+print(gillningarPerInlagg[1]);   // 12
+print(gillningarPerInlagg[99]);  // null – därför är typen int?
 
 // Set – unika värden
-final roller = <String>{'member', 'admin', 'member'};
-print(roller);           // {member, admin}
+final hashtaggar = <String>{'#flutter', '#fika', '#flutter'};
+print(hashtaggar);        // {#flutter, #fika}
 ```
 
 ### Funktionella metoder
@@ -189,14 +190,14 @@ print(roller);           // {member, admin}
 Samma idéer som `map`/`filter`/`reduce` i JavaScript:
 
 ```dart
-final timmar = [2, 3, 1, 4];
+final gillningar = [12, 0, 5, 30];
 
-final dubbla = timmar.map((t) => t * 2).toList();   // [4, 6, 2, 8]
-final langa = timmar.where((t) => t >= 3).toList(); // [3, 4]  (filter i JS)
-final summa = timmar.fold(0, (sum, t) => sum + t);  // 10      (reduce i JS)
-final finnsLang = timmar.any((t) => t > 3);         // true    (some i JS)
-final allaKorta = timmar.every((t) => t < 5);       // true
-final forsta = timmar.firstWhere((t) => t > 2);     // 3
+final dubbla = gillningar.map((g) => g * 2).toList();     // [24, 0, 10, 60]
+final populara = gillningar.where((g) => g >= 10).toList(); // [12, 30]  (filter i JS)
+final summa = gillningar.fold(0, (sum, g) => sum + g);    // 47        (reduce i JS)
+final nagonViral = gillningar.any((g) => g > 25);         // true      (some i JS)
+final allaUnder100 = gillningar.every((g) => g < 100);    // true
+final forstaGillade = gillningar.firstWhere((g) => g > 0); // 12
 ```
 
 ⚠️ **Varning:** `map` och `where` returnerar en *lat* `Iterable`, inte en `List`.
@@ -207,51 +208,51 @@ Glöm inte `.toList()` när du behöver en lista.
 Det här används hela tiden i Flutter för att bygga listor av widgets.
 
 ```dart
-final ordinarie = ['Tvättstuga 1', 'Tvättstuga 2'];
-final arAdmin = true;
+final flikar = ['Flöde', 'Sök'];
+final arInloggad = true;
 
-final alla = [
-  ...ordinarie,                     // spread, som ... i JS
-  if (arAdmin) 'Styrelserummet',    // collection-if
-  for (final n in [1, 2]) 'Förråd $n', // collection-for
+final meny = [
+  ...flikar,                          // spread, som ... i JS
+  if (arInloggad) 'Min profil',       // collection-if
+  for (final n in [1, 2]) 'Förslag $n', // collection-for
 ];
-print(alla);
-// [Tvättstuga 1, Tvättstuga 2, Styrelserummet, Förråd 1, Förråd 2]
+print(meny);
+// [Flöde, Sök, Min profil, Förslag 1, Förslag 2]
 
 List<String>? kanskeNull;
-final saker = [...?kanskeNull, 'Cykelrum']; // ...? hoppar över null
+final saker = [...?kanskeNull, 'Inställningar']; // ...? hoppar över null
 ```
 
 ## Funktioner
 
 ```dart
 // Vanlig funktion med typer
-int beraknaMinuter(int timmar) {
-  return timmar * 60;
+int lastidSekunder(int antalOrd) {
+  return (antalOrd / 200 * 60).round(); // ca 200 ord per minut
 }
 
 // Pilfunktion (arrow) för ett enda uttryck
-int beraknaMinuter2(int timmar) => timmar * 60;
+String handle(String anvandarnamn) => '@$anvandarnamn';
 
 // Valfria positionella parametrar med []
 String halsa(String namn, [String? halsning]) =>
     '${halsning ?? 'Hej'} $namn';
 
 // Namngivna parametrar med {} – standard i Flutter
-String bokningsText({
-  required String resurs,    // måste anges
-  int timmar = 1,            // standardvärde
-  String? notering,          // valfri, kan vara null
+String inlaggsRubrik({
+  required String forfattare, // måste anges
+  int gillningar = 0,         // standardvärde
+  String? plats,              // valfri, kan vara null
 }) {
-  final extra = notering == null ? '' : ' ($notering)';
-  return '$resurs i $timmar h$extra';
+  final extra = plats == null ? '' : ' i $plats';
+  return '$forfattare$extra · $gillningar gillningar';
 }
 
 void main() {
   print(halsa('Anna'));                    // Hej Anna
   print(halsa('Anna', 'Tjena'));           // Tjena Anna
-  print(bokningsText(resurs: 'Festlokalen', timmar: 4));
-  print(bokningsText(notering: 'Kväll', resurs: 'Tvättstuga 1'));
+  print(inlaggsRubrik(forfattare: 'Anna', gillningar: 12));
+  print(inlaggsRubrik(plats: 'Malmö', forfattare: 'Bo'));
 }
 ```
 
@@ -267,7 +268,7 @@ void utforTvaGanger(void Function() handling) {
 }
 
 void main() {
-  utforTvaGanger(() => print('Pling!'));
+  utforTvaGanger(() => print('Kvitt!'));
 }
 ```
 
@@ -276,90 +277,100 @@ returnerar något". I Flutter heter den `VoidCallback` och används för `onPres
 
 ## Klasser
 
-Låt oss modellera en resurs från föreningens databas.
+Låt oss modellera ett inlägg. JSON-nycklarna är samma som i JSONPlaceholder
+(`userId`, `id`, `title`, `body`), som vi hämtar riktig data från i kapitel 05.
+Utöver dem har vi två fält som appen själv håller reda på: hur många som gillar
+inlägget och om *du* gillar det.
 
 ```dart
-class Resource {
+class Post {
   // Fält. final = kan inte ändras efter att objektet skapats
-  final String id;
-  final String name;
-  final String description;
-  final int maxHours;
-  final bool active;
+  final int id;
+  final int userId;
+  final String title;
+  final String body;
+  final int likeCount;
+  final bool liked;
 
   // Konstruktor med namngivna parametrar. this.x tilldelar fältet direkt
-  const Resource({
+  const Post({
     required this.id,
-    required this.name,
-    this.description = '',
-    this.maxHours = 2,
-    this.active = true,
+    required this.userId,
+    required this.title,
+    this.body = '',
+    this.likeCount = 0,
+    this.liked = false,
   });
 
-  // Namngiven konstruktor
-  const Resource.tvattstuga(this.id, int nummer)
-      : name = 'Tvättstuga',
-        description = 'Källaren',
-        maxHours = 3,
-        active = true;
+  // Namngiven konstruktor: ett tomt utkast som ännu inte har fått något id
+  const Post.draft({required this.userId, required this.title})
+      : id = 0,
+        body = '',
+        likeCount = 0,
+        liked = false;
 
-  // factory-konstruktor: skapar objekt från JSON (t.ex. från PocketBase)
-  factory Resource.fromJson(Map<String, dynamic> json) {
-    return Resource(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String? ?? '',
-      maxHours: (json['max_hours'] as num?)?.toInt() ?? 2,
-      active: json['active'] as bool? ?? true,
+  // factory-konstruktor: skapar objekt från JSON (t.ex. från ett API)
+  factory Post.fromJson(Map<String, dynamic> json) {
+    return Post(
+      id: json['id'] as int,
+      userId: json['userId'] as int,
+      title: json['title'] as String,
+      body: json['body'] as String? ?? '',
+      // Finns inte i JSONPlaceholder, så vi har reservvärden
+      likeCount: (json['likeCount'] as num?)?.toInt() ?? 0,
+      liked: json['liked'] as bool? ?? false,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'name': name,
-        'description': description,
-        'max_hours': maxHours,
-        'active': active,
+        'userId': userId,
+        'title': title,
+        'body': body,
       };
 
-  // Getter – ett beräknat värde som ser ut som ett fält
-  String get label => active ? name : '$name (avstängd)';
+  // Getters – beräknade värden som ser ut som fält
+  String get preview => body.length > 40 ? '${body.substring(0, 40)}…' : body;
+  String get likeLabel => likeCount == 1 ? '1 gillning' : '$likeCount gillningar';
 
   // copyWith – skapa en kopia med vissa fält ändrade
-  Resource copyWith({
-    String? name,
-    String? description,
-    int? maxHours,
-    bool? active,
-  }) {
-    return Resource(
+  Post copyWith({String? title, String? body, int? likeCount, bool? liked}) {
+    return Post(
       id: id,
-      name: name ?? this.name,
-      description: description ?? this.description,
-      maxHours: maxHours ?? this.maxHours,
-      active: active ?? this.active,
+      userId: userId,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      likeCount: likeCount ?? this.likeCount,
+      liked: liked ?? this.liked,
     );
   }
 
+  // Gilla/ogilla: en ny kopia, originalet ändras inte
+  Post toggleLike() => copyWith(
+        liked: !liked,
+        likeCount: liked ? likeCount - 1 : likeCount + 1,
+      );
+
   @override
-  String toString() => 'Resource($id, $name, max $maxHours h)';
+  String toString() => 'Post($id, "$title", $likeLabel)';
 }
 
 void main() {
   final json = {
-    'id': 'r1',
-    'name': 'Festlokalen',
-    'description': 'Plan 1, hus A',
-    'max_hours': 6,
-    'active': true,
+    'userId': 1,
+    'id': 1,
+    'title': 'Första fikat på nya kontoret',
+    'body': 'Kanelbullar till alla som kommer före nio!',
   };
 
-  final fest = Resource.fromJson(json);
-  final avstangd = fest.copyWith(active: false);
+  final post = Post.fromJson(json);
+  final gillad = post.toggleLike();
 
-  print(fest);           // Resource(r1, Festlokalen, max 6 h)
-  print(avstangd.label); // Festlokalen (avstängd)
-  print(fest.label);     // Festlokalen – originalet är oförändrat
+  print(post);           // Post(1, "Första fikat på nya kontoret", 0 gillningar)
+  print(gillad);         // Post(1, "Första fikat på nya kontoret", 1 gillning)
+  print(gillad.liked);   // true
+  print(post.liked);     // false – originalet är oförändrat
+  print(post.preview);   // Kanelbullar till alla som kommer före ni…
 }
 ```
 
@@ -367,8 +378,8 @@ Några saker att lägga märke till:
 
 - Dart har inget `new`-nyckelord (det är valfritt och används inte).
 - Med bara `final`-fält blir objektet **oföränderligt** (immutable). I stället för
-  att ändra ett objekt skapar du en ny kopia med `copyWith`. Flutter bygger mycket
-  på den idén.
+  att ändra ett objekt skapar du en ny kopia med `copyWith`. `toggleLike` gör just
+  det. Flutter bygger mycket på den idén.
 - `factory` används när konstruktorn behöver göra något mer än att bara tilldela
   fält, till exempel tolka JSON.
 - `as String` är en typomvandling ("cast"). Den kraschar om värdet har fel typ, så
@@ -382,17 +393,19 @@ nyckelord.
 
 ```dart
 abstract class Entity {
-  String get id;
+  int get id;
 }
 
-class Post extends Entity {
+class User extends Entity {
   @override
-  final String id;
-  final String title;
-  final String body;
-  final DateTime created;
+  final int id;
+  final String name;
+  final String username;
+  final String email;
 
-  Post({required this.id, required this.title, required this.body, required this.created});
+  User({required this.id, required this.name, required this.username, required this.email});
+
+  String get handle => '@$username';
 }
 ```
 
@@ -402,28 +415,28 @@ Du kommer att använda `extends` mest för att skapa widgets
 ## Enums
 
 En enum är en fast uppsättning värden. Dart har *enhanced enums*, som kan ha fält
-och metoder.
+och metoder. Här är de tre flikarna överst i Kvittras flöde:
 
 ```dart
-enum Role {
-  member('Medlem'),
-  board('Styrelse'),
-  admin('Administratör');
+enum FeedFilter {
+  all('Alla'),
+  following('Följer'),
+  mine('Mina');
 
-  const Role(this.label);
+  const FeedFilter(this.label);
   final String label;
 
-  bool get canPublishPosts => this == board || this == admin;
+  bool get requiresLogin => this != all;
 
-  static Role fromString(String value) =>
-      Role.values.firstWhere((r) => r.name == value, orElse: () => Role.member);
+  static FeedFilter fromString(String value) => FeedFilter.values
+      .firstWhere((f) => f.name == value, orElse: () => FeedFilter.all);
 }
 
 void main() {
-  final roll = Role.fromString('board');
-  print(roll.label);           // Styrelse
-  print(roll.name);            // board
-  print(roll.canPublishPosts); // true
+  final filter = FeedFilter.fromString('following');
+  print(filter.label);         // Följer
+  print(filter.name);          // following
+  print(filter.requiresLogin); // true
 }
 ```
 
@@ -433,27 +446,35 @@ Ett **record** är ett litet anonymt "paket" med värden, praktiskt när en funk
 vill returnera mer än en sak.
 
 ```dart
-(int, int) timmarOchMinuter(Duration d) =>
-    (d.inHours, d.inMinutes.remainder(60));
+(int likes, int comments) rakna(List<Map<String, int>> inlagg) {
+  var likes = 0;
+  var comments = 0;
+  for (final p in inlagg) {
+    likes += p['likes'] ?? 0;
+    comments += p['comments'] ?? 0;
+  }
+  return (likes, comments);
+}
 
-({DateTime start, DateTime end}) kvallspass(DateTime dag) => (
-      start: DateTime(dag.year, dag.month, dag.day, 18),
-      end: DateTime(dag.year, dag.month, dag.day, 21),
-    );
+({int followers, int following}) profilSiffror() => (followers: 128, following: 87);
 
 void main() {
-  final (h, m) = timmarOchMinuter(const Duration(minutes: 135));
-  print('$h h $m min'); // 2 h 15 min
+  final (likes, comments) = rakna([
+    {'likes': 12, 'comments': 3},
+    {'likes': 5, 'comments': 0},
+  ]);
+  print('$likes gillningar, $comments kommentarer'); // 17 gillningar, 3 kommentarer
 
-  final pass = kvallspass(DateTime(2026, 3, 14));
-  print(pass.start);    // fält med namn
+  final siffror = profilSiffror();
+  print(siffror.followers);    // fält med namn
 
-  final (:start, :end) = pass; // destrukturera namngivna fält
-  print(end.difference(start).inHours); // 3
+  final (:followers, :following) = siffror; // destrukturera namngivna fält
+  print(followers - following); // 41
 }
 ```
 
-Jämför med JavaScript: `const [h, m] = ...` och `const { start, end } = ...`.
+Jämför med JavaScript: `const [likes, comments] = ...` och
+`const { followers, following } = ...`.
 
 ## Patterns och switch-uttryck
 
@@ -461,28 +482,28 @@ Dart 3 har kraftfulla **patterns**. `switch` kan användas som ett *uttryck* som
 returnerar ett värde:
 
 ```dart
-String beskrivTimmar(int timmar) => switch (timmar) {
-      0 => 'Ingen tid',
-      1 => 'En timme',
-      >= 2 && <= 4 => 'Ett kortare pass',
-      _ => 'Heldag', // _ = allt annat
+String gillaText(int likes) => switch (likes) {
+      0 => 'Bli först att gilla',
+      1 => '1 person gillar detta',
+      >= 2 && <= 99 => '$likes personer gillar detta',
+      _ => '99+ personer gillar detta', // _ = allt annat
     };
 
-String rollText(Role roll) => switch (roll) {
-      Role.member => 'Du kan boka och läsa anslag',
-      Role.board || Role.admin => 'Du kan även publicera anslag',
+String tomtFlode(FeedFilter filter) => switch (filter) {
+      FeedFilter.all => 'Inga inlägg ännu',
+      FeedFilter.following || FeedFilter.mine => 'Inget här – följ någon eller skriv något!',
     };
 ```
 
-Eftersom `Role` är en enum vet Dart vilka värden som finns. Glömmer du ett fall
-får du ett **kompileringsfel**. Det är mycket säkrare än `switch` i JS.
+Eftersom `FeedFilter` är en enum vet Dart vilka värden som finns. Glömmer du ett
+fall får du ett **kompileringsfel**. Det är mycket säkrare än `switch` i JS.
 
 Patterns fungerar också på JSON (maps), vilket gör tolkning både kortare och säkrare:
 
 ```dart
-String? hamtaNamn(Map<String, dynamic> json) {
-  if (json case {'name': String namn, 'active': true}) {
-    return namn;  // matchar bara om name är en String OCH active är true
+String? hamtaHandle(Map<String, dynamic> json) {
+  if (json case {'username': String namn, 'email': String _}) {
+    return '@$namn'; // matchar bara om username OCH email finns och är strängar
   }
   return null;
 }
@@ -511,15 +532,15 @@ class Failed<T> extends LoadState<T> {
 }
 
 String beskriv(LoadState<List<String>> state) => switch (state) {
-      Loading() => 'Laddar...',
-      Loaded(data: final lista) when lista.isEmpty => 'Inga resurser',
-      Loaded(:final data) => '${data.length} resurser',
+      Loading() => 'Laddar flödet...',
+      Loaded(data: final lista) when lista.isEmpty => 'Inga inlägg',
+      Loaded(:final data) => '${data.length} inlägg',
       Failed(:final message) => 'Fel: $message',
     };
 
 void main() {
   print(beskriv(Loading()));
-  print(beskriv(Loaded(['Tvättstuga 1'])));
+  print(beskriv(Loaded(['Första fikat på nya kontoret'])));
   print(beskriv(Failed('Ingen uppkoppling')));
 }
 ```
@@ -535,17 +556,17 @@ Allt som tar tid, som nätverksanrop, filer eller databaser, är **asynkront** i
 - `async`/`await` fungerar som i JS.
 
 ```dart
-Future<List<String>> hamtaResurser() async {
+Future<List<String>> hamtaInlagg() async {
   // Låtsas att vi väntar på nätverket
   await Future.delayed(const Duration(seconds: 1));
-  return ['Tvättstuga 1', 'Festlokalen'];
+  return ['Första fikat på nya kontoret', 'Tips: Flutter DevTools'];
 }
 
 Future<void> main() async {
   print('Hämtar...');
   try {
-    final resurser = await hamtaResurser();
-    print('Fick: $resurser');
+    final inlagg = await hamtaInlagg();
+    print('Fick: $inlagg');
   } catch (e) {
     print('Något gick fel: $e');
   } finally {
@@ -565,7 +586,7 @@ Future<void> main() async {
 varnar ofta, men inte alltid. Om du ser `Instance of 'Future<...>'` i en utskrift
 har du glömt `await`.
 
-En `Stream<T>` är en *ström* av värden över tid, till exempel nya anslag som
+En `Stream<T>` är en *ström* av värden över tid, till exempel nya kommentarer som
 kommer i realtid från PocketBase:
 
 ```dart
@@ -594,11 +615,11 @@ Future<void> main() async {
 import 'dart:convert';                    // från Darts standardbibliotek
 import 'dart:math' as math;               // med prefix
 import 'package:http/http.dart' as http;  // från ett paket i pubspec.yaml
-import 'package:forening_app/models/resource.dart'; // från ditt eget projekt
-import 'models/booking.dart';             // relativ sökväg i projektet
+import 'package:kvittra/models/post.dart'; // från ditt eget projekt
+import 'models/comment.dart';             // relativ sökväg i projektet
 
 void main() {
-  final json = jsonEncode({'name': 'Festlokalen'});
+  final json = jsonEncode({'title': 'Hej Kvittra'});
   print(json);
   print(math.max(3, 7));
 }
@@ -617,10 +638,10 @@ Paket hittar du på <https://pub.dev>. Lägg till dem med `dart pub add <namn>`
 - Enums, records, patterns och sealed classes gör koden säker och uttrycksfull.
 - `Future` + `async`/`await` för saker som tar tid, `Stream` för flera värden över tid.
 
-🧪 **Prova själv:** Skriv en klass `Booking` med fälten `id`, `resourceId`,
-`userId`, `start`, `end` och `note` (nullbar). Lägg till `fromJson` (datum kommer
-som strängar, använd `DateTime.parse`), en getter `duration` och en getter
-`isPast`. Skapa några bokningar i `main` och skriv ut de som är längre än två
-timmar.
+🧪 **Prova själv:** Skriv en klass `Comment` med samma fält som en kommentar i
+JSONPlaceholder: `id` (int), `postId` (int), `name`, `email` och `body`. Lägg till
+`fromJson`, en getter `wordCount` (antal ord i `body`, använd `split`) och en getter
+`emailUser` (delen före `@` i e-postadressen). Skapa några kommentarer från
+JSON-maps i `main` och skriv ut de som har fler än fem ord.
 
 **Nästa kapitel:** [02 – Widgets och layout](02-widgets-och-layout.md)

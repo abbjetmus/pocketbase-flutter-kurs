@@ -1,17 +1,18 @@
 # 9. Arkitektur för en riktig app
 
 Kapitel 1–8 visade byggstenarna. Det här kapitlet visar hur de passar ihop i en app
-av produktionskaraktär för en bostadsrättsförening: inloggning som överlever omstart,
-roller, flera föreningar i samma backend, sidindelade listor, åtgärdsmenyer, en router
-med auth-guard och data i realtid.
+av produktionskaraktär: en riktig version av **Kvittra** med inloggning som överlever
+omstart, ett oändligt flöde, gillningar som känns omedelbara, kommentarer i realtid,
+profiler med följare och **grupper med roller** (`admin`, `moderator`, `member`), en
+router med auth-guard och åtgärdsmenyer som bara visar det man får göra.
 
-Mönstren här är samma som i riktiga föreningsappar. Förstår du dem kan du bygga nya
-funktioner (felanmälan, dokumentarkiv, styrelseprotokoll …) på egen hand, och det är
-precis vad [övning 3.4](ovningar.md#övning-34--ny-feature-felanmälan) går ut på.
+Förstår du mönstren här kan du bygga nya funktioner (notiser, sparade inlägg,
+direktmeddelanden …) på egen hand, och det är precis vad
+[övning 3.4](ovningar.md#övning-34--ny-feature-notiser) går ut på.
 
-All Dart-kod i kapitlet är analyserad med `dart analyze` mot `flutter_compositions`
-0.1.1, `pocketbase` 0.23 och `go_router` 17. Serverkoden (JavaScript) är provkörd mot
-PocketBase.
+All Dart-kod i kapitlet är analyserad med `dart analyze` (och `custom_lint`) mot
+`flutter_compositions` 0.1.1, `pocketbase` 0.25 och `go_router` 17, och testerna i
+slutet av kapitlet går igenom. Serverkoden (JavaScript) är provkörd mot PocketBase.
 
 > 💡 **Tips:** Kapitlet är långt och kodtungt. Läs först texten och tabellerna för att
 > förstå *varför*, och fäll sedan ut koden (`▶ Visa koden`) när du bygger själv.
@@ -19,22 +20,27 @@ PocketBase.
 ## Översikt
 
 ```
-/login ──► /  (dashboard: rutnät med de funktioner rollen har tillgång till)
-            ├── /posts                 Anslag (sidindelad lista, fästa först)
-            │     ├── /posts/new       Nytt anslag
-            │     ├── /posts/:id       Anslag + kommentarer i realtid
-            │     └── /posts/:id/edit  Redigera (samma sida som "ny")
-            ├── /resources             Bokningsbara lokaler
-            │     └── /resources/:id/book   Boka: datum, längd, lediga tider
-            ├── /my-bookings           Mina kommande bokningar
-            └── /members               Medlemslista med sök (admin)
+/login ──► /  (flödet: Alla / Följer / Mina, oändlig scroll)
+            ├── /posts/new              Nytt inlägg (?group=<id> → i en grupp)
+            ├── /posts/:id              Inlägg + kommentarer i realtid
+            ├── /posts/:id/edit         Redigera (samma sida som "nytt")
+            ├── /users/:id              Profil: följare, följ/sluta följa, inlägg
+            └── /groups                 Grupper
+                  ├── /groups/new       Ny grupp
+                  ├── /groups/:id       Gruppens flöde, gå med/lämna
+                  ├── /groups/:id/edit  Redigera gruppen (admin)
+                  └── /groups/:id/members  Medlemmar och roller
 ```
 
-| Roll (`users.role`) | Får |
-|---------------------|-----|
-| `member` | Läsa anslag, kommentera, boka, se och avboka egna bokningar |
-| `styrelse` | Som member, plus skapa och redigera anslag |
-| `admin` | Allt, plus radera anslag, se medlemmar och ändra roller |
+Utanför grupper gäller enkla regler: alla inloggade läser och skriver, och man
+redigerar och raderar bara sitt eget. **I en grupp** styr rollen i `group_members`:
+
+| Roll i gruppen (`group_members.role`) | Får |
+|---------------------------------------|-----|
+| `member` | Läsa, skriva inlägg och kommentera i gruppen. Radera sitt eget |
+| `moderator` | Som member, plus radera andras inlägg och kommentarer i gruppen |
+| `admin` | Som moderator, plus ändra och radera gruppen, ändra roller och ta bort medlemmar |
+| *(inte medlem)* | Läsa i publika grupper, gå med. Ser inte privata grupper alls |
 
 ### Mappstruktur: feature-first
 
@@ -46,20 +52,24 @@ lib/
 │   ├── pocketbase/pocketbase_client.dart
 │   ├── models/                        # Collections + XxxRecord.fromJson
 │   ├── pagination/paginated.dart      # Paginated<T>, PageResult<T>
-│   ├── router/{router.dart, auth_guard.dart}
-│   └── utils/permissions.dart
+│   ├── router/router.dart             # createRouter(authStore) med redirect
+│   └── utils/{permissions.dart, time_ago.dart}
 ├── features/
 │   ├── auth/{auth_store.dart, pages/login_page.dart}
-│   ├── dashboard/pages/dashboard_page.dart
-│   ├── posts/{posts_store.dart, pages/…}
-│   ├── bookings/{bookings_store.dart, composables/use_booking_form.dart, pages/…}
-│   └── members/{members_store.dart, pages/…}
+│   ├── feed/{feed_store.dart, pages/posts_feed_page.dart}
+│   ├── posts/{posts_store.dart, pages/…, widgets/post_card.dart,
+│   │          composables/use_like_toggle.dart}
+│   ├── comments/{comments_store.dart, widgets/…, composables/use_comment_composer.dart}
+│   ├── profile/{profile_store.dart, pages/profile_page.dart}
+│   └── groups/{groups_store.dart, pages/…}
 └── shared/widgets/{paginated_list_view, entity_action_menu, confirm_dialog}.dart
 ```
 
-Varje **feature** har en *store* och en `pages/`-mapp med (oftast) tre sidor:
-`x_list_page`, `x_detail_page` och `create_x_page`. Den sista hanterar **både skapa och
-redigera**: får sidan ett id är den i redigeringsläge.
+Varje **feature** har en *store* och (oftast) en `pages/`-mapp. Inläggen har den
+klassiska trion **lista / detalj / skapa-redigera**: `posts_feed_page`,
+`post_detail_page` och `create_post_page`. Den sista hanterar **både skapa och
+redigera**: får sidan ett id är den i redigeringsläge. Grupperna har samma trio
+(`groups_list_page`, `group_detail_page`, `create_group_page`) plus en medlemssida.
 
 ### De fem mönstren
 
@@ -69,183 +79,191 @@ redigera**: får sidan ett id är den i redigeringsläge.
 | **Provide i roten** | `MyApp.setup()` skapar alla stores en gång och `provide`:ar dem. Sidor gör `inject` | 6 |
 | **`Paginated<T>` + `PaginatedListView`** | Sidindelade listor med oändlig scroll och pull-to-refresh | 5, 7 |
 | **`EntityActionMenu`** | Redigera/radera via en `more_vert`-meny med bekräftelse, i stället för lösa knappar | – |
-| **Auth-guard + rollkontroll** | `redirect` i go_router och `hasPermission(meny, op)` i UI:t, som speglar regler och hooks på servern | 6 |
+| **Auth-guard + rollkontroll** | `redirect` i go_router och `hasPermission(grupp, åtgärd)` i UI:t, som speglar API-regler och hooks på servern | 6 |
 
 ---
 
 ## Backend i korthet
 
-Datamodellen från kursens README utökas med **föreningar** (multi-tenancy). Allt
-bygger på collections, regler och hooks från [modul 02](../02-pocketbase/README.md),
-inklusive dubbelbokningshooken i
-[02 – Hooks och migrationer](../02-pocketbase/07-hooks-och-migrationer.md).
+Vi utgår från din egen PocketBase med Kvittras collections från
+[modul 02](../02-pocketbase/README.md): `users`, `posts`, `comments`, `likes` och
+`follows`, plus grupperna från
+[02 – Grupper och behörigheter](../02-pocketbase/08-grupper-och-behorigheter.md).
 
-| Collection | Tillägg |
-|------------|---------|
-| `associations` | **Ny.** `name`, `org_number`, `permissions` (json) |
-| `users` | `association` (relation), `role` (`member`/`styrelse`/`admin`, från modul 02) |
-| `resources` | `association`, `requires_approval` (bool) |
-| `bookings` | `association`, `approval_status` (`pending`/`approved`/`rejected`) |
-| `posts` | `association`, `pinned` (bool) |
-| `post_comments` | **Ny.** `post` (cascade delete), `author`, `body`, `association`, `created`/`updated` |
-
-Grundregeln för all data är:
-
-```
-@request.auth.id != "" && association = @request.auth.association
-```
-
-| Vad | Var |
-|-----|-----|
-| Se bara den egna föreningens data | API-regel (ovan) |
-| Skriva bara i eget namn | API-regel: `@request.body.user = @request.auth.id` |
-| Ingen dubbelbokning, `max_hours` | Hook `onRecordValidate` (modul 02) |
-| `association` och `approval_status` sätts av servern | Hook `onRecordCreateRequest` (nedan) |
-| Rollmatris (vem får skapa/ändra/radera) | Appen döljer knappar, och regel eller hook stoppar anropet |
+| Collection | Fält som appen använder |
+|------------|-------------------------|
+| `users` (auth) | `username`, `name`, `email`, `bio`, `website` |
+| `posts` | `author` → users, `title`, `body`, `group` → groups (valfri), `created` |
+| `comments` | `post` → posts (cascade delete), `author` → users, `body`, `created` |
+| `likes` | `post` → posts, `user` → users, unikt index på `(post, user)` |
+| `follows` | `follower` → users, `following` → users, unikt index på `(follower, following)` |
+| `groups` | `name`, `description`, `owner` → users, `visibility` (`public`/`private`) |
+| `group_members` | `group` → groups, `user` → users, `role` (`admin`/`moderator`/`member`), unikt index på `(group, user)` |
 
 <details>
-<summary>▶ Visa migrationen <code>pb_migrations/1700000100_foreningar.js</code></summary>
+<summary>▶ Saknar du grupperna? Visa migrationen <code>pb_migrations/1700000100_groups.js</code></summary>
+
+Har du gjort modul 02 kapitel 8 har du redan de här collections och kan hoppa över
+migrationen.
 
 ```js
 /// <reference path="../pb_data/types.d.ts" />
 
-// Föreningar (multi-tenancy), fästa anslag, kommentarer och
-// godkännandestatus på bokningar.
+// Grupper med roller (samma collections som i modul 02 kapitel 8).
 migrate((app) => {
-  // 1. Ny collection: associations
-  const associations = new Collection({
-    type: "base",
-    name: "associations",
-    fields: [
-      { name: "name", type: "text", required: true },
-      { name: "org_number", type: "text" },
-      { name: "permissions", type: "json" },
-    ],
-    // Man ser bara sin egen förening
-    listRule: 'id = @request.auth.association',
-    viewRule: 'id = @request.auth.association',
-    updateRule: '@request.auth.role = "admin" && id = @request.auth.association',
-  })
-  app.save(associations)
-
-  // 2. association-relation på users och på allt innehåll
-  for (const name of ["users", "resources", "bookings", "posts"]) {
-    const c = app.findCollectionByNameOrId(name)
-    c.fields.add(new RelationField({
-      name: "association",
-      collectionId: associations.id,
-      maxSelect: 1,
-    }))
-    app.save(c)
-  }
-
-  // 3. Nya fält
-  const posts = app.findCollectionByNameOrId("posts")
-  posts.fields.add(new BoolField({ name: "pinned" }))
-  app.save(posts)
-
-  const resources = app.findCollectionByNameOrId("resources")
-  resources.fields.add(new BoolField({ name: "requires_approval" }))
-  app.save(resources)
-
-  const bookings = app.findCollectionByNameOrId("bookings")
-  bookings.fields.add(new SelectField({
-    name: "approval_status",
-    values: ["pending", "approved", "rejected"],
-    maxSelect: 1,
-  }))
-  app.save(bookings)
-
-  // 4. Ny collection: post_comments
   const users = app.findCollectionByNameOrId("users")
-  const comments = new Collection({
+
+  // 1. groups
+  const groups = new Collection({
     type: "base",
-    name: "post_comments",
+    name: "groups",
     fields: [
-      { name: "post", type: "relation", collectionId: posts.id, maxSelect: 1, required: true, cascadeDelete: true },
-      { name: "author", type: "relation", collectionId: users.id, maxSelect: 1, required: true },
-      { name: "body", type: "text", required: true, max: 1000 },
-      { name: "association", type: "relation", collectionId: associations.id, maxSelect: 1 },
+      { name: "name", type: "text", required: true, max: 80 },
+      { name: "description", type: "text", max: 500 },
+      { name: "owner", type: "relation", collectionId: users.id, maxSelect: 1, required: true },
+      { name: "visibility", type: "select", values: ["public", "private"], maxSelect: 1, required: true },
       { name: "created", type: "autodate", onCreate: true },
-      { name: "updated", type: "autodate", onCreate: true, onUpdate: true },
     ],
-    listRule: '@request.auth.id != "" && association = @request.auth.association',
-    viewRule: '@request.auth.id != "" && association = @request.auth.association',
-    createRule: '@request.auth.id != "" && @request.body.author = @request.auth.id && @request.body.post.association = @request.auth.association',
-    updateRule: 'author = @request.auth.id && @request.body.author:changed = false',
-    deleteRule: 'author = @request.auth.id || (@request.auth.role = "admin" && association = @request.auth.association)',
   })
-  app.save(comments)
+  app.save(groups)
+
+  // 2. group_members: vem är med i vilken grupp, och med vilken roll
+  const members = new Collection({
+    type: "base",
+    name: "group_members",
+    fields: [
+      { name: "group", type: "relation", collectionId: groups.id, maxSelect: 1, required: true, cascadeDelete: true },
+      { name: "user", type: "relation", collectionId: users.id, maxSelect: 1, required: true, cascadeDelete: true },
+      { name: "role", type: "select", values: ["admin", "moderator", "member"], maxSelect: 1, required: true },
+      { name: "created", type: "autodate", onCreate: true },
+    ],
+    // Samma användare kan bara vara med en gång per grupp.
+    indexes: ["CREATE UNIQUE INDEX idx_group_members_pair ON group_members (`group`, user)"],
+  })
+  app.save(members)
+
+  // 3. Ett inlägg kan (valfritt) höra till en grupp.
+  const posts = app.findCollectionByNameOrId("posts")
+  posts.fields.add(new RelationField({
+    name: "group",
+    collectionId: groups.id,
+    maxSelect: 1,
+    cascadeDelete: true,
+  }))
+  app.save(posts)
 }, (app) => {
-  // Ned-migrering: ta bort i omvänd ordning
-  app.delete(app.findCollectionByNameOrId("post_comments"))
-  for (const [name, field] of [["bookings", "approval_status"], ["resources", "requires_approval"], ["posts", "pinned"]]) {
-    const c = app.findCollectionByNameOrId(name)
-    c.fields.removeByName(field)
-    app.save(c)
-  }
-  for (const name of ["users", "resources", "bookings", "posts"]) {
-    const c = app.findCollectionByNameOrId(name)
-    c.fields.removeByName("association")
-    app.save(c)
-  }
-  app.delete(app.findCollectionByNameOrId("associations"))
+  const posts = app.findCollectionByNameOrId("posts")
+  posts.fields.removeByName("group")
+  app.save(posts)
+  app.delete(app.findCollectionByNameOrId("group_members"))
+  app.delete(app.findCollectionByNameOrId("groups"))
 })
 ```
 
 </details>
+
+Säkerheten ligger på servern. Appen *speglar* reglerna för en bra upplevelse, men det
+är reglerna och hookarna som bestämmer:
+
+| Vad | Var |
+|-----|-----|
+| Inlägg i privata grupper syns bara för medlemmar | API-regel (List/View på `posts`, `comments`, `groups`) |
+| Skriva i en grupp kräver medlemskap | API-regel (Create på `posts`, `comments`) |
+| Radera andras inlägg i en grupp kräver `moderator`/`admin` | API-regel (Delete på `posts`, `comments`) |
+| Ändra roller, ta bort medlemmar, ändra gruppen kräver `admin` | API-regel (`group_members`, `groups`) |
+| `author` och `owner` sätts av servern, aldrig av klienten | Hook `onRecordCreateRequest` |
+| Den som skapar en grupp blir dess `admin` | Hook `onRecordAfterCreateSuccess` |
+
+Reglerna använder `@collection.group_members` för att slå upp **min** rad i gruppen.
+Villkoren på samma `@collection`-koppling gäller samma rad, så
+`group ?= X && user ?= mig && role ?= "admin"` betyder "jag är admin i X".
 
 <details>
 <summary>▶ Visa API-reglerna <code>pb_migrations/1700000200_rules.js</code></summary>
 
 ```js
 /// <reference path="../pb_data/types.d.ts" />
+
+// API-regler för Kvittra med grupper.
 migrate((app) => {
-  const tenant = '@request.auth.id != "" && association = @request.auth.association'
+  const loggedIn = '@request.auth.id != ""'
+
+  // "Jag är medlem i gruppen X" (X är ett uttryck, t.ex. group eller id)
+  const memberOf = (x) =>
+    `(@collection.group_members.group ?= ${x} && @collection.group_members.user ?= @request.auth.id)`
+  // "Jag har någon av rollerna i gruppen X"
+  const hasRole = (x, roles) =>
+    `(@collection.group_members.group ?= ${x} && @collection.group_members.user ?= @request.auth.id && (` +
+    roles.map((r) => `@collection.group_members.role ?= "${r}"`).join(" || ") + "))"
+
+  // Ett inlägg syns om det inte hör till någon grupp, om gruppen är
+  // publik eller om jag är medlem i gruppen.
+  const canSeePost = (p) =>
+    `(${p}group = "" || ${p}group.visibility = "public" || ${memberOf(p + "group")})`
+
   const rules = {
-    resources: {
-      listRule: tenant,
-      viewRule: tenant,
-      createRule: '@request.auth.role = "admin"',
-      updateRule: '@request.auth.role = "admin" && association = @request.auth.association',
-      deleteRule: '@request.auth.role = "admin" && association = @request.auth.association',
-    },
-    bookings: {
-      listRule: tenant + ' && (user = @request.auth.id || @request.auth.role = "styrelse" || @request.auth.role = "admin")',
-      viewRule: tenant + ' && (user = @request.auth.id || @request.auth.role = "styrelse" || @request.auth.role = "admin")',
-      createRule: '@request.auth.id != "" && @request.body.user = @request.auth.id && @request.body.resource.active = true && @request.body.resource.association = @request.auth.association',
-      updateRule: 'user = @request.auth.id && @request.body.user:changed = false',
-      deleteRule: 'user = @request.auth.id || (@request.auth.role = "admin" && association = @request.auth.association)',
-    },
     posts: {
-      listRule: tenant + ' && (published = true || author = @request.auth.id)',
-      viewRule: tenant + ' && (published = true || author = @request.auth.id)',
-      createRule: '(@request.auth.role = "styrelse" || @request.auth.role = "admin") && @request.body.author = @request.auth.id',
-      updateRule: 'association = @request.auth.association && (author = @request.auth.id || @request.auth.role = "admin") && @request.body.author:changed = false',
-      deleteRule: 'association = @request.auth.association && (author = @request.auth.id || @request.auth.role = "admin")',
+      listRule: `${loggedIn} && ${canSeePost("")}`,
+      viewRule: `${loggedIn} && ${canSeePost("")}`,
+      // author stämplas av en hook. I en grupp måste man vara medlem.
+      createRule: `${loggedIn} && (@request.body.group = "" || ${memberOf("@request.body.group")})`,
+      updateRule: 'author = @request.auth.id && @request.body.group:changed = false',
+      deleteRule: `author = @request.auth.id || (group != "" && ${hasRole("group", ["admin", "moderator"])})`,
     },
-    users: {
-      listRule: tenant,
-      viewRule: 'id = @request.auth.id || (' + tenant + ')',
-      // Egen profil (utan roll/lägenhet/förening) ELLER admin i samma förening
-      updateRule:
-        '(id = @request.auth.id && @request.body.role:isset = false && ' +
-        '@request.body.apartment:isset = false && @request.body.association:isset = false) || ' +
-        '(@request.auth.role = "admin" && association = @request.auth.association && ' +
-        '@request.body.association:isset = false)',
+    comments: {
+      listRule: `${loggedIn} && ${canSeePost("post.")}`,
+      viewRule: `${loggedIn} && ${canSeePost("post.")}`,
+      createRule: `${loggedIn} && (@request.body.post.group = "" || ${memberOf("@request.body.post.group")})`,
+      updateRule: 'author = @request.auth.id && @request.body.post:changed = false',
+      deleteRule: `author = @request.auth.id || post.author = @request.auth.id || ` +
+        `(post.group != "" && ${hasRole("post.group", ["admin", "moderator"])})`,
+    },
+    likes: {
+      listRule: loggedIn,
+      viewRule: loggedIn,
+      createRule: `${loggedIn} && @request.body.user = @request.auth.id`,
+      updateRule: null, // en gillning ändras aldrig, den skapas eller raderas
+      deleteRule: 'user = @request.auth.id',
+    },
+    follows: {
+      listRule: loggedIn,
+      viewRule: loggedIn,
+      createRule: `${loggedIn} && @request.body.follower = @request.auth.id && @request.body.following != @request.auth.id`,
+      updateRule: null,
+      deleteRule: 'follower = @request.auth.id',
+    },
+    groups: {
+      listRule: `${loggedIn} && (visibility = "public" || ${memberOf("id")})`,
+      viewRule: `${loggedIn} && (visibility = "public" || ${memberOf("id")})`,
+      createRule: loggedIn, // owner stämplas av en hook
+      updateRule: `${hasRole("id", ["admin"])} && @request.body.owner:changed = false`,
+      deleteRule: hasRole("id", ["admin"]),
+    },
+    group_members: {
+      listRule: `${loggedIn} && (group.visibility = "public" || ${memberOf("group")})`,
+      viewRule: `${loggedIn} && (group.visibility = "public" || ${memberOf("group")})`,
+      // Gå med själv i en publik grupp som member, ELLER bli tillagd av en admin.
+      createRule:
+        `(${loggedIn} && @request.body.user = @request.auth.id && @request.body.role = "member" && @request.body.group.visibility = "public") || ` +
+        hasRole("@request.body.group", ["admin"]),
+      // Bara admin får byta roll, och bara rollen.
+      updateRule: `${hasRole("group", ["admin"])} && @request.body.group:changed = false && @request.body.user:changed = false`,
+      // Lämna själv, eller bli borttagen av en admin.
+      deleteRule: `user = @request.auth.id || ${hasRole("group", ["admin"])}`,
     },
   }
+
   for (const [name, r] of Object.entries(rules)) {
     const c = app.findCollectionByNameOrId(name)
     Object.assign(c, r)
     app.save(c)
   }
-})
+}, (app) => {})
 ```
 
 </details>
 
-Fält som klienten **inte** får välja stämplas av servern. `pb_hooks/tenant.pb.js`:
+Fält som klienten **inte** får välja stämplas av servern. `pb_hooks/author.pb.js`:
 
 ```js
 /// <reference path="../pb_data/types.d.ts" />
@@ -253,51 +271,63 @@ Fält som klienten **inte** får välja stämplas av servern. `pb_hooks/tenant.p
 // Fält som klienten INTE får välja stämplas av servern.
 onRecordCreateRequest((e) => {
   if (!e.hasSuperuserAuth()) {
-    if (!e.auth) throw new UnauthorizedError("Logga in först.");
-    e.record.set("association", e.auth.getString("association"));
+    if (!e.auth) throw new UnauthorizedError("Logga in först.")
+    const field = e.collection.name === "groups" ? "owner" : "author"
+    e.record.set(field, e.auth.id)
   }
-  e.next();
-}, "posts", "post_comments", "bookings");
+  e.next()
+}, "posts", "comments", "groups")
 
-onRecordCreateRequest((e) => {
-  if (!e.hasSuperuserAuth()) {
-    const resource = e.app.findRecordById("resources", e.record.getString("resource"));
-    e.record.set("approval_status", resource.getBool("requires_approval") ? "pending" : "approved");
-  }
-  e.next();
-}, "bookings");
-
-// Association och status får inte ändras av vanliga användare i efterhand.
+// Författare och ägare kan aldrig bytas i efterhand.
 onRecordUpdateRequest((e) => {
   if (!e.hasSuperuserAuth()) {
-    const original = e.record.original();
-    e.record.set("association", original.getString("association"));
-    if (e.collection.name === "bookings") {
-      e.record.set("approval_status", original.getString("approval_status"));
-    }
+    const field = e.collection.name === "groups" ? "owner" : "author"
+    e.record.set(field, e.record.original().getString(field))
   }
-  e.next();
-}, "posts", "post_comments", "bookings");
+  e.next()
+}, "posts", "comments", "groups")
+
+// Den som skapar en grupp blir automatiskt dess admin.
+onRecordAfterCreateSuccess((e) => {
+  const members = e.app.findCollectionByNameOrId("group_members")
+  const m = new Record(members)
+  m.set("group", e.record.id)
+  m.set("user", e.record.getString("owner"))
+  m.set("role", "admin")
+  e.app.save(m)
+  e.next()
+}, "groups")
 ```
 
-Provkört med `curl`:
+Provkört med `curl` (Anna, Bo och Cecilia; Anna har skapat en publik och en privat
+grupp):
 
 | Försök | Resultat |
 |--------|----------|
-| Anna bokar och skickar `"approval_status": "rejected"` och fel förening | Sparas med Annas förening och `approved` |
-| Anna bokar en överlappande tid | `400 Tiden är redan bokad.` |
-| Anna bokar festlokalen (`requires_approval`) | Sparas som `pending` |
-| Cecilia (förening B) bokar förening A:s tvättstuga | `400` (create-regeln följer `@request.body.resource.association`) |
-| Cecilia listar förening A:s anslag och resurser | 0 träffar |
-| Anna (member) skapar ett anslag | `400` (create-regeln kräver styrelse/admin) |
-| Anna gör sig själv till admin | `404` (update-regeln på `users`) |
+| Anna skapar ett inlägg och skickar Bos id som `author` | Sparas med Anna som författare (hooken) |
+| Anna skapar en grupp | Hon blir automatiskt `admin` i den (hooken) |
+| Bo listar grupper | Ser bara den publika |
+| Bo listar inlägg | Ser inte inlägg i den privata gruppen |
+| Bo skriver i eller kommenterar i den privata gruppen | `400` |
+| Bo går med i den publika gruppen som `member` | OK |
+| Bo går med i den privata gruppen, eller Cecilia som `admin` i den publika | `400` |
+| Bo gör sig själv till `moderator` | `404` (update-regeln) |
+| Cecilia (`member`) raderar Bos gruppinlägg | `404` |
+| Anna (`admin`) gör Cecilia till `moderator`, och Cecilia raderar inlägget | OK, `204` |
+| Bo redigerar Annas inlägg | `404` |
+| Anna flyttar sitt inlägg till en grupp i efterhand | `404` (`@request.body.group:changed = false`) |
+| Bo gillar samma inlägg två gånger | `400` (unikt index) |
+| Bo följer sig själv | `400` |
+
+> 💡 **Tips:** `404` i stället för `403` är medvetet. PocketBase avslöjar inte om en post
+> finns när reglerna säger nej.
 
 ---
 
 ## PocketBase-klient, DI och appens rot
 
-Projektet skapas med `flutter create foreningsappen` (därav `package:foreningsappen/…` i
-testerna) och behöver paketen `flutter_compositions`, `pocketbase`, `go_router` och
+Projektet skapas med `flutter create kvittra` (därav `package:kvittra/…` i testerna)
+och behöver paketen `flutter_compositions`, `pocketbase`, `go_router` och
 `shared_preferences`.
 
 ### En klient som minns inloggningen
@@ -360,32 +390,24 @@ import 'package:flutter_compositions/flutter_compositions.dart';
 import 'package:pocketbase/pocketbase.dart' show PocketBase;
 
 import '../../features/auth/auth_store.dart';
-import '../../features/bookings/bookings_store.dart';
-import '../../features/members/members_store.dart';
+import '../../features/comments/comments_store.dart';
+import '../../features/feed/feed_store.dart';
+import '../../features/groups/groups_store.dart';
 import '../../features/posts/posts_store.dart';
+import '../../features/profile/profile_store.dart';
 
 const pocketBaseKey = InjectionKey<PocketBase>('pocketBase');
 const authStoreKey = InjectionKey<AuthStore>('authStore');
+const feedStoreKey = InjectionKey<FeedStore>('feedStore');
 const postsStoreKey = InjectionKey<PostsStore>('postsStore');
-const bookingsStoreKey = InjectionKey<BookingsStore>('bookingsStore');
-const membersStoreKey = InjectionKey<MembersStore>('membersStore');
-
-// go_router:s redirect körs UTANFÖR composition-scope (inte i någon setup()),
-// så där fungerar inte inject(). Därför sparar vi även en global referens.
-AuthStore? _globalAuthStore;
-void setGlobalAuthStore(AuthStore store) => _globalAuthStore = store;
-AuthStore? getGlobalAuthStore() => _globalAuthStore;
+const commentsStoreKey = InjectionKey<CommentsStore>('commentsStore');
+const profileStoreKey = InjectionKey<ProfileStore>('profileStore');
+const groupsStoreKey = InjectionKey<GroupsStore>('groupsStore');
 ```
 
 > ⚠️ **Varning:** Paketet `pocketbase` har redan en klass `AuthStore`
 > (`pb.authStore`). Importera därför med `show PocketBase` eller `hide AuthStore` där
 > båda behövs.
-
-**Varför en global accessor?** `inject` fungerar bara i `setup()`. go_router:s
-`redirect` körs av routern vid varje navigering, utanför alla `setup()`. Därför sparas
-`AuthStore` även i en global variabel som routern kan läsa. Alternativet är att skapa
-routern i `MyApp.setup()` med `createRouter(authStore)`. Det viktiga är att **sidorna**
-fortfarande använder `inject`. Accessorn är ett undantag för routern.
 
 ### `main.dart`
 
@@ -397,9 +419,11 @@ import 'core/di/injection_keys.dart';
 import 'core/pocketbase/pocketbase_client.dart';
 import 'core/router/router.dart';
 import 'features/auth/auth_store.dart';
-import 'features/bookings/bookings_store.dart';
-import 'features/members/members_store.dart';
+import 'features/comments/comments_store.dart';
+import 'features/feed/feed_store.dart';
+import 'features/groups/groups_store.dart';
 import 'features/posts/posts_store.dart';
+import 'features/profile/profile_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -416,32 +440,40 @@ class MyApp extends CompositionWidget {
 
     // Skapa alla stores EN gång.
     final authStore = AuthStore(pb);
-    final postsStore = PostsStore(pb, authStore);
-    final bookingsStore = BookingsStore(pb, authStore);
-    final membersStore = MembersStore(pb);
+    final feedStore = FeedStore(pb, authStore);
+    final postsStore = PostsStore(pb, authStore, feedStore);
+    final commentsStore = CommentsStore(pb);
+    final profileStore = ProfileStore(pb, authStore);
+    final groupsStore = GroupsStore(pb, authStore);
 
     provide(pocketBaseKey, pb);
     provide(authStoreKey, authStore);
+    provide(feedStoreKey, feedStore);
     provide(postsStoreKey, postsStore);
-    provide(bookingsStoreKey, bookingsStore);
-    provide(membersStoreKey, membersStore);
+    provide(commentsStoreKey, commentsStore);
+    provide(profileStoreKey, profileStore);
+    provide(groupsStoreKey, groupsStore);
 
-    // Routerns redirect körs utanför setup() och kan inte använda inject().
-    setGlobalAuthStore(authStore);
+    final router = createRouter(authStore);
+    onUnmounted(router.dispose);
 
-    // Vid in-/utloggning: kör om redirect och ladda föreningens data.
-    watch(() => authStore.isAuthenticated.value, (loggedIn, _) {
-      router.refresh();
-    });
-    watchEffect(() {
-      if (authStore.user.value != null) authStore.loadAssociation();
-    });
+    // Vid in-/utloggning: kör om routerns redirect.
+    watch(() => authStore.isAuthenticated.value, (_, _) => router.refresh());
+
+    // Ny användare: ladda mina grupproller. Utloggad: glöm dem.
+    watch(() => authStore.user.value?.id, (userId, _) {
+      if (userId == null) {
+        groupsStore.clear();
+      } else {
+        groupsStore.loadMyRoles();
+      }
+    }, immediate: true);
 
     return (context) => MaterialApp.router(
-          title: 'Föreningsappen',
-          theme: ThemeData(colorSchemeSeed: Colors.teal),
+          title: 'Kvittra',
+          theme: ThemeData(colorSchemeSeed: Colors.indigo),
           darkTheme: ThemeData(
-            colorSchemeSeed: Colors.teal,
+            colorSchemeSeed: Colors.indigo,
             brightness: Brightness.dark,
           ),
           routerConfig: router,
@@ -450,10 +482,16 @@ class MyApp extends CompositionWidget {
 }
 ```
 
-- Alla stores skapas **en gång** och delas med `provide`.
-- `watch` på `isAuthenticated` anropar `router.refresh()`, så att guarden körs direkt vid
-  in- och utloggning.
-- `watchEffect` laddar föreningens data när en användare finns.
+- Alla stores skapas **en gång** och delas med `provide`. Beroenden mellan stores
+  skickas i konstruktorn (`PostsStore` behöver `FeedStore` för att hämta om flödet).
+- Routern skapas i `setup()` med `createRouter(authStore)` (se nedan) och disposas i
+  `onUnmounted`, som är registrerat direkt i `setup()`.
+- `watch` på `isAuthenticated` anropar `router.refresh()`, så att guarden körs direkt
+  vid in- och utloggning.
+- `watch` på användarens id med `immediate: true` laddar mina grupproller vid start och
+  vid varje inloggning, och glömmer dem vid utloggning. Med `watchEffect` hade
+  `loadMyRoles` riskerat att spåra refs som den själv skriver till. Med `watch` är
+  beroendet explicit.
 
 ---
 
@@ -462,44 +500,44 @@ class MyApp extends CompositionWidget {
 ```dart
 /// Collection-namn samlade på ett ställe, så att stavfel blir kompileringsfel.
 abstract final class Collections {
-  static const associations = 'associations';
   static const users = 'users';
   static const posts = 'posts';
-  static const postComments = 'post_comments';
-  static const resources = 'resources';
-  static const bookings = 'bookings';
+  static const comments = 'comments';
+  static const likes = 'likes';
+  static const follows = 'follows';
+  static const groups = 'groups';
+  static const groupMembers = 'group_members';
 }
 ```
 
 ```dart
-enum UserRole { admin, styrelse, member }
-
 class UserRecord {
   const UserRecord({
     required this.id,
-    required this.email,
+    required this.username,
     required this.name,
-    required this.association,
-    required this.apartment,
-    required this.role,
+    required this.email,
+    this.bio = '',
+    this.website = '',
   });
 
   final String id;
-  final String email;
+  final String username;
   final String name;
-  final String association; // relation = id-sträng
-  final String apartment;   // relation = id-sträng
-  final UserRole role;
+  final String email;
+  final String bio;
+  final String website;
 
-  bool get isAdmin => role == UserRole.admin;
+  /// Namnet om det finns, annars @användarnamn.
+  String get displayName => name.isEmpty ? '@$username' : name;
 
   factory UserRecord.fromJson(Map<String, dynamic> json) => UserRecord(
         id: json['id'] as String,
-        email: json['email'] as String? ?? '',
+        username: json['username'] as String? ?? '',
         name: json['name'] as String? ?? '',
-        association: json['association'] as String? ?? '',
-        apartment: json['apartment'] as String? ?? '',
-        role: UserRole.values.asNameMap()[json['role']] ?? UserRole.member,
+        email: json['email'] as String? ?? '',
+        bio: json['bio'] as String? ?? '',
+        website: json['website'] as String? ?? '',
       );
 }
 ```
@@ -512,38 +550,59 @@ class PostRecord {
     required this.body,
     required this.author,
     required this.authorName,
-    required this.published,
-    required this.pinned,
+    required this.group,
+    required this.groupName,
+    required this.likeCount,
+    required this.likedByMe,
     required this.created,
   });
 
   final String id;
   final String title;
   final String body;
-  final String author;       // relation-id
-  final String authorName;   // från expand.author
-  final bool published;
-  final bool pinned;
+  final String author; // relation-id → users
+  final String authorName; // från expand.author
+  final String group; // relation-id → groups, '' om inget
+  final String groupName; // från expand.group
+  final int likeCount; // antal i expand.likes_via_post
+  final bool likedByMe; // finns min gillning bland dem?
   final DateTime? created;
 
-  factory PostRecord.fromJson(Map<String, dynamic> json) {
+  bool get inGroup => group.isNotEmpty;
+
+  factory PostRecord.fromJson(
+    Map<String, dynamic> json, {
+    String? currentUserId,
+  }) {
     final expand = json['expand'] as Map<String, dynamic>? ?? const {};
     final author = expand['author'] as Map<String, dynamic>?;
+    final group = expand['group'] as Map<String, dynamic>?;
+    // Bakåtrelation: alla likes vars `post` pekar på det här inlägget.
+    final likes = (expand['likes_via_post'] as List<dynamic>? ?? const [])
+        .cast<Map<String, dynamic>>();
     return PostRecord(
       id: json['id'] as String,
       title: json['title'] as String? ?? '',
       body: json['body'] as String? ?? '',
       author: json['author'] as String? ?? '',
       authorName: author?['name'] as String? ?? 'Okänd',
-      published: json['published'] as bool? ?? false,
-      pinned: json['pinned'] as bool? ?? false,
+      group: json['group'] as String? ?? '',
+      groupName: group?['name'] as String? ?? '',
+      likeCount: likes.length,
+      likedByMe:
+          currentUserId != null && likes.any((l) => l['user'] == currentUserId),
       created: DateTime.tryParse(json['created'] as String? ?? '')?.toLocal(),
     );
   }
 }
+```
 
-class PostCommentRecord {
-  const PostCommentRecord({
+<details>
+<summary>▶ Visa <code>comment_record.dart</code> och <code>group_record.dart</code></summary>
+
+```dart
+class CommentRecord {
+  const CommentRecord({
     required this.id,
     required this.post,
     required this.author,
@@ -559,10 +618,10 @@ class PostCommentRecord {
   final String body;
   final DateTime? created;
 
-  factory PostCommentRecord.fromJson(Map<String, dynamic> json) {
+  factory CommentRecord.fromJson(Map<String, dynamic> json) {
     final expand = json['expand'] as Map<String, dynamic>? ?? const {};
     final author = expand['author'] as Map<String, dynamic>?;
-    return PostCommentRecord(
+    return CommentRecord(
       id: json['id'] as String,
       post: json['post'] as String? ?? '',
       author: json['author'] as String? ?? '',
@@ -574,71 +633,62 @@ class PostCommentRecord {
 }
 ```
 
-<details>
-<summary>▶ Visa <code>resource_record.dart</code> (ResourceRecord + BookingRecord)</summary>
-
 ```dart
-class ResourceRecord {
-  const ResourceRecord({
+import '../utils/permissions.dart';
+
+enum GroupVisibility { public, private }
+
+class GroupRecord {
+  const GroupRecord({
     required this.id,
     required this.name,
     required this.description,
-    required this.maxHours,
-    required this.active,
+    required this.owner,
+    required this.visibility,
   });
 
   final String id;
   final String name;
   final String description;
-  final int maxHours;
-  final bool active;
+  final String owner;
+  final GroupVisibility visibility;
 
-  factory ResourceRecord.fromJson(Map<String, dynamic> json) => ResourceRecord(
+  bool get isPrivate => visibility == GroupVisibility.private;
+
+  factory GroupRecord.fromJson(Map<String, dynamic> json) => GroupRecord(
         id: json['id'] as String,
         name: json['name'] as String? ?? '',
         description: json['description'] as String? ?? '',
-        maxHours: (json['max_hours'] as num?)?.toInt() ?? 1,
-        active: json['active'] as bool? ?? false,
+        owner: json['owner'] as String? ?? '',
+        visibility: GroupVisibility.values.asNameMap()[json['visibility']] ??
+            GroupVisibility.public,
       );
 }
 
-enum ApprovalStatus { pending, approved, rejected }
-
-class BookingRecord {
-  const BookingRecord({
+class GroupMemberRecord {
+  const GroupMemberRecord({
     required this.id,
-    required this.resource,
-    required this.resourceName,
+    required this.group,
     required this.user,
-    required this.start,
-    required this.end,
-    required this.note,
-    required this.approvalStatus,
+    required this.userName,
+    required this.role,
   });
 
   final String id;
-  final String resource;
-  final String resourceName; // från expand.resource
+  final String group;
   final String user;
-  final DateTime start;
-  final DateTime end;
-  final String note;
-  final ApprovalStatus approvalStatus;
+  final String userName; // från expand.user
+  final GroupRole role;
 
-  factory BookingRecord.fromJson(Map<String, dynamic> json) {
+  factory GroupMemberRecord.fromJson(Map<String, dynamic> json) {
     final expand = json['expand'] as Map<String, dynamic>? ?? const {};
-    final resource = expand['resource'] as Map<String, dynamic>?;
-    return BookingRecord(
+    final user = expand['user'] as Map<String, dynamic>?;
+    return GroupMemberRecord(
       id: json['id'] as String,
-      resource: json['resource'] as String? ?? '',
-      resourceName: resource?['name'] as String? ?? '–',
+      group: json['group'] as String? ?? '',
       user: json['user'] as String? ?? '',
-      // PocketBase lagrar datum i UTC: "2025-03-01 08:00:00.000Z"
-      start: DateTime.parse(json['start'] as String).toLocal(),
-      end: DateTime.parse(json['end'] as String).toLocal(),
-      note: json['note'] as String? ?? '',
-      approvalStatus: ApprovalStatus.values.asNameMap()[json['approval_status']] ??
-          ApprovalStatus.pending,
+      userName: user?['name'] as String? ?? 'Okänd',
+      role: GroupRole.values.asNameMap()[json['role']] ?? GroupRole.member,
     );
   }
 }
@@ -651,9 +701,11 @@ class BookingRecord {
 - `XxxRecord.fromJson(record.toJson())`, så att UI:t aldrig behöver se `RecordModel`.
 - **Relationer** är id-strängar. **Expanderad data** (`expand: 'author'`) läses ur
   `json['expand']` till extra fält som `authorName`.
+- **Bakåtrelationer**: `expand: 'likes_via_post'` ger alla `likes` vars `post` pekar på
+  inlägget. Antalet blir `likeCount`, och om min gillning finns bland dem blir
+  `likedByMe` sant. Därför tar `PostRecord.fromJson` emot `currentUserId`.
 - **Enums** läses med `values.asNameMap()[…] ?? standardvärde`.
-- **Datum** görs om med `.toLocal()` vid inläsning och `.toUtc().toIso8601String()` vid
-  sparande.
+- **Datum** görs om med `.toLocal()` vid inläsning.
 - Collection-namnen ligger i `Collections`, så att ett stavfel blir ett kompileringsfel.
 
 ---
@@ -661,13 +713,11 @@ class BookingRecord {
 ## Store-mönstret: `AuthStore`
 
 ```dart
-import 'package:flutter/foundation.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 import 'package:pocketbase/pocketbase.dart' hide AuthStore;
 
 import '../../core/models/collections.dart';
 import '../../core/models/user_record.dart';
-import '../../core/utils/permissions.dart';
 
 class AuthStore {
   AuthStore(this._pb) {
@@ -679,7 +729,6 @@ class AuthStore {
   final PocketBase _pb;
 
   final _user = ref<UserRecord?>(null);
-  final _permissionOverrides = ref<Map<String, dynamic>?>(null);
   final _loading = ref(false);
 
   ReadonlyRef<UserRecord?> get user => _user;
@@ -687,8 +736,6 @@ class AuthStore {
 
   late final ReadonlyRef<bool> isAuthenticated =
       computed(() => _user.value != null);
-  late final ReadonlyRef<bool> isAdmin =
-      computed(() => _user.value?.isAdmin ?? false);
 
   void _syncFromPocketBase() {
     final record = _pb.authStore.record;
@@ -709,34 +756,7 @@ class AuthStore {
     }
   }
 
-  void signOut() {
-    _pb.authStore.clear();
-    _permissionOverrides.value = null;
-  }
-
-  /// Hämtar föreningens eventuella behörighetsöverskuggningar.
-  Future<void> loadAssociation() async {
-    final associationId = _user.value?.association;
-    if (associationId == null || associationId.isEmpty) return;
-    try {
-      final record = await _pb
-          .collection(Collections.associations)
-          .getOne(associationId);
-      final json = record.toJson()['permissions'];
-      _permissionOverrides.value = json is Map<String, dynamic> ? json : null;
-    } catch (e) {
-      debugPrint('AuthStore.loadAssociation: $e');
-    }
-  }
-
-  /// Används av UI:t för att visa/dölja knappar och menyer. Läser refs, så
-  /// anrop i computed eller builder blir reaktiva.
-  bool hasPermission(AppMenu menu, PermissionOp op) {
-    final user = _user.value;
-    if (user == null) return false;
-    return resolvePermissions(menu, user.role, _permissionOverrides.value)
-        .contains(op);
-  }
+  void signOut() => _pb.authStore.clear();
 }
 ```
 
@@ -744,88 +764,208 @@ class AuthStore {
 |-----|---------|--------|
 | Privata refs | `final _user = ref<UserRecord?>(null);` | Bara store:n skriver |
 | Publika `ReadonlyRef` | `ReadonlyRef<UserRecord?> get user => _user;` | Sidor läser och reagerar |
-| `computed` | `isAuthenticated`, `isAdmin` | Härledd, cachad data |
-| Async-metoder | `signIn`, `loadAssociation` | All PocketBase-kod samlad |
+| `computed` | `isAuthenticated` | Härledd, cachad data |
+| Async-metoder | `signIn` | All PocketBase-kod samlad |
 | Felmeddelanden | `throw e.response['message']` | UI:t visar serverns text |
 
-`hasPermission` är en vanlig metod, men eftersom den läser refs blir den reaktiv när den
-anropas i en `computed` eller i builder.
+Andra stores följer samma mönster. Deras mutationsmetoder returnerar `Future<bool>`
+(fångar `ClientException` och loggar), och sidan visar en SnackBar vid `false`.
 
-Andra stores (`PostsStore`, `BookingsStore` …) följer samma mönster. Deras
-mutationsmetoder returnerar `Future<bool>`, och sidan visar en SnackBar vid `false`.
+### `FeedStore`: flödet och gillningar
+
+```dart
+import 'package:flutter/foundation.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+import 'package:pocketbase/pocketbase.dart' hide AuthStore;
+
+import '../../core/models/collections.dart';
+import '../../core/models/post_record.dart';
+import '../../core/pagination/paginated.dart';
+import '../auth/auth_store.dart';
+
+enum FeedFilter { all, following, mine }
+
+class FeedStore {
+  FeedStore(this._pb, this._auth);
+
+  final PocketBase _pb;
+  final AuthStore _auth;
+
+  final _filter = ref(FeedFilter.all);
+  ReadonlyRef<FeedFilter> get filter => _filter;
+
+  /// Huvudflödet. API-reglerna ser till att man bara får inlägg man får se
+  /// (inga inlägg från privata grupper man inte är med i).
+  late final posts = Paginated<PostRecord>(
+    (page, perPage) =>
+        fetchPosts(page: page, perPage: perPage, filter: _filter.value),
+  );
+
+  void setFilter(FeedFilter value) {
+    if (_filter.value == value) return;
+    _filter.value = value;
+    posts.refresh();
+  }
+
+  /// Används av flödet, profilsidan och gruppsidan.
+  Future<PageResult<PostRecord>> fetchPosts({
+    required int page,
+    required int perPage,
+    FeedFilter filter = FeedFilter.all,
+    String? authorId,
+    String? groupId,
+  }) async {
+    final me = _auth.user.value?.id ?? '';
+    final parts = [
+      if (filter == FeedFilter.mine) _pb.filter('author = {:me}', {'me': me}),
+      // Bakåtrelation: författare som har en follows-post där jag är follower.
+      if (filter == FeedFilter.following)
+        _pb.filter(
+            'author.follows_via_following.follower ?= {:me}', {'me': me}),
+      if (authorId != null) _pb.filter('author = {:a}', {'a': authorId}),
+      if (groupId != null) _pb.filter('group = {:g}', {'g': groupId}),
+    ];
+    final res = await _pb.collection(Collections.posts).getList(
+          page: page,
+          perPage: perPage,
+          filter: parts.join(' && '),
+          sort: '-created',
+          expand: 'author,group,likes_via_post',
+        );
+    return PageResult(
+      res.items
+          .map((r) => PostRecord.fromJson(r.toJson(), currentUserId: me))
+          .toList(),
+      res.totalPages,
+    );
+  }
+
+  /// Gilla eller sluta gilla. Returnerar false om servern sa nej, så att
+  /// anroparen kan ångra sin optimistiska uppdatering.
+  Future<bool> setLiked(String postId, bool liked) async {
+    final me = _auth.user.value?.id;
+    if (me == null) return false;
+    final likes = _pb.collection(Collections.likes);
+    try {
+      if (liked) {
+        await likes.create(body: {'post': postId, 'user': me});
+      } else {
+        final like = await likes.getFirstListItem(
+          _pb.filter('post = {:p} && user = {:u}', {'p': postId, 'u': me}),
+        );
+        await likes.delete(like.id);
+      }
+      return true;
+    } on ClientException catch (e) {
+      debugPrint(
+          'FeedStore.setLiked: ${e.statusCode} ${e.response['message']}');
+      return false;
+    }
+  }
+}
+```
+
+- `posts` är en `Paginated<PostRecord>` (se nedan) som **lever i store:n**. Går man in
+  på ett inlägg och tillbaka finns flödet kvar.
+- Filtret **Följer** använder en bakåtrelation i filtret:
+  `author.follows_via_following.follower ?= {:me}` betyder "författaren har en
+  `follows`-rad där `following` är författaren och `follower` är jag".
+- `fetchPosts` återanvänds av profilsidan (`authorId`) och gruppsidan (`groupId`).
+- `setLiked` returnerar `false` vid `ClientException`, så att den som anropade kan
+  rulla tillbaka en optimistisk uppdatering.
 
 ---
 
 ## Router och auth-guard
 
 ```dart
-import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/auth/auth_store.dart';
 import '../../features/auth/pages/login_page.dart';
-import '../di/injection_keys.dart';
+import '../../features/feed/pages/posts_feed_page.dart';
+import '../../features/groups/pages/create_group_page.dart';
+import '../../features/groups/pages/group_detail_page.dart';
+import '../../features/groups/pages/group_members_page.dart';
+import '../../features/groups/pages/groups_list_page.dart';
+import '../../features/posts/pages/create_post_page.dart';
+import '../../features/posts/pages/post_detail_page.dart';
+import '../../features/profile/pages/profile_page.dart';
 
-const _authRoutes = {LoginPage.path};
-
-/// Körs av go_router före varje navigering. Returnerar en ny sökväg för att
-/// omdirigera, eller null för att släppa igenom.
-String? authGuard(BuildContext context, GoRouterState state) {
-  final auth = getGlobalAuthStore();
-  final loggedIn = auth?.isAuthenticated.raw ?? false;
-  final onAuthRoute = _authRoutes.contains(state.matchedLocation);
-
-  if (!loggedIn && !onAuthRoute) return LoginPage.path;
-  if (loggedIn && onAuthRoute) return '/';
-  return null;
+/// Routern skapas i MyApp.setup() och får AuthStore som argument.
+/// redirect körs UTANFÖR alla setup() (av go_router), så där går det inte
+/// att använda inject(). Därför skickar vi in store:n här i stället.
+GoRouter createRouter(AuthStore auth) {
+  return GoRouter(
+    initialLocation: PostsFeedPage.path,
+    redirect: (context, state) {
+      final loggedIn = auth.isAuthenticated.raw; // .raw: ingen reaktiv kontext
+      final onLogin = state.matchedLocation == LoginPage.path;
+      if (!loggedIn && !onLogin) return LoginPage.path;
+      if (loggedIn && onLogin) return PostsFeedPage.path;
+      return null; // släpp igenom
+    },
+    routes: [
+      GoRoute(path: LoginPage.path, builder: (_, _) => const LoginPage()),
+      GoRoute(
+          path: PostsFeedPage.path, builder: (_, _) => const PostsFeedPage()),
+      // OBS: '/posts/new' måste stå före '/posts/:id', annars tolkas "new" som ett id.
+      GoRoute(
+        path: CreatePostPage.path,
+        builder: (_, state) =>
+            CreatePostPage(groupId: state.uri.queryParameters['group']),
+      ),
+      GoRoute(
+        path: CreatePostPage.editPath,
+        builder: (_, state) =>
+            CreatePostPage(postId: state.pathParameters['id']),
+      ),
+      GoRoute(
+        path: PostDetailPage.path,
+        builder: (_, state) =>
+            PostDetailPage(postId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: ProfilePage.path,
+        builder: (_, state) => ProfilePage(userId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+          path: GroupsListPage.path, builder: (_, _) => const GroupsListPage()),
+      GoRoute(
+          path: CreateGroupPage.path,
+          builder: (_, _) => const CreateGroupPage()),
+      GoRoute(
+        path: CreateGroupPage.editPath,
+        builder: (_, state) =>
+            CreateGroupPage(groupId: state.pathParameters['id']),
+      ),
+      GoRoute(
+        path: GroupMembersPage.path,
+        builder: (_, state) =>
+            GroupMembersPage(groupId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: GroupDetailPage.path,
+        builder: (_, state) =>
+            GroupDetailPage(groupId: state.pathParameters['id']!),
+      ),
+    ],
+  );
 }
 ```
 
-```dart
-import 'package:go_router/go_router.dart';
-
-import '../../features/auth/pages/login_page.dart';
-import '../../features/bookings/pages/book_resource_page.dart';
-import '../../features/bookings/pages/my_bookings_page.dart';
-import '../../features/bookings/pages/resources_list_page.dart';
-import '../../features/dashboard/pages/dashboard_page.dart';
-import '../../features/members/pages/members_list_page.dart';
-import '../../features/posts/pages/create_post_page.dart';
-import '../../features/posts/pages/post_detail_page.dart';
-import '../../features/posts/pages/posts_list_page.dart';
-import 'auth_guard.dart';
-
-final router = GoRouter(
-  initialLocation: DashboardPage.path,
-  redirect: authGuard,
-  routes: [
-    GoRoute(path: LoginPage.path, builder: (_, _) => const LoginPage()),
-    GoRoute(path: DashboardPage.path, builder: (_, _) => const DashboardPage()),
-    GoRoute(path: PostsListPage.path, builder: (_, _) => const PostsListPage()),
-    // OBS: '/posts/new' måste stå före '/posts/:id', annars tolkas "new" som ett id.
-    GoRoute(path: CreatePostPage.path, builder: (_, _) => const CreatePostPage()),
-    GoRoute(
-      path: CreatePostPage.editPath,
-      builder: (_, state) => CreatePostPage(postId: state.pathParameters['id']),
-    ),
-    GoRoute(
-      path: PostDetailPage.path,
-      builder: (_, state) => PostDetailPage(postId: state.pathParameters['id']!),
-    ),
-    GoRoute(path: ResourcesListPage.path, builder: (_, _) => const ResourcesListPage()),
-    GoRoute(
-      path: BookResourcePage.path,
-      builder: (_, state) => BookResourcePage(resourceId: state.pathParameters['id']!),
-    ),
-    GoRoute(path: MyBookingsPage.path, builder: (_, _) => const MyBookingsPage()),
-    GoRoute(path: MembersListPage.path, builder: (_, _) => const MembersListPage()),
-  ],
-);
-```
-
 - Varje sida har `static const path`, och detaljsidor har `pathFor(id)`.
-- `/posts/new` står före `/posts/:id`, annars tolkas `new` som ett id.
+- `/posts/new` står före `/posts/:id` och `/groups/new` före `/groups/:id`, annars
+  tolkas `new` som ett id.
 - Navigering sker med `context.push(...)`. Efter sparning går man tillbaka med
-  `context.pop()`.
+  `context.pop(true)`, så att föregående sida vet att något ändrats.
+
+**Varför skickas `AuthStore` in i `createRouter`?** `inject` fungerar bara i `setup()`.
+go_router:s `redirect` körs av routern vid varje navigering, utanför alla `setup()`.
+Därför får routern store:n som argument när den skapas i `MyApp.setup()`. Ett
+alternativ som du kan se i andra projekt är en **global accessor**
+(`setGlobalAuthStore(store)` i `MyApp` och `getGlobalAuthStore()` i guarden). Det
+viktiga är att **sidorna** fortfarande använder `inject`. Routern är undantaget.
 
 ### Inloggningssidan navigerar inte själv
 
@@ -848,7 +988,8 @@ class LoginPage extends CompositionWidget {
     final error = ref<String?>(null);
 
     final canSubmit = computed(
-      () => email.value.contains('@') &&
+      () =>
+          email.value.contains('@') &&
           password.value.length >= 8 &&
           !auth.loading.value,
     );
@@ -862,14 +1003,14 @@ class LoginPage extends CompositionWidget {
     Future<void> submit() async {
       try {
         await auth.signIn(email.value.trim(), password.value);
-        // Ingen navigering här: routerns redirect skickar oss till '/'.
+        // Ingen navigering här: routerns redirect skickar oss till flödet.
       } catch (e) {
         error.value = '$e';
       }
     }
 
     return (context) => Scaffold(
-          appBar: AppBar(title: const Text('Föreningsappen')),
+          appBar: AppBar(title: const Text('Kvittra')),
           body: ListView(
             padding: const EdgeInsets.all(24),
             children: [
@@ -901,146 +1042,8 @@ class LoginPage extends CompositionWidget {
 ```
 
 När inloggningen lyckas ändras `pb.authStore`, `AuthStore._user` uppdateras, `watch` i
-`MyApp` anropar `router.refresh()`, och guarden skickar användaren till `/`. Utloggning
-fungerar likadant åt andra hållet, och ingen sida behöver känna till det.
-
----
-
-## Behörigheter och dashboard
-
-```dart
-import '../models/user_record.dart';
-
-/// Funktioner (menyer) i appen.
-enum AppMenu { posts, bookings, members }
-
-/// Operationer som kan tillåtas per roll.
-enum PermissionOp { read, create, update, delete }
-
-/// Standardmatris: meny → roll → tillåtna operationer.
-/// En förening kan skriva över den via JSON-fältet `associations.permissions`.
-const Map<AppMenu, Map<UserRole, Set<PermissionOp>>> defaultPermissions = {
-  AppMenu.posts: {
-    UserRole.admin: {PermissionOp.read, PermissionOp.create, PermissionOp.update, PermissionOp.delete},
-    UserRole.styrelse: {PermissionOp.read, PermissionOp.create, PermissionOp.update},
-    UserRole.member: {PermissionOp.read},
-  },
-  AppMenu.bookings: {
-    UserRole.admin: {PermissionOp.read, PermissionOp.create, PermissionOp.update, PermissionOp.delete},
-    UserRole.styrelse: {PermissionOp.read, PermissionOp.create},
-    UserRole.member: {PermissionOp.read, PermissionOp.create},
-  },
-  AppMenu.members: {
-    UserRole.admin: {PermissionOp.read, PermissionOp.update},
-    UserRole.styrelse: {PermissionOp.read},
-    UserRole.member: {},
-  },
-};
-
-/// Läser en eventuell överskuggning från föreningens JSON, t.ex.
-/// `{"posts": {"member": ["read", "create"]}}`.
-Set<PermissionOp> resolvePermissions(
-  AppMenu menu,
-  UserRole role,
-  Map<String, dynamic>? overrides,
-) {
-  final menuJson = overrides?[menu.name];
-  if (menuJson is Map && menuJson[role.name] is List) {
-    final names = (menuJson[role.name] as List).cast<String>();
-    return {
-      for (final op in PermissionOp.values)
-        if (names.contains(op.name)) op,
-    };
-  }
-  return defaultPermissions[menu]?[role] ?? const {};
-}
-```
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_compositions/flutter_compositions.dart';
-import 'package:go_router/go_router.dart';
-
-import '../../../core/di/injection_keys.dart';
-import '../../../core/utils/permissions.dart';
-import '../../bookings/pages/my_bookings_page.dart';
-import '../../bookings/pages/resources_list_page.dart';
-import '../../members/pages/members_list_page.dart';
-import '../../posts/pages/posts_list_page.dart';
-
-class _MenuItem {
-  const _MenuItem(this.menu, this.label, this.icon, this.path);
-  final AppMenu menu;
-  final String label;
-  final IconData icon;
-  final String path;
-}
-
-const _allItems = [
-  _MenuItem(AppMenu.posts, 'Anslag', Icons.campaign, PostsListPage.path),
-  _MenuItem(AppMenu.bookings, 'Boka', Icons.event_available, ResourcesListPage.path),
-  _MenuItem(AppMenu.bookings, 'Mina bokningar', Icons.bookmark, MyBookingsPage.path),
-  _MenuItem(AppMenu.members, 'Medlemmar', Icons.people, MembersListPage.path),
-];
-
-class DashboardPage extends CompositionWidget {
-  const DashboardPage({super.key});
-
-  static const path = '/';
-
-  @override
-  Widget Function(BuildContext) setup() {
-    final auth = inject(authStoreKey);
-
-    // Visa bara de rutor användaren har läsrätt till.
-    final items = computed(() => _allItems
-        .where((i) => auth.hasPermission(i.menu, PermissionOp.read))
-        .toList());
-    final greeting = computed(() => 'Hej ${auth.user.value?.name ?? ''}!');
-
-    return (context) => Scaffold(
-          appBar: AppBar(
-            title: Text(greeting.value),
-            actions: [
-              IconButton(
-                tooltip: 'Logga ut',
-                icon: const Icon(Icons.logout),
-                onPressed: auth.signOut,
-              ),
-            ],
-          ),
-          body: GridView.count(
-            crossAxisCount: 2,
-            padding: const EdgeInsets.all(16),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            children: [
-              for (final item in items.value)
-                Card(
-                  child: InkWell(
-                    onTap: () => context.push(item.path),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(item.icon, size: 40),
-                        const SizedBox(height: 8),
-                        Text(item.label),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-  }
-}
-```
-
-`items` är en `computed` som anropar `hasPermission`, som läser `auth.user.value`.
-Loggar man ut blir rutnätet tomt direkt.
-
-> ⚠️ **Varning:** Att dölja en knapp är **UX**, inte säkerhet. API-regler och hooks
-> måste stoppa samma sak på servern.
+`MyApp` anropar `router.refresh()`, och guarden skickar användaren till flödet.
+Utloggning fungerar likadant åt andra hållet, och ingen sida behöver känna till det.
 
 ---
 
@@ -1119,11 +1122,17 @@ class Paginated<T> {
   void removeWhere(bool Function(T item) test) {
     _items.value = _items.value.where((i) => !test(i)).toList();
   }
+
+  /// Byt ut element lokalt (t.ex. efter en uppdatering) utan att hämta om.
+  void updateWhere(bool Function(T item) test, T Function(T item) update) {
+    _items.value = [for (final i in _items.value) test(i) ? update(i) : i];
+  }
 }
 ```
 
 `Paginated<T>` är en vanlig klass, inte en composable. Den kan därför leva i en store
-och behålla sin data när sidan stängs och öppnas igen.
+(flödet, grupplistan) **eller** skapas i en sidas `setup()` (profilens och gruppens
+inlägg) och då leva lika länge som sidan.
 
 ```dart
 import 'package:flutter/material.dart';
@@ -1181,8 +1190,12 @@ class PaginatedListView extends CompositionWidget {
     );
 
     return (context) {
-      final PaginatedListView(:itemBuilder, :itemCount, :onRefresh, :emptyText) =
-          props.value;
+      final PaginatedListView(
+        :itemBuilder,
+        :itemCount,
+        :onRefresh,
+        :emptyText
+      ) = props.value;
       return RefreshIndicator(
         onRefresh: onRefresh,
         child: isEmpty.value
@@ -1212,6 +1225,7 @@ class PaginatedListView extends CompositionWidget {
 - `onScroll` läser `props.raw` och `scroll.raw`. Det är en callback, så inget beroende
   behövs.
 - Beräkningarna är `computed`, och builder-funktionen destrukturerar bara props.
+- När man närmar sig botten anropas `onLoadMore`. Det är hela "oändliga flödet".
 
 ---
 
@@ -1279,8 +1293,10 @@ class EntityAction {
   /// Om satt visas en bekräftelsedialog innan [onSelected] körs.
   final String? confirmMessage;
 
-  factory EntityAction.update(VoidCallback onSelected, {String label = 'Redigera'}) =>
-      EntityAction(icon: Icons.edit_outlined, label: label, onSelected: onSelected);
+  factory EntityAction.update(VoidCallback onSelected,
+          {String label = 'Redigera'}) =>
+      EntityAction(
+          icon: Icons.edit_outlined, label: label, onSelected: onSelected);
 
   factory EntityAction.delete(
     VoidCallback onSelected, {
@@ -1333,7 +1349,8 @@ class EntityActionMenu extends StatelessWidget {
               leading: Icon(a.icon, color: a.destructive ? Colors.red : null),
               title: Text(
                 a.label,
-                style: a.destructive ? const TextStyle(color: Colors.red) : null,
+                style:
+                    a.destructive ? const TextStyle(color: Colors.red) : null,
               ),
             ),
           ),
@@ -1347,14 +1364,14 @@ Skicka **bara** de val användaren har rätt till. En tom lista ritar ingenting:
 
 ```dart
 EntityActionMenu(actions: [
-  if (canEdit.value) EntityAction.update(() => context.push(editPath)),
+  if (isMine.value) EntityAction.update(edit),
   if (canDelete.value) EntityAction.delete(delete),
 ]),
 ```
 
 ---
 
-## Feature: anslag
+## Feature: inlägg
 
 ### Store
 
@@ -1365,74 +1382,55 @@ import 'package:pocketbase/pocketbase.dart' hide AuthStore;
 
 import '../../core/models/collections.dart';
 import '../../core/models/post_record.dart';
-import '../../core/pagination/paginated.dart';
 import '../auth/auth_store.dart';
+import '../feed/feed_store.dart';
 
 class PostsStore {
-  PostsStore(this._pb, this._auth);
+  PostsStore(this._pb, this._auth, this._feed);
 
   final PocketBase _pb;
   final AuthStore _auth;
-
-  /// Publicerade anslag, fästa först, nyast överst. API-regeln i PocketBase
-  /// ser till att bara den egna föreningens anslag kommer med.
-  late final posts = Paginated<PostRecord>((page, perPage) async {
-    final res = await _pb.collection(Collections.posts).getList(
-          page: page,
-          perPage: perPage,
-          filter: 'published = true',
-          sort: '-pinned,-created',
-          expand: 'author',
-        );
-    return PageResult(
-      res.items.map((r) => PostRecord.fromJson(r.toJson())).toList(),
-      res.totalPages,
-    );
-  });
+  final FeedStore _feed;
 
   final _saving = ref(false);
   ReadonlyRef<bool> get saving => _saving;
 
   Future<PostRecord?> fetchPost(String id) async {
     try {
-      final r = await _pb.collection(Collections.posts).getOne(id, expand: 'author');
-      return PostRecord.fromJson(r.toJson());
+      final r = await _pb
+          .collection(Collections.posts)
+          .getOne(id, expand: 'author,group,likes_via_post');
+      return PostRecord.fromJson(r.toJson(),
+          currentUserId: _auth.user.value?.id);
     } catch (e) {
       debugPrint('PostsStore.fetchPost: $e');
       return null;
     }
   }
 
-  /// Skapar (id == null) eller uppdaterar ett anslag.
+  /// Skapar (id == null) eller uppdaterar ett inlägg.
   Future<bool> savePost({
     String? id,
     required String title,
     required String body,
-    required bool published,
-    required bool pinned,
+    String? groupId,
   }) async {
-    final user = _auth.user.value;
-    if (user == null) return false;
+    if (_auth.user.value == null) return false;
     _saving.value = true;
     try {
-      final data = {
-        'title': title,
-        'body': body,
-        'published': published,
-        'pinned': pinned,
-      };
       final col = _pb.collection(Collections.posts);
+      final data = {'title': title, 'body': body};
       if (id == null) {
-        // author och association sätts av servern (hook), men vi skickar author
-        // ändå så att API-regeln kan kontrollera den.
-        await col.create(body: {...data, 'author': user.id});
+        // author skickas inte: servern stämplar den (hook).
+        if (groupId != null) data['group'] = groupId;
+        await col.create(body: data);
       } else {
         await col.update(id, body: data);
       }
-      await posts.refresh(); // hämta om efter mutation
+      await _feed.posts.refresh(); // hämta om efter mutation
       return true;
-    } catch (e) {
-      debugPrint('PostsStore.savePost: $e');
+    } on ClientException catch (e) {
+      debugPrint('PostsStore.savePost: ${e.response}');
       return false;
     } finally {
       _saving.value = false;
@@ -1442,84 +1440,10 @@ class PostsStore {
   Future<bool> deletePost(String id) async {
     try {
       await _pb.collection(Collections.posts).delete(id);
-      posts.removeWhere((p) => p.id == id);
+      _feed.posts.removeWhere((p) => p.id == id);
       return true;
-    } catch (e) {
-      debugPrint('PostsStore.deletePost: $e');
-      return false;
-    }
-  }
-
-  // ---- Kommentarer (realtime) --------------------------------------------
-
-  final _comments = ref<List<PostCommentRecord>>([]);
-  ReadonlyRef<List<PostCommentRecord>> get comments => _comments;
-  String? _activePostId;
-  UnsubscribeFunc? _commentsUnsub;
-
-  /// Hämtar kommentarer för ett anslag och prenumererar på ändringar.
-  Future<void> watchComments(String postId) async {
-    await stopWatchingComments();
-    _activePostId = postId;
-    _comments.value = [];
-    try {
-      final list = await _pb.collection(Collections.postComments).getFullList(
-            filter: _pb.filter('post = {:id}', {'id': postId}),
-            sort: 'created',
-            expand: 'author',
-          );
-      if (_activePostId != postId) return; // sidan hann stängas
-      _comments.value =
-          list.map((r) => PostCommentRecord.fromJson(r.toJson())).toList();
-
-      final unsub = await _pb.collection(Collections.postComments).subscribe(
-            '*',
-            (e) => _applyCommentEvent(postId, e),
-            filter: _pb.filter('post = {:id}', {'id': postId}),
-            expand: 'author',
-          );
-      if (_activePostId != postId) {
-        await unsub(); // sidan stängdes medan vi prenumererade
-      } else {
-        _commentsUnsub = unsub;
-      }
-    } catch (e) {
-      debugPrint('PostsStore.watchComments: $e');
-    }
-  }
-
-  void _applyCommentEvent(String postId, RecordSubscriptionEvent e) {
-    final record = e.record;
-    if (record == null || _activePostId != postId) return;
-    final c = PostCommentRecord.fromJson(record.toJson());
-    final current = _comments.value;
-    _comments.value = switch (e.action) {
-      'create' => current.any((x) => x.id == c.id) ? current : [...current, c],
-      'update' => [for (final x in current) x.id == c.id ? c : x],
-      'delete' => current.where((x) => x.id != c.id).toList(),
-      _ => current,
-    };
-  }
-
-  Future<void> stopWatchingComments() async {
-    _activePostId = null;
-    final unsub = _commentsUnsub;
-    _commentsUnsub = null;
-    if (unsub != null) await unsub();
-  }
-
-  Future<bool> addComment(String postId, String body) async {
-    final user = _auth.user.value;
-    if (user == null) return false;
-    try {
-      await _pb.collection(Collections.postComments).create(body: {
-        'post': postId,
-        'author': user.id,
-        'body': body,
-      });
-      return true; // realtime-händelsen lägger in kommentaren i listan
-    } catch (e) {
-      debugPrint('PostsStore.addComment: $e');
+    } on ClientException catch (e) {
+      debugPrint('PostsStore.deletePost: ${e.response}');
       return false;
     }
   }
@@ -1528,80 +1452,84 @@ class PostsStore {
 
 Två strategier för färsk data:
 
-- **Hämta om efter mutation.** `savePost` anropar `posts.refresh()`, och `deletePost`
-  tar bort lokalt. Det räcker för de flesta listor.
+- **Hämta om efter mutation.** `savePost` anropar `posts.refresh()` på flödet, och
+  `deletePost` tar bort lokalt. Det räcker för de flesta listor.
 - **Realtime** för kommentarer, se nedan.
 
-### Lista
+### Gilla: composable + store
+
+Gillningen är **optimistisk** ([kapitel 7](07-async-data.md#optimistisk-uppdatering-gilla-direkt-ångra-vid-fel)).
+Logiken bor i en composable så att alla kort (flödet, profilen, gruppen, detaljsidan)
+beter sig likadant, medan serveranropet bor i `FeedStore`:
 
 ```dart
-import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/di/injection_keys.dart';
-import '../../../core/utils/permissions.dart';
-import '../../../shared/widgets/paginated_list_view.dart';
-import 'create_post_page.dart';
-import 'post_detail_page.dart';
+import '../../../core/models/post_record.dart';
 
-class PostsListPage extends CompositionWidget {
-  const PostsListPage({super.key});
+class LikeToggle {
+  const LikeToggle({
+    required this.liked,
+    required this.count,
+    required this.label,
+    required this.toggle,
+  });
 
-  static const path = '/posts';
+  final ReadonlyRef<bool> liked;
+  final ReadonlyRef<int> count;
+  final ReadonlyRef<String> label;
+  final Future<void> Function() toggle;
+}
 
-  @override
-  Widget Function(BuildContext) setup() {
-    final store = inject(postsStoreKey);
-    final auth = inject(authStoreKey);
-    final posts = store.posts;
+/// Optimistisk gillning: UI:t ändras direkt och rullas tillbaka om
+/// servern säger nej.
+LikeToggle useLikeToggle(ReadonlyRef<PostRecord> post) {
+  final feed = inject(feedStoreKey);
 
-    final canCreate = computed(
-      () => auth.hasPermission(AppMenu.posts, PermissionOp.create),
-    );
-    final showSpinner = computed(
-      () => posts.loading.value && posts.items.value.isEmpty,
-    );
+  final liked = ref(post.raw.likedByMe); // startvärden, utan beroende
+  final count = ref(post.raw.likeCount);
+  var busy = false; // inte reaktiv: ingen UI läser den
 
-    onMounted(posts.refresh);
+  // Ny data från servern (t.ex. efter pull-to-refresh) vinner.
+  watch(() => post.value, (p, _) {
+    liked.value = p.likedByMe;
+    count.value = p.likeCount;
+  });
 
-    return (context) => Scaffold(
-          appBar: AppBar(title: const Text('Anslag')),
-          floatingActionButton: canCreate.value
-              ? FloatingActionButton(
-                  onPressed: () => context.push(CreatePostPage.path),
-                  child: const Icon(Icons.add),
-                )
-              : null,
-          body: showSpinner.value
-              ? const Center(child: CircularProgressIndicator())
-              : PaginatedListView(
-                  itemCount: posts.items.value.length,
-                  hasMore: posts.hasMore.value,
-                  loadingMore: posts.loadingMore.value,
-                  onLoadMore: posts.loadMore,
-                  onRefresh: posts.refresh,
-                  emptyText: 'Inga anslag ännu',
-                  itemBuilder: (context, i) {
-                    final post = posts.items.value[i];
-                    return ListTile(
-                      leading: post.pinned ? const Icon(Icons.push_pin) : null,
-                      title: Text(post.title),
-                      subtitle: Text(
-                        '${post.authorName} · ${post.body}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onTap: () => context.push(PostDetailPage.pathFor(post.id)),
-                    );
-                  },
-                ),
-        );
+  final label = computed(
+    () => count.value == 1 ? '1 gillning' : '${count.value} gillningar',
+  );
+
+  Future<void> toggle() async {
+    if (busy) return;
+    busy = true;
+    final wasLiked = liked.value;
+    liked.value = !wasLiked; // 1. optimistiskt
+    count.value += wasLiked ? -1 : 1;
+
+    final ok = await feed.setLiked(post.raw.id, !wasLiked); // 2. servern
+
+    if (!ok) {
+      liked.value = wasLiked; // 3. rulla tillbaka
+      count.value += wasLiked ? 1 : -1;
+    }
+    busy = false;
   }
+
+  return LikeToggle(liked: liked, count: count, label: label, toggle: toggle);
 }
 ```
 
-### Kommentarer i realtid
+- Startvärdena läses med `.raw`, eftersom de bara ska läsas en gång.
+- `watch(() => post.value, …)` skriver över det lokala state:t när kortet får ny data
+  från servern (t.ex. efter pull-to-refresh). Det är "lokal ref + watch" från kapitel 7.
+- `busy` är en vanlig variabel. Ingen UI läser den, så den behöver inte vara reaktiv.
+
+### Inläggskortet
+
+`PostCard` används i alla listor. Den visar gilla-knappen och en `EntityActionMenu`
+med **bara** de val användaren har rätt till:
 
 ```dart
 import 'package:flutter/material.dart';
@@ -1611,149 +1539,334 @@ import 'package:go_router/go_router.dart';
 import '../../../core/di/injection_keys.dart';
 import '../../../core/models/post_record.dart';
 import '../../../core/utils/permissions.dart';
+import '../../../core/utils/time_ago.dart';
 import '../../../shared/widgets/entity_action_menu.dart';
-import 'create_post_page.dart';
-import 'posts_list_page.dart';
+import '../../profile/pages/profile_page.dart';
+import '../composables/use_like_toggle.dart';
+import '../pages/create_post_page.dart';
+
+/// Ett inlägg i en lista: författare, text, gilla-knapp och åtgärdsmeny.
+class PostCard extends CompositionWidget {
+  const PostCard({
+    super.key,
+    required this.post,
+    this.onTap,
+    this.onEdited,
+    this.onDeleted,
+    this.maxLines = 4,
+  });
+
+  final PostRecord post;
+  final VoidCallback? onTap;
+
+  /// Anropas när redigeringssidan stängts efter en lyckad sparning.
+  final VoidCallback? onEdited;
+
+  /// Anropas efter lyckad radering, t.ex. för att ta bort kortet ur en
+  /// lokal lista eller stänga detaljsidan.
+  final VoidCallback? onDeleted;
+  final int? maxLines;
+
+  @override
+  Widget Function(BuildContext) setup() {
+    final props = widget();
+    final auth = inject(authStoreKey);
+    final groups = inject(groupsStoreKey);
+    final postsStore = inject(postsStoreKey);
+    final theme = useTheme();
+    final context = useContext();
+
+    final post = computed(() => props.value.post);
+    final like = useLikeToggle(post);
+
+    final isMine = computed(() => post.value.author == auth.user.value?.id);
+    final canDelete = computed(
+      () =>
+          isMine.value ||
+          (post.value.inGroup &&
+              groups.hasPermission(
+                  post.value.group, GroupAction.deleteOthersPosts)),
+    );
+    final meta = computed(() {
+      final p = post.value;
+      final where = p.inGroup ? ' · ${p.groupName}' : '';
+      return '${timeAgo(p.created)}$where';
+    });
+    final initial = computed(() {
+      final name = post.value.authorName;
+      return name.isEmpty ? '?' : name.characters.first.toUpperCase();
+    });
+    final titleStyle = computed(() => theme.value.textTheme.titleMedium);
+    final likeColor = computed(() => like.liked.value ? Colors.red : null);
+    final likeIcon = computed(
+      () => like.liked.value ? Icons.favorite : Icons.favorite_border,
+    );
+
+    Future<void> edit() async {
+      final ctx = context.value;
+      if (ctx == null) return;
+      final saved =
+          await ctx.push<bool>(CreatePostPage.editPathFor(post.value.id));
+      if (saved == true) props.value.onEdited?.call();
+    }
+
+    Future<void> delete() async {
+      final ok = await postsStore.deletePost(post.value.id);
+      final ctx = context.value;
+      if (ok) {
+        props.value.onDeleted?.call();
+      } else if (ctx != null && ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Kunde inte radera inlägget')),
+        );
+      }
+    }
+
+    return (context) {
+      final PostCard(:onTap, :maxLines) = props.value;
+      final p = post.value;
+      return Card(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              leading: CircleAvatar(child: Text(initial.value)),
+              title: Text(p.authorName),
+              subtitle: Text(meta.value),
+              onTap: () => context.push(ProfilePage.pathFor(p.author)),
+              trailing: EntityActionMenu(actions: [
+                if (isMine.value) EntityAction.update(edit),
+                if (canDelete.value)
+                  EntityAction.delete(
+                    delete,
+                    confirmMessage: 'Vill du radera "${p.title}"?',
+                  ),
+              ]),
+            ),
+            InkWell(
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(p.title, style: titleStyle.value),
+                    const SizedBox(height: 4),
+                    Text(p.body,
+                        maxLines: maxLines, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                IconButton(
+                  tooltip: 'Gilla',
+                  onPressed: like.toggle,
+                  icon: Icon(likeIcon.value, color: likeColor.value),
+                ),
+                Text(like.label.value),
+              ],
+            ),
+          ],
+        ),
+      );
+    };
+  }
+}
+```
+
+- `canDelete` kombinerar "mitt eget" med `groups.hasPermission(…, deleteOthersPosts)`.
+  `hasPermission` läser en ref i `GroupsStore`, så menyn uppdateras av sig själv om
+  min roll ändras.
+- `onEdited` och `onDeleted` är callback-props (Vues `emit`), så att varje sida kan
+  uppdatera *sin* lista.
+- Temat läses med `useTheme()` i en `computed`, inte med `Theme.of(context)` i builder.
+
+### Flödet
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/di/injection_keys.dart';
+import '../../../shared/widgets/paginated_list_view.dart';
+import '../../groups/pages/groups_list_page.dart';
+import '../../posts/pages/create_post_page.dart';
+import '../../posts/pages/post_detail_page.dart';
+import '../../posts/widgets/post_card.dart';
+import '../../profile/pages/profile_page.dart';
+import '../feed_store.dart';
+
+class PostsFeedPage extends CompositionWidget {
+  const PostsFeedPage({super.key});
+
+  static const path = '/';
+
+  @override
+  Widget Function(BuildContext) setup() {
+    final feed = inject(feedStoreKey);
+    final auth = inject(authStoreKey);
+    final posts = feed.posts;
+
+    final showSpinner = computed(
+      () => posts.loading.value && posts.items.value.isEmpty,
+    );
+    final emptyText = computed(() => switch (feed.filter.value) {
+          FeedFilter.all => 'Inga inlägg ännu. Skriv det första!',
+          FeedFilter.following =>
+            'Du följer ingen än, eller så har de inte skrivit något',
+          FeedFilter.mine => 'Du har inte skrivit något än',
+        });
+    final myId = computed(() => auth.user.value?.id ?? '');
+
+    onMounted(posts.refresh);
+
+    return (context) => Scaffold(
+          appBar: AppBar(
+            title: const Text('Kvittra'),
+            actions: [
+              IconButton(
+                tooltip: 'Grupper',
+                icon: const Icon(Icons.groups),
+                onPressed: () => context.push(GroupsListPage.path),
+              ),
+              IconButton(
+                tooltip: 'Min profil',
+                icon: const Icon(Icons.person),
+                onPressed: () => context.push(ProfilePage.pathFor(myId.value)),
+              ),
+              IconButton(
+                tooltip: 'Logga ut',
+                icon: const Icon(Icons.logout),
+                onPressed: auth.signOut,
+              ),
+            ],
+          ),
+          floatingActionButton: FloatingActionButton(
+            tooltip: 'Nytt inlägg',
+            onPressed: () => context.push(CreatePostPage.path),
+            child: const Icon(Icons.edit),
+          ),
+          body: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: SegmentedButton<FeedFilter>(
+                  segments: const [
+                    ButtonSegment(value: FeedFilter.all, label: Text('Alla')),
+                    ButtonSegment(
+                        value: FeedFilter.following, label: Text('Följer')),
+                    ButtonSegment(value: FeedFilter.mine, label: Text('Mina')),
+                  ],
+                  selected: {feed.filter.value},
+                  onSelectionChanged: (s) => feed.setFilter(s.first),
+                ),
+              ),
+              Expanded(
+                child: showSpinner.value
+                    ? const Center(child: CircularProgressIndicator())
+                    : PaginatedListView(
+                        itemCount: posts.items.value.length,
+                        hasMore: posts.hasMore.value,
+                        loadingMore: posts.loadingMore.value,
+                        onLoadMore: posts.loadMore,
+                        onRefresh: posts.refresh,
+                        emptyText: emptyText.value,
+                        itemBuilder: (context, i) {
+                          final post = posts.items.value[i];
+                          return PostCard(
+                            key: ValueKey(post.id),
+                            post: post,
+                            onTap: () =>
+                                context.push(PostDetailPage.pathFor(post.id)),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+  }
+}
+```
+
+`key: ValueKey(post.id)` är viktigt: utan den kan Flutter återanvända ett kort (och
+dess lokala gilla-state) för ett annat inlägg när listan ändras.
+
+### Detaljsidan
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/di/injection_keys.dart';
+import '../../../core/models/post_record.dart';
+import '../../comments/widgets/comments_section.dart';
+import '../widgets/post_card.dart';
 
 class PostDetailPage extends CompositionWidget {
   const PostDetailPage({super.key, required this.postId});
 
   final String postId;
 
-  static const path = '${PostsListPage.path}/:id';
-  static String pathFor(String id) => '${PostsListPage.path}/$id';
+  static const path = '/posts/:id';
+  static String pathFor(String id) => '/posts/$id';
 
   @override
   Widget Function(BuildContext) setup() {
     final props = widget();
     final store = inject(postsStoreKey);
-    final auth = inject(authStoreKey);
-    final context = useContext();
 
-    final post = ref<PostRecord?>(null);
-    final notFound = ref(false);
-    final (commentController, commentText, _) = useTextEditingController();
-    final sending = ref(false);
-
-    final canEdit = computed(() =>
-        auth.hasPermission(AppMenu.posts, PermissionOp.update) ||
-        post.value?.author == auth.user.value?.id);
-    final canDelete = computed(
-      () => auth.hasPermission(AppMenu.posts, PermissionOp.delete),
-    );
-    final canSend = computed(
-      () => commentText.value.trim().isNotEmpty && !sending.value,
+    // Hämtas via id, så sidan fungerar även vid direktlänk till /posts/:id.
+    final (status, refresh) = useAsyncData<PostRecord, String>(
+      (id) async {
+        final post = await store.fetchPost(id);
+        return post ??
+            (throw 'Inlägget finns inte eller så får du inte se det');
+      },
+      watch: () => props.value.postId,
     );
 
-    // Hämta anslaget + starta realtime för kommentarer. Fungerar även vid
-    // deep link direkt till /posts/:id, eftersom vi hämtar via id.
-    onMounted(() async {
-      final id = props.value.postId;
-      post.value = await store.fetchPost(id);
-      notFound.value = post.value == null;
-      await store.watchComments(id);
-    });
-
-    // Registrerat direkt i setup(), inte inuti onMounted.
-    onUnmounted(store.stopWatchingComments);
-
-    Future<void> send() async {
-      sending.value = true;
-      final ok = await store.addComment(props.value.postId, commentText.value.trim());
-      sending.value = false;
-      if (ok) {
-        commentText.value = '';
-      } else if (context.value?.mounted ?? false) {
-        ScaffoldMessenger.of(context.value!).showSnackBar(
-          const SnackBar(content: Text('Kunde inte skicka kommentaren')),
-        );
-      }
-    }
-
-    Future<void> delete() async {
-      final ok = await store.deletePost(props.value.postId);
-      final ctx = context.value;
-      if (ctx == null || !ctx.mounted) return;
-      if (ok) {
-        ctx.pop();
-      } else {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('Kunde inte radera anslaget')),
-        );
-      }
-    }
+    final title = computed(() => status.value.dataOrNull?.title ?? 'Inlägg');
 
     return (context) => Scaffold(
-          appBar: AppBar(
-            title: Text(post.value?.title ?? 'Anslag'),
-            actions: [
-              EntityActionMenu(actions: [
-                if (canEdit.value)
-                  EntityAction.update(
-                    () => context.push(CreatePostPage.editPathFor(props.value.postId)),
-                  ),
-                if (canDelete.value) EntityAction.delete(delete),
-              ]),
-            ],
-          ),
-          body: notFound.value
-              ? const Center(child: Text('Anslaget finns inte'))
-              : Column(
+          appBar: AppBar(title: Text(title.value)),
+          body: switch (status.value) {
+            AsyncIdle() ||
+            AsyncLoading() =>
+              const Center(child: CircularProgressIndicator()),
+            AsyncError(:final errorValue) => Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          Text(post.value?.body ?? ''),
-                          const Divider(height: 32),
-                          Text('Kommentarer (${store.comments.value.length})'),
-                          for (final c in store.comments.value)
-                            ListTile(
-                              title: Text(c.body),
-                              subtitle: Text(c.authorName),
-                            ),
-                        ],
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: commentController,
-                              decoration: const InputDecoration(
-                                hintText: 'Skriv en kommentar…',
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: canSend.value ? send : null,
-                            icon: const Icon(Icons.send),
-                          ),
-                        ],
-                      ),
-                    ),
+                    Text('$errorValue'),
+                    TextButton(
+                        onPressed: refresh, child: const Text('Försök igen')),
                   ],
                 ),
+              ),
+            AsyncData(:final value) => CommentsSection(
+                post: value,
+                header: PostCard(
+                  post: value,
+                  maxLines: null, // visa hela texten
+                  onEdited: refresh, // hämta om efter redigering
+                  onDeleted: () => context.pop(),
+                ),
+              ),
+          },
         );
   }
 }
 ```
 
-**Livscykeln i detalj:**
-
-1. `onMounted` hämtar anslaget **via id**, så sidan fungerar även vid direktlänk, och
-   startar realtime (`store.watchComments`).
-2. `onUnmounted(store.stopWatchingComments)` registreras **direkt i `setup()`**
-   ([kapitel 4](04-livscykel-och-props.md): hooks får inte registreras inuti
-   `onMounted` i 0.1.1).
-3. I store:n skyddar `_activePostId` mot race-fall. Om sidan stängs medan `subscribe`
-   pågår avslutas prenumerationen direkt.
-4. `subscribe` får ett `filter`, så att servern bara skickar händelser för det här
-   anslaget. API-reglerna gäller även för realtime.
-5. En skickad kommentar läggs **inte** in manuellt. `create`-händelsen gör det, vilket
-   ger samma kodväg för egna och andras kommentarer.
+Sidan hämtar inlägget **via id** med `useAsyncData`, så den fungerar även vid
+direktlänk till `/posts/:id`. `onEdited: refresh` hämtar om efter redigering.
+Kommentarerna kommer i nästa avsnitt.
 
 ### Skapa och redigera, samma sida
 
@@ -1763,17 +1876,21 @@ import 'package:flutter_compositions/flutter_compositions.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/di/injection_keys.dart';
-import 'posts_list_page.dart';
 
 /// Skapa ELLER redigera. Med postId → redigeringsläge.
+/// Med groupId (bara vid nytt inlägg) → inlägget hamnar i gruppen.
 class CreatePostPage extends CompositionWidget {
-  const CreatePostPage({super.key, this.postId});
+  const CreatePostPage({super.key, this.postId, this.groupId});
 
   final String? postId;
+  final String? groupId;
 
-  static const path = '${PostsListPage.path}/new';
-  static const editPath = '${PostsListPage.path}/:id/edit';
-  static String editPathFor(String id) => '${PostsListPage.path}/$id/edit';
+  static const path = '/posts/new';
+  static String pathForGroup(String groupId) => '/posts/new?group=$groupId';
+  static const editPath = '/posts/:id/edit';
+  static String editPathFor(String id) => '/posts/$id/edit';
+
+  static const maxBody = 2000;
 
   @override
   Widget Function(BuildContext) setup() {
@@ -1783,36 +1900,46 @@ class CreatePostPage extends CompositionWidget {
 
     final (titleController, title, _) = useTextEditingController();
     final (bodyController, body, _) = useTextEditingController();
-    final published = ref(true);
-    final pinned = ref(false);
     final loadingExisting = ref(false);
 
     final isEdit = computed(() => props.value.postId != null);
-    final pageTitle = computed(() => isEdit.value ? 'Redigera anslag' : 'Nytt anslag');
+    final pageTitle =
+        computed(() => isEdit.value ? 'Redigera inlägg' : 'Nytt inlägg');
     final titleError = computed(
       () => title.value.trim().length < 3 ? 'Minst 3 tecken' : null,
     );
-    // Visa inte felet förrän användaren börjat skriva.
+    final bodyError = computed(() {
+      final length = body.value.trim().length;
+      if (length == 0) return 'Skriv något';
+      if (length > maxBody) {
+        return 'Max $maxBody tecken (${length - maxBody} för mycket)';
+      }
+      return null;
+    });
+    // Visa inte felen förrän användaren börjat skriva.
     final visibleTitleError = computed(
       () => title.value.isEmpty ? null : titleError.value,
     );
+    final visibleBodyError = computed(
+      () => body.value.isEmpty ? null : bodyError.value,
+    );
     final canSave = computed(() =>
         titleError.value == null &&
-        body.value.trim().isNotEmpty &&
+        bodyError.value == null &&
         !store.saving.value &&
         !loadingExisting.value);
+    final saveLabel =
+        computed(() => store.saving.value ? 'Sparar…' : 'Publicera');
 
-    // Förifyll i redigeringsläge (fungerar även vid deep link).
+    // Förifyll i redigeringsläge (fungerar även vid direktlänk).
     onMounted(() async {
       final id = props.value.postId;
       if (id == null) return;
       loadingExisting.value = true;
       final existing = await store.fetchPost(id);
       if (existing != null) {
-        title.value = existing.title;
+        title.value = existing.title; // tvåvägsbindning fyller fälten
         body.value = existing.body;
-        published.value = existing.published;
-        pinned.value = existing.pinned;
       }
       loadingExisting.value = false;
     });
@@ -1822,16 +1949,15 @@ class CreatePostPage extends CompositionWidget {
         id: props.value.postId,
         title: title.value.trim(),
         body: body.value.trim(),
-        published: published.value,
-        pinned: pinned.value,
+        groupId: props.value.groupId,
       );
       final ctx = context.value;
       if (ctx == null || !ctx.mounted) return;
       if (ok) {
-        ctx.pop();
+        ctx.pop(true); // true = "sparat", så att föregående sida kan hämta om
       } else {
         ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('Kunde inte spara anslaget')),
+          const SnackBar(content: Text('Kunde inte spara inlägget')),
         );
       }
     }
@@ -1841,6 +1967,7 @@ class CreatePostPage extends CompositionWidget {
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (loadingExisting.value) const LinearProgressIndicator(),
               TextField(
                 controller: titleController,
                 decoration: InputDecoration(
@@ -1851,19 +1978,1182 @@ class CreatePostPage extends CompositionWidget {
               TextField(
                 controller: bodyController,
                 minLines: 4,
-                maxLines: 10,
-                decoration: const InputDecoration(labelText: 'Text'),
+                maxLines: 12,
+                decoration: InputDecoration(
+                  labelText: 'Vad vill du berätta?',
+                  errorText: visibleBodyError.value,
+                ),
               ),
-              SwitchListTile(
-                title: const Text('Publicerat'),
-                value: published.value,
-                onChanged: (v) => published.value = v,
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: canSave.value ? save : null,
+                child: Text(saveLabel.value),
               ),
-              SwitchListTile(
-                title: const Text('Fäst överst'),
-                value: pinned.value,
-                onChanged: (v) => pinned.value = v,
+            ],
+          ),
+        );
+  }
+}
+```
+
+- `postId == null` betyder nytt, annars redigering. `groupId` (från `?group=…`)
+  lägger det nya inlägget i en grupp.
+- Förifyllning sker i `onMounted`. Tvåvägsbindningen gör att `title.value = …` räcker.
+- `canSave` kombinerar validering med `store.saving` och `loadingExisting`.
+- `ctx.pop(true)` talar om för föregående sida att något sparats.
+
+---
+
+## Kommentarer i realtid
+
+Store:n hämtar kommentarerna och prenumererar sedan på ändringar, med skydd mot
+race-fall:
+
+```dart
+import 'package:flutter/foundation.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+import 'package:pocketbase/pocketbase.dart';
+
+import '../../core/models/collections.dart';
+import '../../core/models/comment_record.dart';
+
+class CommentsStore {
+  CommentsStore(this._pb);
+
+  final PocketBase _pb;
+
+  final _comments = ref<List<CommentRecord>>([]);
+  final _loading = ref(false);
+  ReadonlyRef<List<CommentRecord>> get comments => _comments;
+  ReadonlyRef<bool> get loading => _loading;
+
+  String? _activePostId;
+  UnsubscribeFunc? _unsubscribe;
+
+  /// Hämtar kommentarer för ett inlägg och prenumererar på ändringar.
+  Future<void> watchComments(String postId) async {
+    await stopWatching();
+    _activePostId = postId;
+    _comments.value = [];
+    _loading.value = true;
+    final col = _pb.collection(Collections.comments);
+    final filter = _pb.filter('post = {:id}', {'id': postId});
+    try {
+      final list = await col.getFullList(
+        filter: filter,
+        sort: 'created',
+        expand: 'author',
+      );
+      if (_activePostId != postId) return; // sidan hann stängas
+      _comments.value =
+          list.map((r) => CommentRecord.fromJson(r.toJson())).toList();
+
+      final unsub = await col.subscribe(
+        '*',
+        (e) => _applyEvent(postId, e),
+        filter: filter,
+        expand: 'author',
+      );
+      if (_activePostId != postId) {
+        await unsub(); // sidan stängdes medan vi prenumererade
+      } else {
+        _unsubscribe = unsub;
+      }
+    } catch (e) {
+      debugPrint('CommentsStore.watchComments: $e');
+    } finally {
+      if (_activePostId == postId) _loading.value = false;
+    }
+  }
+
+  void _applyEvent(String postId, RecordSubscriptionEvent e) {
+    final record = e.record;
+    if (record == null || _activePostId != postId) return;
+    final c = CommentRecord.fromJson(record.toJson());
+    final current = _comments.value;
+    _comments.value = switch (e.action) {
+      'create' => current.any((x) => x.id == c.id) ? current : [...current, c],
+      'update' => [for (final x in current) x.id == c.id ? c : x],
+      'delete' => current.where((x) => x.id != c.id).toList(),
+      _ => current,
+    };
+  }
+
+  Future<void> stopWatching() async {
+    _activePostId = null;
+    final unsub = _unsubscribe;
+    _unsubscribe = null;
+    if (unsub != null) await unsub();
+  }
+
+  Future<bool> addComment(String postId, String body) async {
+    try {
+      // author stämplas av servern. Kommentaren läggs in i listan av
+      // realtime-händelsen, så egna och andras kommentarer går samma väg.
+      await _pb
+          .collection(Collections.comments)
+          .create(body: {'post': postId, 'body': body});
+      return true;
+    } on ClientException catch (e) {
+      debugPrint('CommentsStore.addComment: ${e.response}');
+      return false;
+    }
+  }
+
+  Future<bool> deleteComment(String id) async {
+    try {
+      await _pb.collection(Collections.comments).delete(id);
+      _comments.value = _comments.value.where((c) => c.id != id).toList();
+      return true;
+    } on ClientException catch (e) {
+      debugPrint('CommentsStore.deleteComment: ${e.response}');
+      return false;
+    }
+  }
+}
+```
+
+Widgeten kopplar ihop store:n med `useCommentComposer` från
+[kapitel 5](05-composables.md):
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+
+import '../../../core/di/injection_keys.dart';
+import '../../../core/models/comment_record.dart';
+import '../../../core/models/post_record.dart';
+import '../../../core/utils/permissions.dart';
+import '../../../core/utils/time_ago.dart';
+import '../../../shared/widgets/entity_action_menu.dart';
+import '../composables/use_comment_composer.dart';
+
+/// Kommentarer i realtid + ett fält för att skriva en ny.
+/// [header] visas överst i samma scrollbara lista (t.ex. själva inlägget).
+class CommentsSection extends CompositionWidget {
+  const CommentsSection({super.key, required this.post, required this.header});
+
+  final PostRecord post;
+  final Widget header;
+
+  @override
+  Widget Function(BuildContext) setup() {
+    final props = widget();
+    final store = inject(commentsStoreKey);
+    final auth = inject(authStoreKey);
+    final groups = inject(groupsStoreKey);
+    final context = useContext();
+
+    final composer = useCommentComposer(
+      onSend: (body) => store.addComment(props.value.post.id, body),
+    );
+
+    final title = computed(
+      () => 'Kommentarer (${store.comments.value.length})',
+    );
+    // I en grupp får bara medlemmar kommentera. Utanför grupper får alla.
+    final canComment = computed(() {
+      final p = props.value.post;
+      return !p.inGroup || groups.hasPermission(p.group, GroupAction.comment);
+    });
+
+    // Vilka kommentarer får jag radera? Mina egna, alla på mitt eget inlägg,
+    // och alla i gruppen om jag är moderator eller admin där.
+    final deletableIds = computed(() {
+      final me = auth.user.value?.id;
+      final p = props.value.post;
+      final moderates = p.inGroup &&
+          groups.hasPermission(p.group, GroupAction.deleteOthersPosts);
+      return {
+        for (final c in store.comments.value)
+          if (moderates || c.author == me || p.author == me) c.id,
+      };
+    });
+
+    // Starta realtime när sidan visas. Byts inlägget (ny prop) startar vi om.
+    onMounted(() => store.watchComments(props.value.post.id));
+    watch(() => props.value.post.id, (id, _) => store.watchComments(id));
+    // Registrerat direkt i setup(), inte inuti onMounted.
+    onUnmounted(store.stopWatching);
+
+    Future<void> delete(CommentRecord c) async {
+      final ok = await store.deleteComment(c.id);
+      final ctx = context.value;
+      if (!ok && ctx != null && ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Kunde inte radera kommentaren')),
+        );
+      }
+    }
+
+    return (context) {
+      final CommentsSection(:header) = props.value;
+      return Column(
+        children: [
+          Expanded(
+            child: ListView(
+              children: [
+                header,
+                ListTile(title: Text(title.value)),
+                if (store.loading.value) const LinearProgressIndicator(),
+                for (final c in store.comments.value)
+                  ListTile(
+                    title: Text(c.body),
+                    subtitle: Text('${c.authorName} · ${timeAgo(c.created)}'),
+                    trailing: EntityActionMenu(
+                      actions: [
+                        if (deletableIds.value.contains(c.id))
+                          EntityAction.delete(() => delete(c)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (canComment.value)
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: composer.controller,
+                        minLines: 1,
+                        maxLines: 4,
+                        decoration: InputDecoration(
+                          hintText: 'Skriv en kommentar…',
+                          errorText: composer.error.value,
+                          suffixText: composer.counterLabel.value,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: composer.canSend.value ? composer.send : null,
+                      icon: const Icon(Icons.send),
+                    ),
+                  ],
+                ),
               ),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Gå med i gruppen för att kommentera'),
+            ),
+        ],
+      );
+    };
+  }
+}
+```
+
+**Livscykeln i detalj:**
+
+1. `onMounted` startar realtime (`store.watchComments`). Byts inlägget (ny prop)
+   startar `watch(() => props.value.post.id, …)` om prenumerationen, precis som
+   `didUpdateWidget` hade gjort.
+2. `onUnmounted(store.stopWatching)` registreras **direkt i `setup()`**
+   ([kapitel 4](04-livscykel-och-props.md): hooks får inte registreras inuti
+   `onMounted` i 0.1.1).
+3. I store:n skyddar `_activePostId` mot race-fall. Om sidan stängs medan `subscribe`
+   pågår avslutas prenumerationen direkt. Det är samma idé som `disposed`-flaggan i
+   kapitel 7.
+4. `subscribe` får ett `filter`, så att servern bara skickar händelser för det här
+   inlägget. API-reglerna gäller även för realtime, så kommentarer i en privat grupp
+   når bara medlemmar.
+5. En skickad kommentar läggs **inte** in manuellt. `create`-händelsen gör det, vilket
+   ger samma kodväg för egna och andras kommentarer.
+6. Vem som får radera vad är en `computed` (`deletableIds`), inte logik i builder.
+
+---
+
+## Profil: följa och sluta följa
+
+<details>
+<summary>▶ Visa <code>profile_store.dart</code></summary>
+
+```dart
+import 'package:flutter/foundation.dart';
+import 'package:pocketbase/pocketbase.dart' hide AuthStore;
+
+import '../../core/models/collections.dart';
+import '../../core/models/user_record.dart';
+import '../auth/auth_store.dart';
+
+class ProfileData {
+  const ProfileData({
+    required this.user,
+    required this.followers,
+    required this.following,
+    required this.followedByMe,
+  });
+
+  final UserRecord user;
+  final int followers; // hur många som följer användaren
+  final int following; // hur många användaren följer
+  final bool followedByMe;
+}
+
+class ProfileStore {
+  ProfileStore(this._pb, this._auth);
+
+  final PocketBase _pb;
+  final AuthStore _auth;
+
+  /// Antal poster som matchar ett filter, utan att hämta dem.
+  Future<int> _count(String filter) async {
+    final res = await _pb
+        .collection(Collections.follows)
+        .getList(perPage: 1, filter: filter);
+    return res.totalItems;
+  }
+
+  /// Kastar vid fel, så att useAsyncData kan visa AsyncError.
+  Future<ProfileData> fetchProfile(String userId) async {
+    final me = _auth.user.value?.id ?? '';
+    final record = await _pb.collection(Collections.users).getOne(userId);
+    final results = await Future.wait([
+      _count(_pb.filter('following = {:id}', {'id': userId})),
+      _count(_pb.filter('follower = {:id}', {'id': userId})),
+      _count(_pb.filter(
+        'follower = {:me} && following = {:id}',
+        {'me': me, 'id': userId},
+      )),
+    ]);
+    return ProfileData(
+      user: UserRecord.fromJson(record.toJson()),
+      followers: results[0],
+      following: results[1],
+      followedByMe: results[2] > 0,
+    );
+  }
+
+  Future<bool> follow(String userId) async {
+    final me = _auth.user.value?.id;
+    if (me == null) return false;
+    try {
+      await _pb
+          .collection(Collections.follows)
+          .create(body: {'follower': me, 'following': userId});
+      return true;
+    } on ClientException catch (e) {
+      debugPrint('ProfileStore.follow: ${e.response}');
+      return false;
+    }
+  }
+
+  Future<bool> unfollow(String userId) async {
+    final me = _auth.user.value?.id;
+    if (me == null) return false;
+    try {
+      final col = _pb.collection(Collections.follows);
+      final row = await col.getFirstListItem(
+        _pb.filter(
+            'follower = {:me} && following = {:id}', {'me': me, 'id': userId}),
+      );
+      await col.delete(row.id);
+      return true;
+    } on ClientException catch (e) {
+      debugPrint('ProfileStore.unfollow: ${e.response}');
+      return false;
+    }
+  }
+}
+```
+
+</details>
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/di/injection_keys.dart';
+import '../../../core/models/post_record.dart';
+import '../../../core/pagination/paginated.dart';
+import '../../../shared/widgets/paginated_list_view.dart';
+import '../../posts/pages/post_detail_page.dart';
+import '../../posts/widgets/post_card.dart';
+import '../profile_store.dart';
+
+class ProfilePage extends CompositionWidget {
+  const ProfilePage({super.key, required this.userId});
+
+  final String userId;
+
+  static const path = '/users/:id';
+  static String pathFor(String id) => '/users/$id';
+
+  @override
+  Widget Function(BuildContext) setup() {
+    final props = widget();
+    final store = inject(profileStoreKey);
+    final feed = inject(feedStoreKey);
+    final auth = inject(authStoreKey);
+    final theme = useTheme();
+    final context = useContext();
+
+    // 1. Profilen (användare + antal följare). Hämtas om vid nytt userId.
+    final (status, _) = useAsyncData<ProfileData, String>(
+      store.fetchProfile,
+      watch: () => props.value.userId,
+    );
+
+    // 2. Lokalt state för följ-knappen: synkas från servern, ändras
+    //    optimistiskt (samma mönster som "lokal ref + watch" i kapitel 7).
+    final followedByMe = ref(false);
+    final followers = ref(0);
+    watch(() => status.value, (s, _) {
+      if (s case AsyncData(:final value)) {
+        followedByMe.value = value.followedByMe;
+        followers.value = value.followers;
+      }
+    });
+
+    // 3. Användarens inlägg. Paginated är en vanlig klass, så den kan
+    //    skapas här i setup() och leva lika länge som sidan.
+    final posts = Paginated<PostRecord>(
+      (page, perPage) => feed.fetchPosts(
+        page: page,
+        perPage: perPage,
+        authorId: props.raw.userId,
+      ),
+    );
+    onMounted(posts.refresh);
+    watch(() => props.value.userId, (_, _) => posts.refresh());
+
+    final isMe = computed(() => props.value.userId == auth.user.value?.id);
+    final user = computed(() => status.value.dataOrNull?.user);
+    final title = computed(() => user.value?.displayName ?? 'Profil');
+    final username = computed(() => '@${user.value?.username ?? ''}');
+    final bio = computed(() => user.value?.bio ?? '');
+    final stats = computed(() {
+      final following = status.value.dataOrNull?.following ?? 0;
+      return '${followers.value} följare · följer $following';
+    });
+    final followLabel = computed(
+      () => followedByMe.value ? 'Sluta följa' : 'Följ',
+    );
+    final nameStyle = computed(() => theme.value.textTheme.headlineSmall);
+
+    Future<void> toggleFollow() async {
+      final id = props.value.userId;
+      final was = followedByMe.value;
+      followedByMe.value = !was; // optimistiskt
+      followers.value += was ? -1 : 1;
+      final ok = was ? await store.unfollow(id) : await store.follow(id);
+      if (ok) return;
+      followedByMe.value = was; // rulla tillbaka
+      followers.value += was ? 1 : -1;
+      final ctx = context.value;
+      if (ctx != null && ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Det gick inte, försök igen')),
+        );
+      }
+    }
+
+    Widget header() => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title.value, style: nameStyle.value),
+              Text(username.value),
+              if (bio.value.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(bio.value),
+              ],
+              const SizedBox(height: 8),
+              Text(stats.value),
+              if (!isMe.value) ...[
+                const SizedBox(height: 8),
+                FilledButton.tonal(
+                  onPressed: status.value.isData ? toggleFollow : null,
+                  child: Text(followLabel.value),
+                ),
+              ],
+            ],
+          ),
+        );
+
+    return (context) => Scaffold(
+          appBar: AppBar(title: Text(title.value)),
+          body: switch (status.value) {
+            AsyncIdle() ||
+            AsyncLoading() =>
+              const Center(child: CircularProgressIndicator()),
+            AsyncError(:final errorValue) =>
+              Center(child: Text('Kunde inte hämta profilen: $errorValue')),
+            AsyncData() => PaginatedListView(
+                // Rad 0 är profilhuvudet, resten är inlägg.
+                itemCount: posts.items.value.length + 1,
+                hasMore: posts.hasMore.value,
+                loadingMore: posts.loadingMore.value,
+                onLoadMore: posts.loadMore,
+                onRefresh: posts.refresh,
+                itemBuilder: (context, i) {
+                  if (i == 0) return header();
+                  final post = posts.items.value[i - 1];
+                  return PostCard(
+                    key: ValueKey(post.id),
+                    post: post,
+                    onTap: () => context.push(PostDetailPage.pathFor(post.id)),
+                    onEdited: posts.refresh,
+                    onDeleted: () => posts.removeWhere((p) => p.id == post.id),
+                  );
+                },
+              ),
+          },
+        );
+  }
+}
+```
+
+Profilsidan kombinerar tre mönster:
+
+1. **`useAsyncData` med `watch`** för profilen. Byts `userId` hämtas den nya.
+2. **Lokal ref + `watch`** för följ-knappen och antalet följare. De synkas från servern
+   och ändras optimistiskt, med tillbakarullning vid fel.
+3. **En `Paginated` i `setup()`** för användarens inlägg. Hämtfunktionen läser
+   `props.raw.userId` (en callback, inget beroende behövs) och en `watch` på
+   `props.value.userId` hämtar om.
+
+---
+
+## Grupper och roller
+
+### Rollmatrisen
+
+```dart
+/// Roller i en grupp (`group_members.role`).
+enum GroupRole { admin, moderator, member }
+
+/// Saker man kan vilja göra i en grupp.
+enum GroupAction {
+  createPost,
+  comment,
+  deleteOthersPosts,
+  editGroup,
+  manageMembers,
+  deleteGroup,
+}
+
+/// Rollmatrisen. API-reglerna på servern speglar samma matris.
+const Map<GroupRole, Set<GroupAction>> groupPermissions = {
+  GroupRole.admin: {
+    GroupAction.createPost,
+    GroupAction.comment,
+    GroupAction.deleteOthersPosts,
+    GroupAction.editGroup,
+    GroupAction.manageMembers,
+    GroupAction.deleteGroup,
+  },
+  GroupRole.moderator: {
+    GroupAction.createPost,
+    GroupAction.comment,
+    GroupAction.deleteOthersPosts,
+  },
+  GroupRole.member: {
+    GroupAction.createPost,
+    GroupAction.comment,
+  },
+};
+
+/// `role == null` betyder "inte medlem", och då får man ingenting.
+bool roleAllows(GroupRole? role, GroupAction action) =>
+    role != null && (groupPermissions[role]?.contains(action) ?? false);
+```
+
+Matrisen är en **ren funktion** som är lätt att testa. Samma matris finns på servern,
+uttryckt som API-regler (och, i fördjupningen nedan, som en hook).
+
+### Store
+
+```dart
+import 'package:flutter/foundation.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+import 'package:pocketbase/pocketbase.dart' hide AuthStore;
+
+import '../../core/models/collections.dart';
+import '../../core/models/group_record.dart';
+import '../../core/pagination/paginated.dart';
+import '../../core/utils/permissions.dart';
+import '../auth/auth_store.dart';
+
+class GroupsStore {
+  GroupsStore(this._pb, this._auth);
+
+  final PocketBase _pb;
+  final AuthStore _auth;
+
+  /// Alla grupper jag får se: publika + privata där jag är medlem.
+  late final groups = Paginated<GroupRecord>((page, perPage) async {
+    final res = await _pb.collection(Collections.groups).getList(
+          page: page,
+          perPage: perPage,
+          sort: 'name',
+        );
+    return PageResult(
+      res.items.map((r) => GroupRecord.fromJson(r.toJson())).toList(),
+      res.totalPages,
+    );
+  });
+
+  /// Mina medlemskap: grupp-id → roll. Laddas vid inloggning.
+  final _myRoles = ref<Map<String, GroupRole>>({});
+  final _saving = ref(false);
+  ReadonlyRef<Map<String, GroupRole>> get myRoles => _myRoles;
+  ReadonlyRef<bool> get saving => _saving;
+
+  Future<void> loadMyRoles() async {
+    final me = _auth.user.value?.id;
+    if (me == null) return clear();
+    try {
+      final list = await _pb.collection(Collections.groupMembers).getFullList(
+            filter: _pb.filter('user = {:me}', {'me': me}),
+          );
+      _myRoles.value = {
+        for (final m in list.map((r) => GroupMemberRecord.fromJson(r.toJson())))
+          m.group: m.role,
+      };
+    } catch (e) {
+      debugPrint('GroupsStore.loadMyRoles: $e');
+    }
+  }
+
+  void clear() => _myRoles.value = {};
+
+  /// Läser en ref, så anrop i computed eller builder blir reaktiva.
+  GroupRole? roleIn(String groupId) => _myRoles.value[groupId];
+
+  bool isMember(String groupId) => roleIn(groupId) != null;
+
+  bool hasPermission(String groupId, GroupAction action) =>
+      roleAllows(roleIn(groupId), action);
+
+  @visibleForTesting
+  void debugSetRoles(Map<String, GroupRole> roles) => _myRoles.value = roles;
+
+  // ---- Grupper ------------------------------------------------------------
+
+  /// Kastar vid fel, så att useAsyncData kan visa AsyncError.
+  Future<GroupRecord> fetchGroup(String id) async {
+    final r = await _pb.collection(Collections.groups).getOne(id);
+    return GroupRecord.fromJson(r.toJson());
+  }
+
+  /// Skapar (id == null) eller uppdaterar en grupp.
+  Future<bool> saveGroup({
+    String? id,
+    required String name,
+    required String description,
+    required GroupVisibility visibility,
+  }) async {
+    _saving.value = true;
+    try {
+      final col = _pb.collection(Collections.groups);
+      final data = {
+        'name': name,
+        'description': description,
+        'visibility': visibility.name,
+      };
+      if (id == null) {
+        // owner stämplas av servern, och en hook gör mig till admin.
+        await col.create(body: data);
+        await loadMyRoles();
+      } else {
+        await col.update(id, body: data);
+      }
+      await groups.refresh();
+      return true;
+    } on ClientException catch (e) {
+      debugPrint('GroupsStore.saveGroup: ${e.response}');
+      return false;
+    } finally {
+      _saving.value = false;
+    }
+  }
+
+  Future<bool> deleteGroup(String id) async {
+    try {
+      await _pb.collection(Collections.groups).delete(id);
+      groups.removeWhere((g) => g.id == id);
+      _myRoles.value = {..._myRoles.value}..remove(id);
+      return true;
+    } on ClientException catch (e) {
+      debugPrint('GroupsStore.deleteGroup: ${e.response}');
+      return false;
+    }
+  }
+
+  // ---- Medlemskap ---------------------------------------------------------
+
+  Future<bool> join(String groupId) async {
+    final me = _auth.user.value?.id;
+    if (me == null) return false;
+    try {
+      await _pb.collection(Collections.groupMembers).create(body: {
+        'group': groupId,
+        'user': me,
+        'role': GroupRole.member.name,
+      });
+      _myRoles.value = {..._myRoles.value, groupId: GroupRole.member};
+      return true;
+    } on ClientException catch (e) {
+      debugPrint('GroupsStore.join: ${e.response}');
+      return false;
+    }
+  }
+
+  Future<bool> leave(String groupId) async {
+    final me = _auth.user.value?.id;
+    if (me == null) return false;
+    try {
+      final col = _pb.collection(Collections.groupMembers);
+      final row = await col.getFirstListItem(
+        _pb.filter('group = {:g} && user = {:me}', {'g': groupId, 'me': me}),
+      );
+      await col.delete(row.id);
+      _myRoles.value = {..._myRoles.value}..remove(groupId);
+      return true;
+    } on ClientException catch (e) {
+      debugPrint('GroupsStore.leave: ${e.response}');
+      return false;
+    }
+  }
+
+  Future<List<GroupMemberRecord>> fetchMembers(String groupId) async {
+    final list = await _pb.collection(Collections.groupMembers).getFullList(
+          filter: _pb.filter('group = {:g}', {'g': groupId}),
+          expand: 'user',
+          sort: 'role,created',
+        );
+    return list.map((r) => GroupMemberRecord.fromJson(r.toJson())).toList();
+  }
+
+  /// Bara gruppens admin (update-regeln på group_members kontrollerar det).
+  Future<bool> setRole(String memberId, GroupRole role) async {
+    try {
+      await _pb
+          .collection(Collections.groupMembers)
+          .update(memberId, body: {'role': role.name});
+      return true;
+    } on ClientException catch (e) {
+      debugPrint('GroupsStore.setRole: ${e.response}');
+      return false;
+    }
+  }
+
+  Future<bool> removeMember(String memberId) async {
+    try {
+      await _pb.collection(Collections.groupMembers).delete(memberId);
+      return true;
+    } on ClientException catch (e) {
+      debugPrint('GroupsStore.removeMember: ${e.response}');
+      return false;
+    }
+  }
+}
+```
+
+- `_myRoles` är en `Map<String, GroupRole>` (grupp-id → min roll). Den laddas vid
+  inloggning (`watch` i `MyApp`) och uppdateras lokalt vid `join`, `leave` och
+  `deleteGroup`.
+- `hasPermission` är en vanlig metod, men eftersom den läser `_myRoles.value` blir den
+  reaktiv när den anropas i en `computed` eller i builder.
+- Efter `saveGroup` för en ny grupp laddas rollerna om, eftersom hooken på servern
+  gjorde mig till `admin`.
+- `debugSetRoles` finns bara för tester (`@visibleForTesting`).
+
+### Gruppsidan: FAB och meny styrs av rollen
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/di/injection_keys.dart';
+import '../../../core/models/group_record.dart';
+import '../../../core/models/post_record.dart';
+import '../../../core/pagination/paginated.dart';
+import '../../../core/utils/permissions.dart';
+import '../../../shared/widgets/entity_action_menu.dart';
+import '../../../shared/widgets/paginated_list_view.dart';
+import '../../posts/pages/create_post_page.dart';
+import '../../posts/pages/post_detail_page.dart';
+import '../../posts/widgets/post_card.dart';
+import 'create_group_page.dart';
+import 'group_members_page.dart';
+import 'groups_list_page.dart';
+
+class GroupDetailPage extends CompositionWidget {
+  const GroupDetailPage({super.key, required this.groupId});
+
+  final String groupId;
+
+  static const path = '${GroupsListPage.path}/:id';
+  static String pathFor(String id) => '${GroupsListPage.path}/$id';
+
+  @override
+  Widget Function(BuildContext) setup() {
+    final props = widget();
+    final store = inject(groupsStoreKey);
+    final feed = inject(feedStoreKey);
+    final context = useContext();
+
+    final (status, refresh) = useAsyncData<GroupRecord, String>(
+      store.fetchGroup,
+      watch: () => props.value.groupId,
+    );
+
+    final posts = Paginated<PostRecord>(
+      (page, perPage) => feed.fetchPosts(
+        page: page,
+        perPage: perPage,
+        groupId: props.raw.groupId,
+      ),
+    );
+    onMounted(posts.refresh);
+
+    // Behörigheter: computed som läser store:ns roller → reaktiva.
+    final id = computed(() => props.value.groupId);
+    final role = computed(() => store.roleIn(id.value));
+    final canPost = computed(
+      () => store.hasPermission(id.value, GroupAction.createPost),
+    );
+    final canEdit = computed(
+      () => store.hasPermission(id.value, GroupAction.editGroup),
+    );
+    final canDelete = computed(
+      () => store.hasPermission(id.value, GroupAction.deleteGroup),
+    );
+    final canJoin = computed(
+      () => role.value == null && status.value.dataOrNull?.isPrivate == false,
+    );
+    final title = computed(() => status.value.dataOrNull?.name ?? 'Grupp');
+    final description =
+        computed(() => status.value.dataOrNull?.description ?? '');
+    final roleLabel = computed(() => switch (role.value) {
+          null => 'Du är inte medlem',
+          final r => 'Du är ${r.name}',
+        });
+
+    void snack(String text) {
+      final ctx = context.value;
+      if (ctx != null && ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(text)));
+      }
+    }
+
+    Future<void> join() async {
+      if (await store.join(id.value)) {
+        await posts.refresh(); // privata inlägg kan nu synas
+      } else {
+        snack('Kunde inte gå med i gruppen');
+      }
+    }
+
+    Future<void> leave() async {
+      if (!await store.leave(id.value)) snack('Kunde inte lämna gruppen');
+    }
+
+    Future<void> edit() async {
+      final ctx = context.value;
+      if (ctx == null) return;
+      final saved = await ctx.push<bool>(CreateGroupPage.editPathFor(id.value));
+      if (saved == true) refresh();
+    }
+
+    Future<void> delete() async {
+      final ok = await store.deleteGroup(id.value);
+      final ctx = context.value;
+      if (ok && ctx != null && ctx.mounted) {
+        ctx.pop();
+      } else if (!ok) {
+        snack('Kunde inte radera gruppen');
+      }
+    }
+
+    Future<void> newPost() async {
+      final ctx = context.value;
+      if (ctx == null) return;
+      final saved = await ctx.push<bool>(CreatePostPage.pathForGroup(id.value));
+      if (saved == true) await posts.refresh();
+    }
+
+    Widget header() => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (description.value.isNotEmpty) Text(description.value),
+              const SizedBox(height: 8),
+              Text(roleLabel.value),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (canJoin.value)
+                    FilledButton(onPressed: join, child: const Text('Gå med')),
+                  if (role.value != null)
+                    OutlinedButton(
+                        onPressed: leave, child: const Text('Lämna')),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () =>
+                        context.value?.push(GroupMembersPage.pathFor(id.value)),
+                    icon: const Icon(Icons.people),
+                    label: const Text('Medlemmar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+
+    return (context) => Scaffold(
+          appBar: AppBar(
+            title: Text(title.value),
+            actions: [
+              EntityActionMenu(actions: [
+                if (canEdit.value) EntityAction.update(edit),
+                if (canDelete.value)
+                  EntityAction.delete(
+                    delete,
+                    confirmMessage: 'Gruppen och alla dess inlägg raderas.',
+                  ),
+              ]),
+            ],
+          ),
+          // FAB:en syns bara för den som får skriva i gruppen.
+          floatingActionButton: canPost.value
+              ? FloatingActionButton(
+                  tooltip: 'Nytt inlägg i gruppen',
+                  onPressed: newPost,
+                  child: const Icon(Icons.edit),
+                )
+              : null,
+          body: switch (status.value) {
+            AsyncIdle() ||
+            AsyncLoading() =>
+              const Center(child: CircularProgressIndicator()),
+            AsyncError(:final errorValue) =>
+              Center(child: Text('Kunde inte hämta gruppen: $errorValue')),
+            AsyncData() => PaginatedListView(
+                itemCount: posts.items.value.length + 1, // rad 0 = huvudet
+                hasMore: posts.hasMore.value,
+                loadingMore: posts.loadingMore.value,
+                onLoadMore: posts.loadMore,
+                onRefresh: posts.refresh,
+                itemBuilder: (context, i) {
+                  if (i == 0) return header();
+                  final post = posts.items.value[i - 1];
+                  return PostCard(
+                    key: ValueKey(post.id),
+                    post: post,
+                    onTap: () => context.push(PostDetailPage.pathFor(post.id)),
+                    onEdited: posts.refresh,
+                    onDeleted: () => posts.removeWhere((p) => p.id == post.id),
+                  );
+                },
+              ),
+          },
+        );
+  }
+}
+```
+
+Alla behörighetsbeslut (`canPost`, `canEdit`, `canDelete`, `canJoin`) är `computed`.
+FAB:en för nya inlägg finns bara för medlemmar, och åtgärdsmenyn har bara de val
+rollen tillåter. Går användaren med i gruppen ändras `_myRoles`, och FAB:en dyker upp
+utan att sidan laddas om.
+
+> ⚠️ **Varning:** Att dölja en knapp är **UX**, inte säkerhet. API-reglerna stoppar
+> samma sak på servern, och det är dem som räknas.
+
+<details>
+<summary>▶ Visa övriga gruppsidor: lista, skapa/redigera och medlemmar</summary>
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/di/injection_keys.dart';
+import '../../../shared/widgets/paginated_list_view.dart';
+import 'create_group_page.dart';
+import 'group_detail_page.dart';
+
+class GroupsListPage extends CompositionWidget {
+  const GroupsListPage({super.key});
+
+  static const path = '/groups';
+
+  @override
+  Widget Function(BuildContext) setup() {
+    final store = inject(groupsStoreKey);
+    final groups = store.groups;
+
+    final showSpinner = computed(
+      () => groups.loading.value && groups.items.value.isEmpty,
+    );
+
+    onMounted(groups.refresh);
+
+    return (context) => Scaffold(
+          appBar: AppBar(title: const Text('Grupper')),
+          floatingActionButton: FloatingActionButton(
+            tooltip: 'Ny grupp',
+            onPressed: () => context.push(CreateGroupPage.path),
+            child: const Icon(Icons.group_add),
+          ),
+          body: showSpinner.value
+              ? const Center(child: CircularProgressIndicator())
+              : PaginatedListView(
+                  itemCount: groups.items.value.length,
+                  hasMore: groups.hasMore.value,
+                  loadingMore: groups.loadingMore.value,
+                  onLoadMore: groups.loadMore,
+                  onRefresh: groups.refresh,
+                  emptyText: 'Inga grupper ännu',
+                  itemBuilder: (context, i) {
+                    final g = groups.items.value[i];
+                    final role = store.myRoles.value[g.id];
+                    return ListTile(
+                      leading: Icon(g.isPrivate ? Icons.lock : Icons.public),
+                      title: Text(g.name),
+                      subtitle: Text(
+                        g.description,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing:
+                          role == null ? null : Chip(label: Text(role.name)),
+                      onTap: () => context.push(GroupDetailPage.pathFor(g.id)),
+                    );
+                  },
+                ),
+        );
+  }
+}
+```
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/di/injection_keys.dart';
+import '../../../core/models/group_record.dart';
+import 'groups_list_page.dart';
+
+/// Skapa ELLER redigera en grupp. Med groupId → redigeringsläge.
+class CreateGroupPage extends CompositionWidget {
+  const CreateGroupPage({super.key, this.groupId});
+
+  final String? groupId;
+
+  static const path = '${GroupsListPage.path}/new';
+  static const editPath = '${GroupsListPage.path}/:id/edit';
+  static String editPathFor(String id) => '${GroupsListPage.path}/$id/edit';
+
+  @override
+  Widget Function(BuildContext) setup() {
+    final props = widget();
+    final store = inject(groupsStoreKey);
+    final context = useContext();
+
+    final (nameController, name, _) = useTextEditingController();
+    final (descController, description, _) = useTextEditingController();
+    final visibility = ref(GroupVisibility.public);
+    final touched = ref(false);
+
+    final pageTitle = computed(
+      () => props.value.groupId == null ? 'Ny grupp' : 'Redigera grupp',
+    );
+    final nameError = computed(
+      () => name.value.trim().length < 3 ? 'Minst 3 tecken' : null,
+    );
+    final visibleNameError =
+        computed(() => touched.value ? nameError.value : null);
+    final visibilityHelp = computed(() => switch (visibility.value) {
+          GroupVisibility.public => 'Alla kan se gruppen och gå med',
+          GroupVisibility.private =>
+            'Bara medlemmar ser gruppen. En admin lägger till nya',
+        });
+    final canSave = computed(() => !store.saving.value);
+
+    onMounted(() async {
+      final id = props.value.groupId;
+      if (id == null) return;
+      try {
+        final g = await store.fetchGroup(id);
+        name.value = g.name;
+        description.value = g.description;
+        visibility.value = g.visibility;
+      } catch (_) {
+        // Sidan visar tomt formulär; sparningen misslyckas i så fall.
+      }
+    });
+
+    Future<void> save() async {
+      touched.value = true;
+      if (nameError.value != null) return;
+      final ok = await store.saveGroup(
+        id: props.value.groupId,
+        name: name.value.trim(),
+        description: description.value.trim(),
+        visibility: visibility.value,
+      );
+      final ctx = context.value;
+      if (ctx == null || !ctx.mounted) return;
+      if (ok) {
+        ctx.pop(true);
+      } else {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Kunde inte spara gruppen')),
+        );
+      }
+    }
+
+    return (context) => Scaffold(
+          appBar: AppBar(title: Text(pageTitle.value)),
+          body: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: InputDecoration(
+                  labelText: 'Namn',
+                  errorText: visibleNameError.value,
+                ),
+              ),
+              TextField(
+                controller: descController,
+                minLines: 2,
+                maxLines: 5,
+                decoration: const InputDecoration(labelText: 'Beskrivning'),
+              ),
+              const SizedBox(height: 16),
+              SegmentedButton<GroupVisibility>(
+                segments: const [
+                  ButtonSegment(
+                    value: GroupVisibility.public,
+                    icon: Icon(Icons.public),
+                    label: Text('Publik'),
+                  ),
+                  ButtonSegment(
+                    value: GroupVisibility.private,
+                    icon: Icon(Icons.lock),
+                    label: Text('Privat'),
+                  ),
+                ],
+                selected: {visibility.value},
+                onSelectionChanged: (s) => visibility.value = s.first,
+              ),
+              const SizedBox(height: 8),
+              Text(visibilityHelp.value),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: canSave.value ? save : null,
@@ -1876,715 +3166,111 @@ class CreatePostPage extends CompositionWidget {
 }
 ```
 
-- `postId == null` betyder ny, annars redigering.
-- Förifyllning sker i `onMounted`. Tvåvägsbindningen gör att `title.value = …` räcker.
-- `canSave` kombinerar validering med `store.saving` och `loadingExisting`.
-
----
-
-## Bokningsformulär med lediga tider
-
-Bokningsformuläret visar hur en **composable** och en **store** samarbetar. Store:n
-pratar med servern, och composablen äger formulärets state och validering.
-
-<details>
-<summary>▶ Visa <code>bookings_store.dart</code></summary>
-
-```dart
-import 'package:flutter/foundation.dart';
-import 'package:flutter_compositions/flutter_compositions.dart';
-import 'package:pocketbase/pocketbase.dart' hide AuthStore;
-
-import '../../core/models/collections.dart';
-import '../../core/models/resource_record.dart';
-import '../auth/auth_store.dart';
-
-class BookingsStore {
-  BookingsStore(this._pb, this._auth);
-
-  final PocketBase _pb;
-  final AuthStore _auth;
-
-  final _resources = ref<List<ResourceRecord>>([]);
-  final _myBookings = ref<List<BookingRecord>>([]);
-  final _loading = ref(false);
-  final _saving = ref(false);
-  final _lastError = ref<String?>(null);
-
-  ReadonlyRef<List<ResourceRecord>> get resources => _resources;
-  ReadonlyRef<List<BookingRecord>> get myBookings => _myBookings;
-  ReadonlyRef<bool> get loading => _loading;
-  ReadonlyRef<bool> get saving => _saving;
-
-  /// Senaste felmeddelandet från servern (t.ex. från dubbelbokningshooken).
-  ReadonlyRef<String?> get lastError => _lastError;
-
-  Future<void> loadResources() async {
-    _loading.value = true;
-    try {
-      final list = await _pb.collection(Collections.resources).getFullList(
-            filter: 'active = true',
-            sort: 'name',
-          );
-      _resources.value =
-          list.map((r) => ResourceRecord.fromJson(r.toJson())).toList();
-    } catch (e) {
-      debugPrint('BookingsStore.loadResources: $e');
-    } finally {
-      _loading.value = false;
-    }
-  }
-
-  ResourceRecord? resourceById(String id) =>
-      _resources.value.where((r) => r.id == id).firstOrNull;
-
-  Future<void> loadMyBookings() async {
-    final userId = _auth.user.value?.id;
-    if (userId == null) return;
-    _loading.value = true;
-    try {
-      final list = await _pb.collection(Collections.bookings).getFullList(
-            filter: _pb.filter('user = {:uid} && end >= @now', {'uid': userId}),
-            sort: 'start',
-            expand: 'resource',
-          );
-      _myBookings.value =
-          list.map((r) => BookingRecord.fromJson(r.toJson())).toList();
-    } catch (e) {
-      debugPrint('BookingsStore.loadMyBookings: $e');
-    } finally {
-      _loading.value = false;
-    }
-  }
-
-  /// Alla bokningar av en resurs ett visst dygn, för att räkna ut lediga tider.
-  Future<List<BookingRecord>> fetchBookingsForDay(
-    String resourceId,
-    DateTime day,
-  ) async {
-    final from = DateTime(day.year, day.month, day.day);
-    final to = from.add(const Duration(days: 1));
-    final list = await _pb.collection(Collections.bookings).getFullList(
-          filter: _pb.filter(
-            'resource = {:res} && start < {:to} && end > {:from}',
-            {
-              'res': resourceId,
-              'from': from.toUtc().toIso8601String(),
-              'to': to.toUtc().toIso8601String(),
-            },
-          ),
-          sort: 'start',
-        );
-    return list.map((r) => BookingRecord.fromJson(r.toJson())).toList();
-  }
-
-  Future<bool> createBooking({
-    required String resourceId,
-    required DateTime start,
-    required DateTime end,
-    String note = '',
-  }) async {
-    final user = _auth.user.value;
-    if (user == null) return false;
-    _saving.value = true;
-    _lastError.value = null;
-    try {
-      // Vi skickar INTE association eller approval_status. De stämplas av
-      // servern (hook), så att en klient inte kan fuska.
-      await _pb.collection(Collections.bookings).create(body: {
-        'resource': resourceId,
-        'user': user.id,
-        'start': start.toUtc().toIso8601String(),
-        'end': end.toUtc().toIso8601String(),
-        'note': note,
-      });
-      await loadMyBookings(); // hämta om efter mutation
-      return true;
-    } on ClientException catch (e) {
-      _lastError.value =
-          e.response['message']?.toString() ?? 'Kunde inte spara bokningen';
-      return false;
-    } finally {
-      _saving.value = false;
-    }
-  }
-
-  Future<bool> deleteBooking(String id) async {
-    final before = _myBookings.value;
-    _myBookings.value = before.where((b) => b.id != id).toList(); // optimistiskt
-    try {
-      await _pb.collection(Collections.bookings).delete(id);
-      return true;
-    } catch (e) {
-      debugPrint('BookingsStore.deleteBooking: $e');
-      _myBookings.value = before; // ångra
-      return false;
-    }
-  }
-
-  void clearError() => _lastError.value = null;
-}
-```
-
-</details>
-
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
 import '../../../core/di/injection_keys.dart';
-import '../../../core/models/resource_record.dart';
+import '../../../core/models/group_record.dart';
+import '../../../core/utils/permissions.dart';
+import '../../../shared/widgets/entity_action_menu.dart';
+import 'groups_list_page.dart';
 
-/// Öppettider för bokningsbara resurser (timmar, lokal tid).
-const openingHour = 7;
-const closingHour = 22;
+class GroupMembersPage extends CompositionWidget {
+  const GroupMembersPage({super.key, required this.groupId});
 
-class TimeSlot {
-  const TimeSlot(this.hour, {required this.available});
-  final int hour;
-  final bool available;
-  String get label => '${hour.toString().padLeft(2, '0')}:00';
-}
+  final String groupId;
 
-class BookingForm {
-  BookingForm({
-    required this.date,
-    required this.startHour,
-    required this.hours,
-    required this.noteController,
-    required this.slots,
-    required this.loadingSlots,
-    required this.errors,
-    required this.canSubmit,
-    required this.summary,
-    required this.submit,
-  });
-
-  final Ref<DateTime> date;
-  final Ref<int?> startHour;
-  final Ref<int> hours;
-  final TextEditingController noteController;
-  final ReadonlyRef<List<TimeSlot>> slots;
-  final ReadonlyRef<bool> loadingSlots;
-  final ReadonlyRef<List<String>> errors;
-  final ReadonlyRef<bool> canSubmit;
-  final ReadonlyRef<String> summary;
-  final Future<bool> Function() submit;
-}
-
-BookingForm useBookingForm(ReadonlyRef<ResourceRecord?> resource) {
-  final store = inject(bookingsStoreKey);
-
-  final today = DateUtils.dateOnly(DateTime.now());
-  final date = ref(today);
-  final startHour = ref<int?>(null);
-  final hours = ref(1);
-  final (noteController, note, _) = useTextEditingController();
-
-  // Hämta dagens bokningar för resursen. Hämtas om när resurs eller datum ändras.
-  final (dayStatus, _) = useAsyncData<List<BookingRecord>, (String?, DateTime)>(
-    (args) async {
-      final (resourceId, day) = args;
-      if (resourceId == null) return const [];
-      return store.fetchBookingsForDay(resourceId, day);
-    },
-    watch: () => (resource.value?.id, date.value),
-  );
-  final loadingSlots = computed(() => dayStatus.value.isLoading);
-
-  bool isFree(int hour, int length, List<BookingRecord> taken) {
-    final d = date.value;
-    final s = DateTime(d.year, d.month, d.day, hour);
-    final e = s.add(Duration(hours: length));
-    if (s.isBefore(DateTime.now())) return false;
-    if (hour + length > closingHour) return false;
-    return !taken.any((b) => b.start.isBefore(e) && b.end.isAfter(s));
-  }
-
-  final slots = computed(() {
-    final taken = dayStatus.value.dataOrNull ?? const <BookingRecord>[];
-    return [
-      for (var h = openingHour; h < closingHour; h++)
-        TimeSlot(h, available: isFree(h, hours.value, taken)),
-    ];
-  });
-
-  final start = computed<DateTime?>(() {
-    final h = startHour.value;
-    final d = date.value;
-    return h == null ? null : DateTime(d.year, d.month, d.day, h);
-  });
-  final end = computed(() => start.value?.add(Duration(hours: hours.value)));
-
-  final errors = computed<List<String>>(() {
-    final r = resource.value;
-    final h = startHour.value;
-    return [
-      if (r == null) 'Resursen kunde inte hittas',
-      if (h == null) 'Välj en starttid',
-      if (h != null && !slots.value.any((s) => s.hour == h && s.available))
-        'Vald tid är inte ledig',
-      if (r != null && hours.value > r.maxHours)
-        '${r.name} kan bokas max ${r.maxHours} h',
-      if (note.value.length > 200) 'Anteckningen får vara max 200 tecken',
-    ];
-  });
-
-  final canSubmit = computed(
-    () => errors.value.isEmpty && !store.saving.value && !loadingSlots.value,
-  );
-
-  final summary = computed(() {
-    final s = start.value;
-    final e = end.value;
-    if (s == null || e == null) return 'Ingen tid vald';
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${s.year}-${two(s.month)}-${two(s.day)} '
-        '${two(s.hour)}:00–${two(e.hour)}:00';
-  });
-
-  // Byter man datum eller längd nollställs vald tid och gamla serverfel.
-  watch(() => (date.value, hours.value), (_, _) {
-    startHour.value = null;
-    store.clearError();
-  });
-
-  Future<bool> submit() async {
-    final r = resource.value;
-    if (!canSubmit.value || r == null) return false;
-    return store.createBooking(
-      resourceId: r.id,
-      start: start.value!,
-      end: end.value!,
-      note: note.value.trim(),
-    );
-  }
-
-  return BookingForm(
-    date: date,
-    startHour: startHour,
-    hours: hours,
-    noteController: noteController,
-    slots: slots,
-    loadingSlots: loadingSlots,
-    errors: errors,
-    canSubmit: canSubmit,
-    summary: summary,
-    submit: submit,
-  );
-}
-```
-
-Följ beroendekedjan:
-
-```
-resource ─┐
-date ─────┼─► useAsyncData (dagens bokningar) ─┐
-          │                                    ├─► slots ─┐
-hours ────┼────────────────────────────────────┘          ├─► errors ─► canSubmit
-startHour ┴─► start ─► end ─► summary                     │
-note ─────────────────────────────────────────────────────┘
-```
-
-- `useAsyncData` med `watch: () => (resource.value?.id, date.value)` hämtar om dagens
-  bokningar vid nytt datum.
-- `slots` räknas om när bokningarna **eller** längden ändras.
-- `watch` på `(date, hours)` nollställer vald tid. Det är en sidoeffekt, så `watch` är
-  rätt verktyg.
-- Klienten visar bara lediga tider, men **servern har sista ordet** (två personer kan
-  välja samma tid samtidigt). Felet från hooken exponeras som `store.lastError`.
-
-<details>
-<summary>▶ Visa sidan <code>book_resource_page.dart</code></summary>
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_compositions/flutter_compositions.dart';
-import 'package:go_router/go_router.dart';
-
-import '../../../core/di/injection_keys.dart';
-import '../../../core/models/resource_record.dart';
-import '../composables/use_booking_form.dart';
-import 'resources_list_page.dart';
-
-class BookResourcePage extends CompositionWidget {
-  const BookResourcePage({super.key, required this.resourceId});
-
-  final String resourceId;
-
-  static const path = '${ResourcesListPage.path}/:id/book';
-  static String pathFor(String id) => '${ResourcesListPage.path}/$id/book';
+  static const path = '${GroupsListPage.path}/:id/members';
+  static String pathFor(String id) => '${GroupsListPage.path}/$id/members';
 
   @override
   Widget Function(BuildContext) setup() {
     final props = widget();
-    final store = inject(bookingsStoreKey);
+    final store = inject(groupsStoreKey);
+    final auth = inject(authStoreKey);
     final context = useContext();
 
-    final resource = computed<ResourceRecord?>(
-      () => store.resourceById(props.value.resourceId),
+    final (status, refresh) = useAsyncData<List<GroupMemberRecord>, String>(
+      store.fetchMembers,
+      watch: () => props.value.groupId,
     );
-    final form = useBookingForm(resource);
 
-    final title = computed(() => 'Boka ${resource.value?.name ?? ''}');
-    final dateLabel = computed(() {
-      final d = form.date.value;
-      return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    });
-    final hourOptions = computed(() => [
-          for (var h = 1; h <= (resource.value?.maxHours ?? 1); h++) h,
-        ]);
-    final submitLabel = computed(() => store.saving.value ? 'Sparar…' : 'Boka');
+    final canManage = computed(
+      () => store.hasPermission(props.value.groupId, GroupAction.manageMembers),
+    );
+    final myId = computed(() => auth.user.value?.id);
+    final title = computed(() => switch (status.value) {
+          AsyncData(:final value) => 'Medlemmar (${value.length})',
+          _ => 'Medlemmar',
+        });
 
-    // Deep link direkt till sidan: resurserna är kanske inte hämtade än.
-    onMounted(() async {
-      if (resource.value == null) await store.loadResources();
-    });
-
-    Future<void> pickDate() async {
-      final ctx = context.value!;
-      final now = DateTime.now();
-      final picked = await showDatePicker(
-        context: ctx,
-        firstDate: DateUtils.dateOnly(now),
-        lastDate: now.add(const Duration(days: 60)),
-        initialDate: form.date.value,
-      );
-      if (picked != null) form.date.value = picked;
+    void snack(String text) {
+      final ctx = context.value;
+      if (ctx != null && ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(text)));
+      }
     }
 
-    Future<void> submit() async {
-      final ok = await form.submit();
-      final ctx = context.value;
-      if (ok && ctx != null && ctx.mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(content: Text('Bokat: ${form.summary.value}')),
-        );
-        ctx.pop();
+    Future<void> setRole(GroupMemberRecord m, GroupRole role) async {
+      if (await store.setRole(m.id, role)) {
+        refresh();
+      } else {
+        snack('Kunde inte ändra rollen');
+      }
+    }
+
+    Future<void> remove(GroupMemberRecord m) async {
+      if (await store.removeMember(m.id)) {
+        refresh();
+      } else {
+        snack('Kunde inte ta bort ${m.userName}');
       }
     }
 
     return (context) => Scaffold(
           appBar: AppBar(title: Text(title.value)),
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              ListTile(
-                leading: const Icon(Icons.calendar_today),
-                title: const Text('Datum'),
-                subtitle: Text(dateLabel.value),
-                onTap: pickDate,
-              ),
-              DropdownButtonFormField<int>(
-                initialValue: form.hours.value,
-                decoration: const InputDecoration(labelText: 'Antal timmar'),
-                items: [
-                  for (final h in hourOptions.value)
-                    DropdownMenuItem(value: h, child: Text('$h h')),
-                ],
-                onChanged: (h) => form.hours.value = h ?? 1,
-              ),
-              const SizedBox(height: 16),
-              const Text('Starttid'),
-              const SizedBox(height: 8),
-              if (form.loadingSlots.value)
-                const LinearProgressIndicator()
-              else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final slot in form.slots.value)
-                      ChoiceChip(
-                        label: Text(slot.label),
-                        selected: form.startHour.value == slot.hour,
-                        onSelected: slot.available
-                            ? (_) => form.startHour.value = slot.hour
-                            : null,
-                      ),
-                  ],
-                ),
-              TextField(
-                controller: form.noteController,
-                decoration: const InputDecoration(labelText: 'Anteckning (valfri)'),
-              ),
-              const SizedBox(height: 16),
-              Text(form.summary.value),
-              for (final e in form.errors.value)
-                Text('• $e', style: const TextStyle(color: Colors.orange)),
-              if (store.lastError.value case final msg?)
-                Text(msg, style: const TextStyle(color: Colors.red)),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: form.canSubmit.value ? submit : null,
-                child: Text(submitLabel.value),
-              ),
-            ],
-          ),
-        );
-  }
-}
-```
-
-</details>
-
-<details>
-<summary>▶ Visa övriga sidor: resurslista, mina bokningar och medlemmar</summary>
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_compositions/flutter_compositions.dart';
-import 'package:go_router/go_router.dart';
-
-import '../../../core/di/injection_keys.dart';
-import 'book_resource_page.dart';
-
-class ResourcesListPage extends CompositionWidget {
-  const ResourcesListPage({super.key});
-
-  static const path = '/resources';
-
-  @override
-  Widget Function(BuildContext) setup() {
-    final store = inject(bookingsStoreKey);
-    final showSpinner = computed(
-      () => store.loading.value && store.resources.value.isEmpty,
-    );
-
-    onMounted(store.loadResources);
-
-    return (context) => Scaffold(
-          appBar: AppBar(title: const Text('Boka lokal')),
-          body: showSpinner.value
-              ? const Center(child: CircularProgressIndicator())
-              : RefreshIndicator(
-                  onRefresh: store.loadResources,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      for (final r in store.resources.value)
-                        ListTile(
-                          leading: const Icon(Icons.meeting_room),
-                          title: Text(r.name),
-                          subtitle: Text('${r.description}\nMax ${r.maxHours} h per bokning'),
-                          isThreeLine: true,
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => context.push(BookResourcePage.pathFor(r.id)),
-                        ),
-                    ],
-                  ),
-                ),
-        );
-  }
-}
-```
-
-```dart
-import 'package:flutter/material.dart';
-import 'package:flutter_compositions/flutter_compositions.dart';
-
-import '../../../core/di/injection_keys.dart';
-import '../../../core/models/resource_record.dart';
-import '../../../shared/widgets/entity_action_menu.dart';
-
-String formatRange(DateTime s, DateTime e) {
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${s.year}-${two(s.month)}-${two(s.day)} ${two(s.hour)}:${two(s.minute)}'
-      '–${two(e.hour)}:${two(e.minute)}';
-}
-
-class MyBookingsPage extends CompositionWidget {
-  const MyBookingsPage({super.key});
-
-  static const path = '/my-bookings';
-
-  @override
-  Widget Function(BuildContext) setup() {
-    final store = inject(bookingsStoreKey);
-    final context = useContext();
-
-    final showSpinner = computed(
-      () => store.loading.value && store.myBookings.value.isEmpty,
-    );
-    final isEmpty = computed(
-      () => !store.loading.value && store.myBookings.value.isEmpty,
-    );
-
-    onMounted(store.loadMyBookings);
-
-    Future<void> cancel(BookingRecord b) async {
-      final ok = await store.deleteBooking(b.id);
-      final ctx = context.value;
-      if (!ok && ctx != null && ctx.mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('Kunde inte avboka')),
-        );
-      }
-    }
-
-    return (context) => Scaffold(
-          appBar: AppBar(title: const Text('Mina bokningar')),
-          body: showSpinner.value
-              ? const Center(child: CircularProgressIndicator())
-              : RefreshIndicator(
-                  onRefresh: store.loadMyBookings,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      if (isEmpty.value)
-                        const ListTile(title: Text('Du har inga kommande bokningar')),
-                      for (final b in store.myBookings.value)
-                        ListTile(
-                          leading: Icon(
-                            b.approvalStatus == ApprovalStatus.approved
-                                ? Icons.check_circle
-                                : Icons.hourglass_top,
+          body: switch (status.value) {
+            AsyncIdle() ||
+            AsyncLoading() =>
+              const Center(child: CircularProgressIndicator()),
+            AsyncError(:final errorValue) => Center(child: Text('$errorValue')),
+            AsyncData(:final value) => ListView(
+                children: [
+                  for (final m in value)
+                    ListTile(
+                      title: Text(m.userName),
+                      // Admin ser en rollväljare, andra ser bara rollen.
+                      subtitle: canManage.value && m.user != myId.value
+                          ? DropdownButton<GroupRole>(
+                              value: m.role,
+                              items: [
+                                for (final r in GroupRole.values)
+                                  DropdownMenuItem(
+                                      value: r, child: Text(r.name)),
+                              ],
+                              onChanged: (r) =>
+                                  r == null ? null : setRole(m, r),
+                            )
+                          : Text(m.role.name),
+                      trailing: EntityActionMenu(actions: [
+                        if (canManage.value && m.user != myId.value)
+                          EntityAction.delete(
+                            () => remove(m),
+                            label: 'Ta bort ur gruppen',
+                            confirmMessage: 'Ta bort ${m.userName} ur gruppen?',
                           ),
-                          title: Text(b.resourceName),
-                          subtitle: Text(formatRange(b.start, b.end)),
-                          trailing: EntityActionMenu(actions: [
-                            EntityAction.delete(
-                              () => cancel(b),
-                              label: 'Avboka',
-                              confirmMessage: 'Vill du avboka ${b.resourceName}?',
-                            ),
-                          ]),
-                        ),
-                    ],
-                  ),
-                ),
-        );
-  }
-}
-```
-
-```dart
-import 'package:flutter/foundation.dart';
-import 'package:flutter_compositions/flutter_compositions.dart';
-import 'package:pocketbase/pocketbase.dart';
-
-import '../../core/models/collections.dart';
-import '../../core/models/user_record.dart';
-import '../../core/pagination/paginated.dart';
-
-class MembersStore {
-  MembersStore(this._pb);
-
-  final PocketBase _pb;
-
-  final search = ref('');
-
-  late final members = Paginated<UserRecord>((page, perPage) async {
-    final q = search.value.trim();
-    final res = await _pb.collection(Collections.users).getList(
-          page: page,
-          perPage: perPage,
-          sort: 'name',
-          filter: q.isEmpty
-              ? ''
-              : _pb.filter('name ~ {:q} || email ~ {:q}', {'q': q}),
-        );
-    return PageResult(
-      res.items.map((r) => UserRecord.fromJson(r.toJson())).toList(),
-      res.totalPages,
-    );
-  });
-
-  /// Endast admin (API-regeln på users kontrollerar det också).
-  Future<bool> setRole(String userId, UserRole role) async {
-    try {
-      await _pb.collection(Collections.users).update(userId, body: {'role': role.name});
-      await members.refresh();
-      return true;
-    } catch (e) {
-      debugPrint('MembersStore.setRole: $e');
-      return false;
-    }
-  }
-}
-```
-
-```dart
-import 'dart:async';
-
-import 'package:flutter/material.dart';
-import 'package:flutter_compositions/flutter_compositions.dart';
-
-import '../../../core/di/injection_keys.dart';
-import '../../../core/models/user_record.dart';
-import '../../../core/utils/permissions.dart';
-import '../../../shared/widgets/paginated_list_view.dart';
-
-class MembersListPage extends CompositionWidget {
-  const MembersListPage({super.key});
-
-  static const path = '/members';
-
-  @override
-  Widget Function(BuildContext) setup() {
-    final store = inject(membersStoreKey);
-    final auth = inject(authStoreKey);
-    final members = store.members;
-    final (searchController, search, _) = useTextEditingController();
-
-    final canEditRoles = computed(
-      () => auth.hasPermission(AppMenu.members, PermissionOp.update),
-    );
-
-    // Enkel debounce: sök 300 ms efter sista tangenttrycket.
-    Timer? debounce;
-    watch(() => search.value, (q, _) {
-      debounce?.cancel();
-      debounce = Timer(const Duration(milliseconds: 300), () {
-        store.search.value = q;
-        members.refresh();
-      });
-    });
-    onUnmounted(() => debounce?.cancel());
-
-    onMounted(members.refresh);
-
-    return (context) => Scaffold(
-          appBar: AppBar(
-            title: TextField(
-              controller: searchController,
-              decoration: const InputDecoration(hintText: 'Sök medlem…'),
-            ),
-          ),
-          body: PaginatedListView(
-            itemCount: members.items.value.length,
-            hasMore: members.hasMore.value,
-            loadingMore: members.loadingMore.value,
-            onLoadMore: members.loadMore,
-            onRefresh: members.refresh,
-            emptyText: 'Inga medlemmar hittades',
-            itemBuilder: (context, i) {
-              final m = members.items.value[i];
-              return ListTile(
-                title: Text(m.name),
-                subtitle: Text(m.email),
-                trailing: canEditRoles.value
-                    ? DropdownButton<UserRole>(
-                        value: m.role,
-                        items: [
-                          for (final r in UserRole.values)
-                            DropdownMenuItem(value: r, child: Text(r.name)),
-                        ],
-                        onChanged: (r) => r == null ? null : store.setRole(m.id, r),
-                      )
-                    : Text(m.role.name),
-              );
-            },
-          ),
+                      ]),
+                    ),
+                ],
+              ),
+          },
         );
   }
 }
 ```
 
 </details>
-
-Lägg märke till att avbokningen i `BookingsStore.deleteBooking` är **optimistisk**:
-bokningen tas bort ur listan direkt och läggs tillbaka om servern svarar med fel.
 
 ---
 
@@ -2594,188 +3280,280 @@ En ren funktion:
 
 ```dart
 import 'package:flutter_test/flutter_test.dart';
-import 'package:foreningsappen/core/models/user_record.dart';
-import 'package:foreningsappen/core/utils/permissions.dart';
+import 'package:kvittra/core/utils/permissions.dart';
 
 void main() {
-  test('member får läsa men inte skapa anslag som standard', () {
-    final ops = resolvePermissions(AppMenu.posts, UserRole.member, null);
-    expect(ops, {PermissionOp.read});
+  test('member får skriva men inte radera andras inlägg', () {
+    expect(roleAllows(GroupRole.member, GroupAction.createPost), isTrue);
+    expect(
+        roleAllows(GroupRole.member, GroupAction.deleteOthersPosts), isFalse);
   });
 
-  test('föreningens JSON skriver över standardmatrisen', () {
-    final ops = resolvePermissions(AppMenu.posts, UserRole.member, {
-      'posts': {'member': ['read', 'create']},
-    });
-    expect(ops, {PermissionOp.read, PermissionOp.create});
+  test('moderator får radera andras inlägg men inte hantera medlemmar', () {
+    expect(
+        roleAllows(GroupRole.moderator, GroupAction.deleteOthersPosts), isTrue);
+    expect(roleAllows(GroupRole.moderator, GroupAction.manageMembers), isFalse);
+  });
+
+  test('den som inte är medlem får ingenting', () {
+    for (final action in GroupAction.values) {
+      expect(roleAllows(null, action), isFalse);
+    }
   });
 }
 ```
 
-Ett widget-test med en riktig `AuthStore` och fejkad inloggning. `pb.authStore.save`
-loggar in utan nätverk. Token måste vara en JWT med `exp` i framtiden för att `isValid`
-ska bli sant.
+Ett widget-test med riktiga stores och fejkad inloggning. `pb.authStore.save` loggar in
+utan nätverk. Token måste vara en JWT med `exp` i framtiden för att `isValid` ska bli
+sant.
 
 ```dart
 import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_compositions/flutter_compositions.dart';
-import 'package:pocketbase/pocketbase.dart' hide AuthStore;
-import 'package:foreningsappen/core/di/injection_keys.dart';
-import 'package:foreningsappen/features/auth/auth_store.dart';
-import 'package:foreningsappen/features/dashboard/pages/dashboard_page.dart';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pocketbase/pocketbase.dart' hide AuthStore;
+import 'package:kvittra/core/di/injection_keys.dart';
+import 'package:kvittra/core/models/post_record.dart';
+import 'package:kvittra/core/utils/permissions.dart';
+import 'package:kvittra/features/auth/auth_store.dart';
+import 'package:kvittra/features/feed/feed_store.dart';
+import 'package:kvittra/features/groups/groups_store.dart';
+import 'package:kvittra/features/posts/posts_store.dart';
+import 'package:kvittra/features/posts/widgets/post_card.dart';
+
+/// En JWT med `exp` långt fram i tiden, så att authStore.isValid blir sant.
 String fakeJwt() {
-  String b64(Map m) => base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
+  String b64(Map<String, Object> m) =>
+      base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
   return '${b64({'alg': 'HS256'})}.${b64({'exp': 4102444800})}.sig';
 }
 
-PocketBase pbAs(String role) {
+/// "Loggar in" som Anna utan nätverk.
+PocketBase pbAsAnna() {
   final pb = PocketBase('http://127.0.0.1:8090');
-  pb.authStore.save(fakeJwt(), RecordModel({
-    'id': 'u1', 'name': 'Anna', 'email': 'anna@example.com',
-    'association': '', 'role': role,
-  }));
+  pb.authStore.save(
+    fakeJwt(),
+    RecordModel({'id': 'anna', 'username': 'anna', 'name': 'Anna'}),
+  );
   return pb;
 }
 
+PostRecord post({required String author, String group = ''}) => PostRecord(
+      id: 'p1',
+      title: 'Hej Kvittra',
+      body: 'Mitt första inlägg',
+      author: author,
+      authorName: author == 'anna' ? 'Anna' : 'Bo',
+      group: group,
+      groupName: group.isEmpty ? '' : 'Flutter',
+      likeCount: 1,
+      likedByMe: false,
+      created: DateTime.now(),
+    );
+
 void main() {
-  for (final (role, seesMembers) in [('member', false), ('admin', true)]) {
-    testWidgets('dashboard för $role', (tester) async {
-      final auth = AuthStore(pbAs(role));
-      expect(auth.isAuthenticated.value, isTrue);
-      await tester.pumpWidget(CompositionBuilder(setup: () {
-        provide(authStoreKey, auth);
-        return (context) => const MaterialApp(home: DashboardPage());
-      }));
-      expect(find.text('Hej Anna!'), findsOneWidget);
-      expect(find.text('Anslag'), findsOneWidget);
-      expect(find.text('Medlemmar'), seesMembers ? findsOneWidget : findsNothing);
-      auth.signOut();
-      await tester.pump();
-      expect(find.text('Anslag'), findsNothing);
-    });
+  late AuthStore auth;
+  late GroupsStore groups;
+
+  Future<void> pumpCard(WidgetTester tester, PostRecord p) async {
+    final pb = pbAsAnna();
+    auth = AuthStore(pb);
+    final feed = FeedStore(pb, auth);
+    groups = GroupsStore(pb, auth);
+    await tester.pumpWidget(CompositionBuilder(setup: () {
+      provide(authStoreKey, auth);
+      provide(feedStoreKey, feed);
+      provide(groupsStoreKey, groups);
+      provide(postsStoreKey, PostsStore(pb, auth, feed));
+      return (context) => MaterialApp(home: Scaffold(body: PostCard(post: p)));
+    }));
   }
+
+  testWidgets('mitt eget inlägg: redigera och radera', (tester) async {
+    await pumpCard(tester, post(author: 'anna'));
+    expect(find.text('1 gillning'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    expect(find.text('Redigera'), findsOneWidget);
+    expect(find.text('Radera'), findsOneWidget);
+  });
+
+  testWidgets('någon annans inlägg utanför grupp: ingen meny', (tester) async {
+    await pumpCard(tester, post(author: 'bo'));
+    expect(find.byIcon(Icons.more_vert), findsNothing);
+  });
+
+  testWidgets('moderator i gruppen får radera, men inte redigera',
+      (tester) async {
+    await pumpCard(tester, post(author: 'bo', group: 'g1'));
+    expect(find.byIcon(Icons.more_vert), findsNothing);
+
+    // Rollerna är refs i store:n: ändras de byggs kortet om av sig självt.
+    groups.debugSetRoles({'g1': GroupRole.moderator});
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    expect(find.text('Redigera'), findsNothing);
+    expect(find.text('Radera'), findsOneWidget);
+  });
 }
 ```
 
-Testet verifierar tre saker: att `provide`/`inject` fungerar, att dashboarden filtrerar
-per roll, och att UI:t reagerar på utloggning.
+Testet verifierar tre saker: att `provide`/`inject` fungerar, att åtgärdsmenyn bara
+visar tillåtna val, och att UI:t reagerar när rollen i store:n ändras.
 
 ---
 
 ## Fördjupning: rollmatris på servern
 
-API-regler kan inte utvärdera en **JSON-matris** som
-`{"posts": {"member": ["read", "create"]}}` på föreningen. En hook kan det. Lätta då på
-`posts.createRule` till `@request.auth.id != "" && @request.body.author = @request.auth.id`
-och låt hooken avgöra rollen, med samma standardmatris som `permissions.dart`.
+API-reglerna ovan räknar upp rollerna (`role ?= "admin" || role ?= "moderator"`) i
+varje regel. Vill du ha matrisen på **ett** ställe även på servern kan en hook göra
+kontrollen, med samma matris som `permissions.dart`. Lätta då på raderingsreglerna och
+låt hooken avgöra.
+
+💡 **Tips:** Det här är samma mönster som `enforce(e, groupId, operation)` i
+[modul 02, kapitel 8](../02-pocketbase/08-grupper-och-behorigheter.md). Skillnaden är att
+operationerna här heter exakt som Dart-enumen `GroupAction` (`deleteOthersPosts`,
+`manageMembers` …), så att appen och servern delar samma namn. Har du redan
+`pb_hooks/utils/group_permissions.js` från modul 02 bygger du ut den filen i stället för att
+skapa en till. Ha bara **en** rollmatris på servern.
 
 <details>
-<summary>▶ Visa <code>pb_hooks/permissions_utils.js</code> och <code>permissions.pb.js</code></summary>
+<summary>▶ Visa <code>pb_hooks/group_permissions.js</code>, <code>group_permissions.pb.js</code> och migrationen</summary>
 
 ```js
-// Samma standardmatris som lib/core/utils/permissions.dart i appen.
-const DEFAULTS = {
-  posts:    { admin: ["read", "create", "update", "delete"], styrelse: ["read", "create", "update"], member: ["read"] },
-  bookings: { admin: ["read", "create", "update", "delete"], styrelse: ["read", "create"], member: ["read", "create"] },
-  members:  { admin: ["read", "update"], styrelse: ["read"], member: [] },
-};
+// Samma rollmatris som lib/core/utils/permissions.dart i appen.
+const GROUP_PERMISSIONS = {
+  admin: ["createPost", "comment", "deleteOthersPosts", "editGroup", "manageMembers", "deleteGroup"],
+  moderator: ["createPost", "comment", "deleteOthersPosts"],
+  member: ["createPost", "comment"],
+}
 
-// Vilken "meny" en collection hör till.
-const MENU_BY_COLLECTION = { posts: "posts", post_comments: "posts", bookings: "bookings" };
-
-function readOverrides(app, associationId) {
-  if (!associationId) return null;
+/** Min roll i gruppen, eller null om jag inte är medlem. */
+function roleIn(app, groupId, userId) {
+  if (!groupId || !userId) return null
   try {
-    const assoc = app.findRecordById("associations", associationId);
-    // JSON-fält kan komma som en byte-array; toString() + JSON.parse normaliserar.
-    const raw = toString(assoc.get("permissions"));
-    const parsed = raw ? JSON.parse(raw) : null;
-    return parsed && typeof parsed === "object" ? parsed : null;
+    const m = app.findFirstRecordByFilter(
+      "group_members",
+      "group = {:g} && user = {:u}",
+      { g: groupId, u: userId },
+    )
+    return m.getString("role")
   } catch (_) {
-    return null;
+    return null // ingen rad = inte medlem
   }
 }
 
 module.exports = {
-  /** Kastar ForbiddenError om inloggad användares roll saknar rätt till op. */
-  enforce: (e, op) => {
-    if (e.hasSuperuserAuth()) return;
-    const auth = e.auth;
-    if (!auth) throw new UnauthorizedError("Logga in först.");
-
-    const menu = MENU_BY_COLLECTION[e.collection.name];
-    if (!menu) return;
-    // Kommentarer: alla som får läsa anslag får kommentera.
-    const effectiveOp = e.collection.name === "post_comments" ? "read" : op;
-
-    const role = auth.getString("role") || "member";
-    const overrides = readOverrides(e.app, auth.getString("association"));
-    const allowed =
-      (overrides && overrides[menu] && overrides[menu][role]) ||
-      DEFAULTS[menu][role] || [];
-
-    if (allowed.indexOf(effectiveOp) === -1) {
-      throw new ForbiddenError("Din roll saknar behörighet för detta.");
+  /** Kastar ForbiddenError om min roll i gruppen saknar rätt till action. */
+  enforce: (e, groupId, action) => {
+    if (e.hasSuperuserAuth()) return
+    if (!e.auth) throw new UnauthorizedError("Logga in först.")
+    const role = roleIn(e.app, groupId, e.auth.id)
+    const allowed = (role && GROUP_PERMISSIONS[role]) || []
+    if (allowed.indexOf(action) === -1) {
+      throw new ForbiddenError("Din roll i gruppen saknar behörighet för detta.")
     }
   },
-};
+}
 ```
 
 ```js
 /// <reference path="../pb_data/types.d.ts" />
-onRecordCreateRequest((e) => {
-  require(`${__hooks}/permissions_utils.js`).enforce(e, "create");
-  e.next();
-}, "posts", "post_comments", "bookings");
 
-onRecordUpdateRequest((e) => {
-  require(`${__hooks}/permissions_utils.js`).enforce(e, "update");
-  e.next();
-}, "posts", "bookings");
-
+// Radera ett inlägg: egna går alltid, andras kräver deleteOthersPosts i gruppen.
 onRecordDeleteRequest((e) => {
-  require(`${__hooks}/permissions_utils.js`).enforce(e, "delete");
-  e.next();
-}, "posts", "bookings");
+  const post = e.record
+  if (!e.auth || post.getString("author") !== e.auth.id) {
+    require(`${__hooks}/group_permissions.js`)
+      .enforce(e, post.getString("group"), "deleteOthersPosts")
+  }
+  e.next()
+}, "posts")
+
+// Radera en kommentar: egen, eller på mitt eget inlägg, eller som moderator.
+onRecordDeleteRequest((e) => {
+  const post = e.app.findRecordById("posts", e.record.getString("post"))
+  const me = e.auth ? e.auth.id : ""
+  if (e.record.getString("author") !== me && post.getString("author") !== me) {
+    require(`${__hooks}/group_permissions.js`)
+      .enforce(e, post.getString("group"), "deleteOthersPosts")
+  }
+  e.next()
+}, "comments")
+```
+
+```js
+/// <reference path="../pb_data/types.d.ts" />
+
+// Raderingsreglerna blir enkla: rollkontrollen sköts av group_permissions.pb.js.
+migrate((app) => {
+  for (const name of ["posts", "comments"]) {
+    const c = app.findCollectionByNameOrId(name)
+    c.deleteRule = '@request.auth.id != ""'
+    app.save(c)
+  }
+}, (app) => {
+  const mod = (x) =>
+    `(@collection.group_members.group ?= ${x} && @collection.group_members.user ?= @request.auth.id && ` +
+    `(@collection.group_members.role ?= "admin" || @collection.group_members.role ?= "moderator"))`
+  const posts = app.findCollectionByNameOrId("posts")
+  posts.deleteRule = `author = @request.auth.id || (group != "" && ${mod("group")})`
+  app.save(posts)
+  const comments = app.findCollectionByNameOrId("comments")
+  comments.deleteRule = `author = @request.auth.id || post.author = @request.auth.id || (post.group != "" && ${mod("post.group")})`
+  app.save(comments)
+})
 ```
 
 </details>
 
-Provkört: en `member` får `403 Din roll saknar behörighet för detta.`, och efter att
-admin satt matrisen ovan på föreningen lyckas samma anrop.
+Provkört: en `member` som raderar någon annans kommentar eller gruppinlägg får
+`403 Din roll i gruppen saknar behörighet för detta.` När admin gjort personen till
+`moderator` lyckas samma anrop (`204`). Egna inlägg och kommentarer på egna inlägg går
+alltid att radera.
 
-> ⚠️ **Varning:** Ett JSON-fält kan i hooks komma som en byte-array. `toString(...)` +
-> `JSON.parse` normaliserar det.
+> ⚠️ **Varning:** Hookar körs i en isolerad kontext. Funktioner och variabler som
+> deklareras utanför en hook-callback syns inte inuti den. Lägg delad kod i en egen
+> fil och hämta den med `require(`${__hooks}/…`)` *inuti* callbacken, som ovan.
 
 ---
 
 ## Så bygger du nästa feature
 
-1. **Backend:** collection med `association`-relation, tenant-regler och vid behov en
-   hook som stämplar serverfält. Testa med `curl` som "fel" användare.
+1. **Backend:** en collection med relationer, API-regler (vem ser, skapar, ändrar,
+   raderar?) och vid behov en hook som stämplar serverfält. Testa med `curl` som "fel"
+   användare.
 2. **Modell:** `XxxRecord.fromJson` och namnet i `Collections`.
 3. **Store:** `Paginated<XxxRecord>` för listan, `fetchXxx(id)`, `saveXxx({id, …})` och
-   `deleteXxx(id)` som returnerar `Future<bool>`, plus en `saving`-ref.
-4. **DI:** `InjectionKey` i `injection_keys.dart`, skapa och `provide` i `MyApp`.
-5. **Sidor:** `XxxListPage` (PaginatedListView + FAB med behörighet), `XxxDetailPage`
-   (hämta via id, `EntityActionMenu`) och `CreateXxxPage` (skapa och redigera).
+   `deleteXxx(id)` som returnerar `Future<bool>`, plus en `saving`-ref. Realtime i
+   store:n om datan ska uppdateras av sig själv.
+4. **DI:** `InjectionKey` i `injection_keys.dart`, skapa och `provide` i `MyApp`. Ska
+   store:n starta något vid inloggning? Lägg det i `watch` på användarens id.
+5. **Sidor:** lista (`PaginatedListView`, FAB med behörighet), detalj (hämta via id,
+   `EntityActionMenu`) och skapa/redigera (samma sida, `pop(true)` efter sparning).
 6. **Router:** routes med `static const path`, med `new` före `:id`.
-7. **Behörighet:** ett `AppMenu`-värde, matrisen och en ruta på dashboarden.
+7. **Behörighet:** behövs en ny `GroupAction`? Lägg till den i matrisen **och** i
+   reglerna på servern.
 8. **Test:** minst ett widget-test med `provide`.
 
-Prova själv i [övning 3.4](ovningar.md#övning-34--ny-feature-felanmälan).
+Prova själv i [övning 3.4](ovningar.md#övning-34--ny-feature-notiser).
 
 ## Sammanfattning
 
 - **Feature-first** med en store per domän. Stores exponerar `ReadonlyRef` och
   `computed` och har async-metoder som returnerar `Future<bool>`.
-- Alla stores skapas och `provide`:as i `MyApp`. Sidor gör `inject`. Bara routern
-  använder en global accessor.
-- `Paginated<T>` + `PaginatedListView` för långa listor, och `EntityActionMenu` för
-  åtgärder.
-- Auth-guard i `redirect` plus `router.refresh()` vid inloggningsändring.
-- Säkerhet ligger på servern (regler och hooks). Appen speglar den för en bra
-  upplevelse.
+- Alla stores skapas och `provide`:as i `MyApp`. Sidor gör `inject`. Routern får
+  `AuthStore` som argument (eller via en global accessor), eftersom `redirect` körs
+  utanför `setup()`.
+- `Paginated<T>` + `PaginatedListView` för långa listor och det oändliga flödet, och
+  `EntityActionMenu` för åtgärder.
+- Optimistiska uppdateringar (gilla, följa) i composables eller sidor, med
+  serveranropet i en store som returnerar `false` vid fel.
+- Realtime i en store med skydd mot race-fall, startad i `onMounted` och stoppad i
+  `onUnmounted` som registrerats direkt i `setup()`.
+- Roller per grupp: `hasPermission` i UI:t, API-regler (och valfritt en hook) på
+  servern. Säkerheten ligger alltid på servern.

@@ -1,52 +1,61 @@
 # Lösningar – Modul 04: Flutter Compositions
 
 > ⚠️ **Varning:** Försök själv först! Det finns ofta flera bra lösningar. Det här är
-> *förslag*. All kod nedan är testad mot `flutter_compositions` 0.1.1.
+> *förslag*. All kod nedan är analyserad med `dart analyze` mot `flutter_compositions`
+> 0.1.1, och testerna går igenom.
 
 ---
 
 ## Nivå 1
 
-### Lösning 1.1 – LimitedCounter
+### Lösning 1.1 – PostPager
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
-class LimitedCounter extends CompositionWidget {
-  const LimitedCounter({super.key, this.min = 0, this.max = 10});
-  final int min;
-  final int max;
+class PostPager extends CompositionWidget {
+  const PostPager({super.key, required this.titles, this.pageSize = 3});
+  final List<String> titles;
+  final int pageSize;
 
   @override
   Widget Function(BuildContext) setup() {
     final props = widget();
-    final count = ref(props.value.min);
+    final page = ref(0);
 
-    final canDecrement = computed(() => count.value > props.value.min);
-    final canIncrement = computed(() => count.value < props.value.max);
-    final label = computed(() => 'Antal: ${count.value} (max ${props.value.max})');
+    final pageCount = computed(
+      () => (props.value.titles.length / props.value.pageSize).ceil(),
+    );
+    final canPrev = computed(() => page.value > 0);
+    final canNext = computed(() => page.value < pageCount.value - 1);
+    final visible = computed(() => props.value.titles
+        .skip(page.value * props.value.pageSize)
+        .take(props.value.pageSize)
+        .toList());
+    final label = computed(() => 'Sida ${page.value + 1} av ${pageCount.value}');
 
-    void increment() => count.value++;
-    void decrement() => count.value--;
-    void reset() => count.value = props.value.min;
+    void prev() => page.value--;
+    void next() => page.value++;
+    void first() => page.value = 0;
 
     return (context) => Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            for (final t in visible.value) ListTile(title: Text(t)),
             Text(label.value),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  onPressed: canDecrement.value ? decrement : null,
-                  icon: const Icon(Icons.remove),
+                  onPressed: canPrev.value ? prev : null,
+                  icon: const Icon(Icons.chevron_left),
                 ),
                 IconButton(
-                  onPressed: canIncrement.value ? increment : null,
-                  icon: const Icon(Icons.add),
+                  onPressed: canNext.value ? next : null,
+                  icon: const Icon(Icons.chevron_right),
                 ),
-                TextButton(onPressed: reset, child: const Text('Nollställ')),
+                TextButton(onPressed: first, child: const Text('Till början')),
               ],
             ),
           ],
@@ -57,48 +66,64 @@ class LimitedCounter extends CompositionWidget {
 
 **Kommentarer:**
 
-- `count` startar på `props.value.min`. Det är ett medvetet *startvärde* (kapitel 4).
-- `canDecrement`/`canIncrement` läser `props.value.min/max`. Ändrar föräldern `max`
-  uppdateras knapparna automatiskt, vilket originalet bara klarade för att `build()`
-  kördes om.
-- Ingen `initState`, inget `setState` och ingen `State`-klass.
+- `page` är det enda egentliga state:t. Allt annat (`pageCount`, `canPrev`, `canNext`,
+  `visible`, `label`) är härlett och därför `computed`.
+- `pageCount` och `visible` läser `props.value.titles` och `props.value.pageSize`.
+  Skickar föräldern en ny lista uppdateras sidan automatiskt, vilket originalet bara
+  klarade för att `build()` kördes om.
+- Ingen `State`-klass, inget `setState` och inga beräkningar i builder.
 
-### Lösning 1.2 – Tvättlistan
+### Lösning 1.2 – Hashtaggar
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
-class LaundryList extends CompositionWidget {
-  const LaundryList({super.key});
+class HashtagEditor extends CompositionWidget {
+  const HashtagEditor({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
     final (inputController, input, _) = useTextEditingController();
-    final items = ref(<String>[]);
-    final sorted = computed(() => [...items.value]..sort());
-    final countLabel = computed(() => '${items.value.length} saker');
-    final canAdd = computed(() => input.value.trim().isNotEmpty);
+    final tags = ref(<String>[]);
+
+    // "flutter" → "#flutter", " #Dart " → "#dart"
+    final normalized = computed(() {
+      final t = input.value.trim().toLowerCase().replaceAll(' ', '');
+      if (t.isEmpty) return '';
+      return t.startsWith('#') ? t : '#$t';
+    });
+    final canAdd = computed(
+      () => normalized.value.length > 1 && !tags.value.contains(normalized.value),
+    );
+    final sorted = computed(() => [...tags.value]..sort());
+    final countLabel = computed(() => '${tags.value.length} taggar');
 
     void add() {
-      items.value = [...items.value, input.value.trim()];
-      input.value = '';
+      tags.value = [...tags.value, normalized.value];
+      input.value = ''; // tvåvägsbindning: tömmer fältet
     }
 
-    void remove(String item) {
-      items.value = items.value.where((i) => i != item).toList();
+    void remove(String tag) {
+      tags.value = tags.value.where((t) => t != tag).toList();
     }
 
     void removeFirst() {
-      if (items.value.isEmpty) return;
-      items.value = items.value.sublist(1);
+      if (tags.value.isEmpty) return;
+      tags.value = tags.value.sublist(1);
     }
 
     return (context) => Column(
           children: [
             Row(
               children: [
-                Expanded(child: TextField(controller: inputController)),
+                Expanded(
+                  child: TextField(
+                    controller: inputController,
+                    decoration: const InputDecoration(hintText: 'Ny tagg, t.ex. #dart'),
+                    onSubmitted: (_) => canAdd.value ? add() : null,
+                  ),
+                ),
                 IconButton(
                   onPressed: canAdd.value ? add : null,
                   icon: const Icon(Icons.add),
@@ -107,12 +132,12 @@ class LaundryList extends CompositionWidget {
             ),
             Text(countLabel.value),
             TextButton(onPressed: removeFirst, child: const Text('Ta bort första')),
-            for (final item in sorted.value)
+            for (final tag in sorted.value)
               ListTile(
-                title: Text(item),
+                title: Text(tag),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete),
-                  onPressed: () => remove(item),
+                  onPressed: () => remove(tag),
                 ),
               ),
           ],
@@ -123,7 +148,9 @@ class LaundryList extends CompositionWidget {
 
 **Kommentarer:**
 
-- `[...items.value]..sort()` sorterar en **kopia**. `items.value..sort()` hade muterat
+- `normalized` är en `computed` av textfältet, så "+"-knappen (`canAdd`) vet redan när
+  användaren skriver om taggen finns.
+- `[...tags.value]..sort()` sorterar en **kopia**. `tags.value..sort()` hade muterat
   originalet, och eftersom det är samma lista-instans hade ingen uppdatering triggats.
 - `input.value = ''` tömmer textfältet tack vare tvåvägsbindningen.
 - `sublist(1)` skapar en ny lista. `removeAt(0)` hade muterat den gamla.
@@ -133,45 +160,50 @@ class LaundryList extends CompositionWidget {
 | # | Fel | Varför | Rättning |
 |---|-----|--------|----------|
 | 1 | `int clicks = 0;`, ett föränderligt fält i widgeten | Inte reaktivt, och widgets ska vara immutabla (`no_mutable_fields`) | Lägg state i en `ref` i `setup()` |
-| 2 | Konstruktorn är inte `const` | Följer av fel 1. Med bara `final`-fält kan den vara `const` | `const Greeting(...)` |
+| 2 | Konstruktorn är inte `const` | Följer av fel 1. Med bara `final`-fält kan den vara `const` | `const ProfileGreeting(...)` |
 | 3 | `'Hej $name!'` läser prop direkt | Bara startvärdet fångas (`ensure_reactive_props`) | `props.value.name` via `widget()` |
 | 4 | `if (name.isEmpty) { watchEffect(...) }` | Villkorligt composition-anrop (`no_conditional_composition`) | Anropa alltid och lägg villkoret *inuti* effekten, eller ta bort den |
 | 5 | `Theme.of(context)` i builder | Uppdateras inte reaktivt när temat byts | `useTheme()` + `computed` |
 | 6 | `Text('$message')` | Glömt `.value`, skriver ut `Instance of …` | `message.value` |
-| 7 | `tags.value.add('ny')` | Mutation, ingen uppdatering (grund reaktivitet) | `tags.value = [...tags.value, 'ny']` |
-| 8 | `clicks++` | Varken reaktivt eller tillåtet (fel 1) | `visits.value++` |
+| 7 | `interests.value.add('Flutter')` | Mutation, ingen uppdatering (grund reaktivitet) | `interests.value = [...interests.value, 'Flutter']` |
+| 8 | `clicks++` | Varken reaktivt eller tillåtet (fel 1) | `views.value++` |
 
 Rättad version:
 
 ```dart
-class Greeting extends CompositionWidget {
-  const Greeting({super.key, required this.name});
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+
+class ProfileGreeting extends CompositionWidget {
+  const ProfileGreeting({super.key, required this.name});
   final String name;
 
   @override
   Widget Function(BuildContext) setup() {
     final props = widget();
     final theme = useTheme();
-    final visits = ref(0);
-    final tags = ref(<String>[]);
-    final message = computed(() => 'Hej ${props.value.name}! Besök: ${visits.value}');
+    final views = ref(0);
+    final interests = ref(<String>[]);
+    final message = computed(
+      () => 'Hej ${props.value.name}! Profilvisningar: ${views.value}',
+    );
     final style = computed(() => theme.value.textTheme.titleLarge);
 
     onMounted(() async {
       await Future<void>.delayed(const Duration(milliseconds: 500));
-      visits.value = 1;
+      views.value = 1;
     });
 
     return (context) => Column(
           children: [
             Text(message.value, style: style.value),
-            Text(tags.value.join(', ')),
+            Text(interests.value.join(', ')),
             TextButton(
-              onPressed: () => tags.value = [...tags.value, 'ny'],
-              child: const Text('Lägg till tagg'),
+              onPressed: () => interests.value = [...interests.value, 'Flutter'],
+              child: const Text('Lägg till intresse'),
             ),
             TextButton(
-              onPressed: () => visits.value++,
+              onPressed: () => views.value++,
               child: const Text('+1'),
             ),
           ],
@@ -184,77 +216,92 @@ class Greeting extends CompositionWidget {
 
 ## Nivå 2
 
-### Lösning 2.1 – Todo-lista med filter
+### Lösning 2.1 – Flöde med filter och sök
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
-enum TodoFilter { all, active, done }
+enum FeedFilter { all, following, mine }
 
-class Todo {
-  const Todo({required this.id, required this.title, this.done = false});
+class Post {
+  const Post({
+    required this.id,
+    required this.author,
+    required this.title,
+    this.liked = false,
+  });
   final int id;
+  final String author;
   final String title;
-  final bool done;
-  Todo copyWith({bool? done}) => Todo(id: id, title: title, done: done ?? this.done);
+  final bool liked;
+
+  Post copyWith({bool? liked}) =>
+      Post(id: id, author: author, title: title, liked: liked ?? this.liked);
 }
 
-class TodoScreen extends CompositionWidget {
-  const TodoScreen({super.key});
+const me = 'anna';
+const following = {'bo', 'cecilia'};
+
+class FeedScreen extends CompositionWidget {
+  const FeedScreen({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
-    final (inputController, input, _) = useTextEditingController();
-    final todos = ref(<Todo>[]);
-    final filter = ref(TodoFilter.all);
-    var nextId = 1;
+    final posts = ref(const <Post>[
+      Post(id: 1, author: 'anna', title: 'Hej Kvittra!'),
+      Post(id: 2, author: 'bo', title: 'Flutter är kul'),
+      Post(id: 3, author: 'cecilia', title: 'Tips om Dart'),
+      Post(id: 4, author: 'david', title: 'Min första app'),
+      Post(id: 5, author: 'anna', title: 'Vem kan PocketBase?'),
+      Post(id: 6, author: 'bo', title: 'Fredagsfika'),
+    ]);
+    final filter = ref(FeedFilter.all);
+    final (searchController, search, _) = useTextEditingController();
 
-    final visible = computed(() => switch (filter.value) {
-          TodoFilter.all => todos.value,
-          TodoFilter.active => todos.value.where((t) => !t.done).toList(),
-          TodoFilter.done => todos.value.where((t) => t.done).toList(),
+    final filtered = computed(() => switch (filter.value) {
+          FeedFilter.all => posts.value,
+          FeedFilter.following =>
+            posts.value.where((p) => following.contains(p.author)).toList(),
+          FeedFilter.mine => posts.value.where((p) => p.author == me).toList(),
         });
-    final remaining = computed(() => todos.value.where((t) => !t.done).length);
-    final summary = computed(() => '${remaining.value} av ${todos.value.length} kvar');
-    final canAdd = computed(() => input.value.trim().isNotEmpty);
-    final hasDone = computed(() => todos.value.any((t) => t.done));
+    final visible = computed(() {
+      final q = search.value.trim().toLowerCase();
+      if (q.isEmpty) return filtered.value;
+      return filtered.value
+          .where((p) => p.title.toLowerCase().contains(q))
+          .toList();
+    });
+    final likedCount = computed(() => posts.value.where((p) => p.liked).length);
+    final summary = computed(() =>
+        '${visible.value.length} av ${posts.value.length} inlägg · '
+        '${likedCount.value} gillade');
+    final hasLiked = computed(() => likedCount.value > 0);
 
-    void add() {
-      todos.value = [...todos.value, Todo(id: nextId++, title: input.value.trim())];
-      input.value = '';
-    }
-
-    void toggle(Todo todo) {
-      todos.value = [
-        for (final t in todos.value) t.id == todo.id ? t.copyWith(done: !t.done) : t,
+    void toggleLike(Post post) {
+      posts.value = [
+        for (final p in posts.value)
+          p.id == post.id ? p.copyWith(liked: !p.liked) : p,
       ];
     }
 
-    void clearDone() {
-      todos.value = todos.value.where((t) => !t.done).toList();
+    void unlikeAll() {
+      posts.value = [for (final p in posts.value) p.copyWith(liked: false)];
     }
 
     return (context) => Scaffold(
           appBar: AppBar(title: Text(summary.value)),
           body: Column(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: inputController,
-                      onSubmitted: (_) => canAdd.value ? add() : null,
-                    ),
-                  ),
-                  IconButton(onPressed: canAdd.value ? add : null, icon: const Icon(Icons.add)),
-                ],
+              TextField(
+                controller: searchController,
+                decoration: const InputDecoration(hintText: 'Sök…'),
               ),
-              SegmentedButton<TodoFilter>(
+              SegmentedButton<FeedFilter>(
                 segments: const [
-                  ButtonSegment(value: TodoFilter.all, label: Text('Alla')),
-                  ButtonSegment(value: TodoFilter.active, label: Text('Aktiva')),
-                  ButtonSegment(value: TodoFilter.done, label: Text('Klara')),
+                  ButtonSegment(value: FeedFilter.all, label: Text('Alla')),
+                  ButtonSegment(value: FeedFilter.following, label: Text('Följer')),
+                  ButtonSegment(value: FeedFilter.mine, label: Text('Mina')),
                 ],
                 selected: {filter.value},
                 onSelectionChanged: (s) => filter.value = s.first,
@@ -262,18 +309,23 @@ class TodoScreen extends CompositionWidget {
               Expanded(
                 child: ListView(
                   children: [
-                    for (final t in visible.value)
-                      CheckboxListTile(
-                        value: t.done,
-                        title: Text(t.title),
-                        onChanged: (_) => toggle(t),
+                    for (final p in visible.value)
+                      ListTile(
+                        title: Text(p.title),
+                        subtitle: Text('@${p.author}'),
+                        trailing: IconButton(
+                          onPressed: () => toggleLike(p),
+                          icon: Icon(
+                            p.liked ? Icons.favorite : Icons.favorite_border,
+                          ),
+                        ),
                       ),
                   ],
                 ),
               ),
               TextButton(
-                onPressed: hasDone.value ? clearDone : null,
-                child: const Text('Rensa klara'),
+                onPressed: hasLiked.value ? unlikeAll : null,
+                child: const Text('Sluta gilla alla'),
               ),
             ],
           ),
@@ -284,43 +336,61 @@ class TodoScreen extends CompositionWidget {
 
 **Kommentarer:**
 
-- `visible` använder en `switch`-expression över enumen. Lägger du till ett nytt
+- `filtered` använder en `switch`-expression över enumen. Lägger du till ett nytt
   filter tvingar kompilatorn dig att hantera det.
-- `toggle` bygger en ny lista med `copyWith` för den todo som ändras. Övriga element
-  återanvänds.
-- `nextId` är en vanlig lokal variabel. Den behöver inte vara reaktiv, eftersom ingen
-  UI läser den.
+- `visible` bygger på `filtered`. Skriver användaren i sökfältet räknas bara `visible`
+  (och `summary`) om. `filtered` tas från cachen.
+- `toggleLike` bygger en ny lista med `copyWith` för det inlägg som ändras. Övriga
+  element återanvänds.
+- `me` och `following` är konstanter. De ändras aldrig, så de behöver inte vara
+  reaktiva. (I kapitel 9 kommer de från servern.)
 
 ### Lösning 2.2 – Registreringsformulär
 
 ```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+
 class RegisterForm extends CompositionWidget {
   const RegisterForm({super.key, required this.onSubmit});
-  final void Function(String name, String email, String apartment, String password) onSubmit;
+  final void Function(String name, String email, String username, String password)
+      onSubmit;
 
   @override
   Widget Function(BuildContext) setup() {
     final props = widget();
     final (nameController, name, _) = useTextEditingController();
     final (emailController, email, _) = useTextEditingController();
-    final (aptController, apartment, _) = useTextEditingController();
+    final (usernameController, username, _) = useTextEditingController();
     final (pwController, password, _) = useTextEditingController();
     final (pw2Controller, password2, _) = useTextEditingController();
     final touched = ref(false);
 
     final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-    final aptRegex = RegExp(r'^\d{4}$');
+    final usernameRegex = RegExp(r'^[a-z0-9_]{3,20}$');
 
-    final nameError = computed(() => name.value.trim().length < 2 ? 'Ange ditt namn' : null);
-    final emailError = computed(() => emailRegex.hasMatch(email.value.trim()) ? null : 'Ogiltig e-postadress');
-    final aptError = computed(() => aptRegex.hasMatch(apartment.value) ? null : 'Lägenhetsnummer är fyra siffror, t.ex. 1101');
-    final passwordError = computed(() => password.value.length < 8 ? 'Minst 8 tecken' : null);
-    final password2Error = computed(() => password2.value != password.value ? 'Lösenorden matchar inte' : null);
+    final nameError = computed(
+      () => name.value.trim().length < 2 ? 'Ange ditt namn' : null,
+    );
+    final emailError = computed(
+      () => emailRegex.hasMatch(email.value.trim()) ? null : 'Ogiltig e-postadress',
+    );
+    final usernameError = computed(
+      () => usernameRegex.hasMatch(username.value)
+          ? null
+          : '3–20 tecken: a–z, 0–9 och _',
+    );
+    final passwordError = computed(
+      () => password.value.length < 8 ? 'Minst 8 tecken' : null,
+    );
+    final password2Error = computed(
+      () => password2.value != password.value ? 'Lösenorden matchar inte' : null,
+    );
 
     final isValid = computed(() => [
           nameError.value,
           emailError.value,
-          aptError.value,
+          usernameError.value,
           passwordError.value,
           password2Error.value,
         ].every((e) => e == null));
@@ -330,20 +400,60 @@ class RegisterForm extends CompositionWidget {
     void submit() {
       touched.value = true;
       if (!isValid.value) return;
-      props.value.onSubmit(name.value.trim(), email.value.trim(), apartment.value, password.value);
+      props.value.onSubmit(
+        name.value.trim(),
+        email.value.trim(),
+        username.value,
+        password.value,
+      );
     }
 
     return (context) => Column(
           children: [
-            TextField(controller: nameController, decoration: InputDecoration(labelText: 'Namn', errorText: show(nameError))),
-            TextField(controller: emailController, decoration: InputDecoration(labelText: 'E-post', errorText: show(emailError))),
-            TextField(controller: aptController, decoration: InputDecoration(labelText: 'Lägenhet', errorText: show(aptError))),
-            TextField(controller: pwController, obscureText: true, decoration: InputDecoration(labelText: 'Lösenord', errorText: show(passwordError))),
-            TextField(controller: pw2Controller, obscureText: true, decoration: InputDecoration(labelText: 'Bekräfta lösenord', errorText: show(password2Error))),
-            FilledButton(onPressed: submit, child: const Text('Registrera')),
+            TextField(
+              controller: nameController,
+              decoration: InputDecoration(labelText: 'Namn', errorText: show(nameError)),
+            ),
+            TextField(
+              controller: emailController,
+              decoration: InputDecoration(labelText: 'E-post', errorText: show(emailError)),
+            ),
+            TextField(
+              controller: usernameController,
+              decoration: InputDecoration(
+                labelText: 'Användarnamn',
+                prefixText: '@',
+                errorText: show(usernameError),
+              ),
+            ),
+            TextField(
+              controller: pwController,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'Lösenord',
+                errorText: show(passwordError),
+              ),
+            ),
+            TextField(
+              controller: pw2Controller,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'Bekräfta lösenord',
+                errorText: show(password2Error),
+              ),
+            ),
+            FilledButton(onPressed: submit, child: const Text('Skapa konto')),
           ],
         );
   }
+}
+
+(TextEditingController, WritableRef<String>, ReadonlyRef<String?>) useValidatedField(
+  String? Function(String value) validator,
+) {
+  final (controller, text, _) = useTextEditingController();
+  final error = computed(() => validator(text.value));
+  return (controller, text, error);
 }
 ```
 
@@ -355,21 +465,12 @@ class RegisterForm extends CompositionWidget {
 - `show(...)` är en liten hjälpfunktion som läser `touched.value` och felet. Den anropas
   i builder-funktionen, så båda blir beroenden.
 - `props.value.onSubmit(...)` motsvarar `emit('submit', ...)` i Vue.
+- Användarnamnets regex motsvarar det som ett unikt `username`-fält i PocketBase
+  brukar tillåta. Servern har ändå sista ordet (t.ex. om namnet redan är taget).
 
-**Bonus – `useValidatedField`:**
-
-```dart
-(TextEditingController, WritableRef<String>, ReadonlyRef<String?>) useValidatedField(
-  String? Function(String value) validator,
-) {
-  final (controller, text, _) = useTextEditingController();
-  final error = computed(() => validator(text.value));
-  return (controller, text, error);
-}
-```
+**Bonus – `useValidatedField`** (längst ner i filen ovan). Användning i `setup()`:
 
 ```dart
-// Användning i setup():
 final (emailController, email, emailError) = useValidatedField(
   (v) => v.contains('@') ? null : 'Ogiltig e-post',
 );
@@ -379,6 +480,7 @@ final (emailController, email, emailError) = useValidatedField(
 
 ```dart
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
@@ -437,32 +539,28 @@ Countdown useCountdown(Duration total, {Duration tick = const Duration(seconds: 
     reset: reset,
   );
 }
-```
 
-Widgeten:
-
-```dart
-class LaundryTimer extends CompositionWidget {
-  const LaundryTimer({super.key});
+class QuietModeTimer extends CompositionWidget {
+  const QuietModeTimer({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
-    final countdown = useCountdown(const Duration(minutes: 45));
+    final countdown = useCountdown(const Duration(minutes: 30));
     final label = computed(() {
       final r = countdown.remaining.value;
       final m = r.inMinutes.toString().padLeft(2, '0');
       final s = (r.inSeconds % 60).toString().padLeft(2, '0');
-      return countdown.isFinished.value ? 'Tvätten är klar!' : '$m:$s';
+      return countdown.isFinished.value ? 'Tyst läge är slut' : 'Tyst läge i $m:$s';
     });
     final buttonLabel = computed(() => countdown.isRunning.value ? 'Pausa' : 'Starta');
 
     watch(() => countdown.isFinished.value, (finished, _) {
-      if (finished) debugPrint('Dags att hämta tvätten');
+      if (finished) debugPrint('Notiser är på igen');
     });
 
     return (context) => Column(
           children: [
-            Text(label.value, style: const TextStyle(fontSize: 48)),
+            Text(label.value, style: const TextStyle(fontSize: 32)),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -531,9 +629,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
 class FakeUser {
-  const FakeUser({required this.name, required this.apartment});
+  const FakeUser({required this.name, required this.username});
   final String name;
-  final String apartment;
+  final String username;
 }
 
 class SessionService {
@@ -543,7 +641,10 @@ class SessionService {
 
   Future<void> login(String name) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    _user.value = FakeUser(name: name, apartment: '1101');
+    _user.value = FakeUser(
+      name: name,
+      username: name.toLowerCase().replaceAll(' ', '_'),
+    );
   }
 
   void logout() => _user.value = null;
@@ -564,8 +665,11 @@ class AppShell extends CompositionWidget {
 
     return (context) => MaterialApp(
           themeMode: themeMode.value,
-          theme: ThemeData(colorSchemeSeed: Colors.teal),
-          darkTheme: ThemeData(colorSchemeSeed: Colors.teal, brightness: Brightness.dark),
+          theme: ThemeData(colorSchemeSeed: Colors.indigo),
+          darkTheme: ThemeData(
+            colorSchemeSeed: Colors.indigo,
+            brightness: Brightness.dark,
+          ),
           home: session.isLoggedIn.value ? const HomePage() : const FakeLoginPage(),
         );
   }
@@ -593,8 +697,14 @@ class FakeLoginPage extends CompositionWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Namn')),
-                FilledButton(onPressed: canLogin.value ? login : null, child: const Text('Logga in')),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Namn'),
+                ),
+                FilledButton(
+                  onPressed: canLogin.value ? login : null,
+                  child: const Text('Logga in'),
+                ),
               ],
             ),
           ),
@@ -608,7 +718,7 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const ProfileHeader(), actions: const [ThemeToggle()]),
-        body: const Center(child: Text('Välkommen till föreningen')),
+        body: const Center(child: Text('Välkommen till Kvittra')),
       );
 }
 
@@ -620,7 +730,7 @@ class ProfileHeader extends CompositionWidget {
     final session = inject(sessionKey);
     final title = computed(() {
       final u = session.user.value;
-      return u == null ? '' : '${u.name} (lgh ${u.apartment})';
+      return u == null ? '' : '${u.name} (@${u.username})';
     });
     return (context) => Row(
           children: [
@@ -667,7 +777,7 @@ void main() {
       return (context) => const MaterialApp(home: HomePage());
     }));
 
-    expect(find.text('Anna (lgh 1101)'), findsOneWidget);
+    expect(find.text('Anna (@anna)'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.logout));
     await tester.pump();
     expect(session.isLoggedIn.value, isFalse);
@@ -686,7 +796,7 @@ void main() {
 - I testet loggar vi in *innan* `pumpWidget` och låter `tester.pump(300 ms)` köra
   fördröjningen.
 
-### Lösning 3.2 – Resurslista med refresh och realtime
+### Lösning 3.2 – Inlägg med refresh och realtime
 
 ```dart
 import 'package:flutter/material.dart';
@@ -695,50 +805,57 @@ import 'package:pocketbase/pocketbase.dart';
 
 const pocketBaseKey = InjectionKey<PocketBase>('pocketBase');
 
-class Resource {
-  const Resource({required this.id, required this.name, required this.description, required this.maxHours, required this.active});
+class Post {
+  const Post({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.authorName,
+  });
   final String id;
-  final String name;
-  final String description;
-  final int maxHours;
-  final bool active;
-  factory Resource.fromRecord(RecordModel r) => Resource(
-        id: r.id,
-        name: r.getStringValue('name'),
-        description: r.getStringValue('description'),
-        maxHours: r.getIntValue('max_hours'),
-        active: r.getBoolValue('active'),
-      );
+  final String title;
+  final String body;
+  final String authorName;
+
+  factory Post.fromRecord(RecordModel r) {
+    final author = r.toJson()['expand']?['author'] as Map<String, dynamic>?;
+    return Post(
+      id: r.id,
+      title: r.getStringValue('title'),
+      body: r.getStringValue('body'),
+      authorName: author?['name'] as String? ?? 'Okänd',
+    );
+  }
 }
 
-class ResourcesPage extends CompositionWidget {
-  const ResourcesPage({super.key});
+class PostsPage extends CompositionWidget {
+  const PostsPage({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
     final pb = inject(pocketBaseKey);
-    final showInactive = ref(false);
+    final oldestFirst = ref(false);
 
-    final (status, refresh) = useAsyncData<List<Resource>, bool>(
-      (includeInactive) async {
-        final records = await pb.collection('resources').getFullList(
-              filter: includeInactive ? '' : 'active = true',
-              sort: 'name',
+    final (status, refresh) = useAsyncData<List<Post>, bool>(
+      (oldest) async {
+        final records = await pb.collection('posts').getFullList(
+              sort: oldest ? 'created' : '-created',
+              expand: 'author',
             );
-        return records.map(Resource.fromRecord).toList();
+        return records.map(Post.fromRecord).toList();
       },
-      watch: () => showInactive.value,
+      watch: () => oldestFirst.value,
     );
 
     final title = computed(() => switch (status.value) {
-          AsyncData(:final value) => 'Resurser (${value.length})',
-          _ => 'Resurser',
+          AsyncData(:final value) => 'Inlägg (${value.length})',
+          _ => 'Inlägg',
         });
 
     UnsubscribeFunc? unsubscribe;
     var disposed = false;
     onMounted(() async {
-      final unsub = await pb.collection('resources').subscribe('*', (_) => refresh());
+      final unsub = await pb.collection('posts').subscribe('*', (_) => refresh());
       if (disposed) {
         await unsub();
       } else {
@@ -754,16 +871,24 @@ class ResourcesPage extends CompositionWidget {
           appBar: AppBar(
             title: Text(title.value),
             actions: [
-              Switch(value: showInactive.value, onChanged: (v) => showInactive.value = v),
+              const Text('Äldst först'),
+              Switch(
+                value: oldestFirst.value,
+                onChanged: (v) => oldestFirst.value = v,
+              ),
             ],
           ),
           body: switch (status.value) {
-            AsyncIdle() || AsyncLoading() => const Center(child: CircularProgressIndicator()),
+            AsyncIdle() || AsyncLoading() =>
+              const Center(child: CircularProgressIndicator()),
             AsyncError(:final errorValue) => Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('Kunde inte hämta resurser:\n$errorValue', textAlign: TextAlign.center),
+                    Text(
+                      'Kunde inte hämta inlägg:\n$errorValue',
+                      textAlign: TextAlign.center,
+                    ),
                     FilledButton(onPressed: refresh, child: const Text('Försök igen')),
                   ],
                 ),
@@ -773,12 +898,15 @@ class ResourcesPage extends CompositionWidget {
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   children: [
-                    if (value.isEmpty) const ListTile(title: Text('Inga resurser')),
-                    for (final r in value)
+                    if (value.isEmpty) const ListTile(title: Text('Inga inlägg ännu')),
+                    for (final p in value)
                       ListTile(
-                        title: Text(r.name),
-                        subtitle: Text('${r.description} · max ${r.maxHours} h'),
-                        trailing: r.active ? null : const Chip(label: Text('Inaktiv')),
+                        title: Text(p.title),
+                        subtitle: Text(
+                          '${p.authorName} · ${p.body}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                 ),
@@ -787,349 +915,501 @@ class ResourcesPage extends CompositionWidget {
         );
   }
 }
-```
 
-I `main.dart`:
-
-```dart
 class App extends CompositionWidget {
   const App({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
     provide(pocketBaseKey, PocketBase('http://127.0.0.1:8090'));
-    return (context) => const MaterialApp(home: ResourcesPage());
+    return (context) => const MaterialApp(home: PostsPage());
   }
 }
 ```
 
+I `main.dart`: `runApp(const App());`
+
 **Kommentarer:**
 
-- `watch: () => showInactive.value` gör att `useAsyncData` hämtar om när switchen
-  ändras. Värdet skickas som argument (`includeInactive`) till hämtfunktionen.
+- `watch: () => oldestFirst.value` gör att `useAsyncData` hämtar om när switchen
+  ändras. Värdet skickas som argument (`oldest`) till hämtfunktionen.
+- `authorName` läses ur `expand.author`. Utan `expand: 'author'` i anropet blir det
+  "Okänd".
 - `title` använder en `switch` på `status.value` i en `computed`, inte i builder.
 - `physics: AlwaysScrollableScrollPhysics()` gör att pull-to-refresh fungerar även när
   listan är kort.
 - Realtime-prenumerationen följer mönstret från kapitel 7: `onMounted` +
   `onUnmounted` registrerade i `setup()`, plus en `disposed`-flagga för fallet där
   widgeten försvinner innan `subscribe` hunnit bli klar.
-- Kom ihåg att API-regeln för `resources` (List/View) måste tillåta användaren att se
+- Kom ihåg att API-regeln för `posts` (List/View) måste tillåta användaren att se
   posterna, annars kommer varken data eller händelser
-  ([02 – API-regler](../02-pocketbase/04-autentisering-och-api-regler.md)). I den här
-  övningen är ingen inloggad, så reglerna måste tillåta anonym läsning, eller så loggar du
-  in först.
+  ([02 – API-regler](../02-pocketbase/04-autentisering-och-api-regler.md)). Kräver
+  reglerna inloggning loggar du in först, t.ex. med
+  `pb.collection('users').authWithPassword('anna@example.com', '…')` i `App`.
 
-### Lösning 3.4 – Felanmälan
+### Lösning 3.4 – Notiser
 
-Lösningen följer checklistan i kapitel 9. Allt nedan är analyserat med
-`dart analyze`, och reglerna är provkörda med `curl`.
+Lösningen följer checklistan i kapitel 9. Dart-koden är analyserad med `dart analyze`,
+reglerna och hookarna är provkörda med `curl`, och store:n är provkörd mot en riktig
+PocketBase (Bo gillar Annas inlägg → Annas `unreadCount` blir 1 via realtime).
 
 #### Backend
 
-`pb_migrations/1700000300_issues.js`:
+`pb_migrations/1700000400_notifications.js`:
 
 ```js
 /// <reference path="../pb_data/types.d.ts" />
 migrate((app) => {
   const users = app.findCollectionByNameOrId("users")
-  const associations = app.findCollectionByNameOrId("associations")
-  const tenant = '@request.auth.id != "" && association = @request.auth.association'
-  const board = '(@request.auth.role = "styrelse" || @request.auth.role = "admin")'
+  const posts = app.findCollectionByNameOrId("posts")
 
-  const issues = new Collection({
+  const notifications = new Collection({
     type: "base",
-    name: "issues",
+    name: "notifications",
     fields: [
-      { name: "title", type: "text", required: true, max: 200 },
-      { name: "description", type: "text", required: true },
-      { name: "reported_by", type: "relation", collectionId: users.id, maxSelect: 1, required: true },
-      { name: "assigned_to", type: "relation", collectionId: users.id, maxSelect: 1 },
-      { name: "is_resolved", type: "bool" },
-      { name: "association", type: "relation", collectionId: associations.id, maxSelect: 1 },
+      // Mottagaren
+      { name: "user", type: "relation", collectionId: users.id, maxSelect: 1, required: true, cascadeDelete: true },
+      // Den som gjorde något
+      { name: "actor", type: "relation", collectionId: users.id, maxSelect: 1, required: true, cascadeDelete: true },
+      { name: "type", type: "select", values: ["like", "comment", "follow"], maxSelect: 1, required: true },
+      // Inlägget det gäller (saknas för "follow")
+      { name: "post", type: "relation", collectionId: posts.id, maxSelect: 1, cascadeDelete: true },
+      { name: "read", type: "bool" },
       { name: "created", type: "autodate", onCreate: true },
-      { name: "updated", type: "autodate", onCreate: true, onUpdate: true },
     ],
-    listRule: tenant,
-    viewRule: tenant,
-    createRule: '@request.auth.id != "" && @request.body.reported_by = @request.auth.id && @request.body.is_resolved:isset = false',
-    // Anmälaren får ändra text (inte status) tills den är åtgärdad. Styrelsen får ändra allt.
+    indexes: ["CREATE INDEX idx_notifications_user_read ON notifications (user, read)"],
+    // Bara mottagaren ser och hanterar sina notiser.
+    listRule: 'user = @request.auth.id',
+    viewRule: 'user = @request.auth.id',
+    // null = bara superuser. Notiser skapas av hooks på servern, aldrig av appen.
+    createRule: null,
+    // Mottagaren får bara ändra "read".
     updateRule:
-      'association = @request.auth.association && @request.body.reported_by:changed = false && (' +
-      '(reported_by = @request.auth.id && is_resolved = false && @request.body.is_resolved:isset = false) || ' + board + ')',
-    deleteRule: 'reported_by = @request.auth.id || (@request.auth.role = "admin" && association = @request.auth.association)',
+      'user = @request.auth.id && @request.body.user:changed = false && ' +
+      '@request.body.actor:changed = false && @request.body.type:changed = false && ' +
+      '@request.body.post:changed = false',
+    deleteRule: 'user = @request.auth.id',
   })
-  app.save(issues)
+  app.save(notifications)
 }, (app) => {
-  app.delete(app.findCollectionByNameOrId("issues"))
+  app.delete(app.findCollectionByNameOrId("notifications"))
 })
 ```
 
-I `pb_hooks/tenant.pb.js` läggs `"issues"` till i listan av collections i **både**
-create- och update-hooken:
+`pb_hooks/notify.js` (delad kod, hämtas med `require` inuti varje hook):
 
 ```js
-}, "posts", "post_comments", "bookings", "issues");
+module.exports = {
+  /** Skapar en notis, utom när man gör något mot sig själv. */
+  notify: (app, { user, actor, type, post }) => {
+    if (!user || user === actor) return
+    const n = new Record(app.findCollectionByNameOrId("notifications"))
+    n.set("user", user)
+    n.set("actor", actor)
+    n.set("type", type)
+    if (post) n.set("post", post)
+    n.set("read", false)
+    app.save(n) // app.save går förbi API-reglerna (createRule = null)
+  },
+}
+```
+
+`pb_hooks/notifications.pb.js`:
+
+```js
+/// <reference path="../pb_data/types.d.ts" />
+
+// Någon gillade ett inlägg → notis till inläggets författare.
+onRecordAfterCreateSuccess((e) => {
+  const post = e.app.findRecordById("posts", e.record.getString("post"))
+  require(`${__hooks}/notify.js`).notify(e.app, {
+    user: post.getString("author"),
+    actor: e.record.getString("user"),
+    type: "like",
+    post: post.id,
+  })
+  e.next()
+}, "likes")
+
+// Någon kommenterade → notis till inläggets författare.
+onRecordAfterCreateSuccess((e) => {
+  const post = e.app.findRecordById("posts", e.record.getString("post"))
+  require(`${__hooks}/notify.js`).notify(e.app, {
+    user: post.getString("author"),
+    actor: e.record.getString("author"),
+    type: "comment",
+    post: post.id,
+  })
+  e.next()
+}, "comments")
+
+// Någon började följa → notis till den som blev följd.
+onRecordAfterCreateSuccess((e) => {
+  require(`${__hooks}/notify.js`).notify(e.app, {
+    user: e.record.getString("following"),
+    actor: e.record.getString("follower"),
+    type: "follow",
+  })
+  e.next()
+}, "follows")
 ```
 
 Provkört:
 
 | Försök | Resultat |
 |--------|----------|
-| Anna anmäler ett fel | Sparas, med `association` stämplad och `is_resolved = false` |
-| Anna skickar `"is_resolved": true` vid skapande | `400` |
-| Anna ändrar rubriken på sin öppna anmälan | OK |
-| Anna markerar sin anmälan som åtgärdad | `404` (update-regeln) |
-| Bo (styrelse) markerar den som åtgärdad | OK |
-| Anna ändrar texten efter att den åtgärdats | `404` |
-| Cecilia (förening B) listar anmälningar | 0 träffar |
-| Anna raderar sin anmälan | `204` |
+| Bo gillar och kommenterar Annas inlägg, Cecilia följer Anna | Anna får tre notiser (`like`, `comment`, `follow`) |
+| Anna gillar sitt eget inlägg | Ingen notis |
+| Anna listar olästa (`perPage=1&filter=read = false`) | `totalItems: 3` |
+| Bo listar notiser | 0 träffar (bara mottagaren ser sina) |
+| Bo skapar en notis till Anna | `403` (`createRule: null`) |
+| Anna sätter `read: true` | OK |
+| Anna ändrar `type` på sin notis | `404` (update-regeln) |
+| Bo markerar Annas notis som oläst | `404` |
 
-> 💡 **Tips:** Regeln `@request.body.is_resolved:isset = false` betyder att klienten
-> inte ens får *skicka med* fältet. Därför skickar store:n inte `is_resolved` när en ny
-> anmälan skapas.
+> 💡 **Tips:** `createRule: null` betyder "bara superuser". Hookarna använder
+> `app.save(...)`, som går förbi API-reglerna. Därför kan servern skapa notiser men
+> ingen klient.
 
-#### Modell: `lib/core/models/issue_record.dart`
+#### Modell: `lib/core/models/notification_record.dart`
 
 ```dart
-class IssueRecord {
-  const IssueRecord({
+enum NotificationType { like, comment, follow }
+
+class NotificationRecord {
+  const NotificationRecord({
     required this.id,
-    required this.title,
-    required this.description,
-    required this.reportedBy,
-    required this.reporterName,
-    required this.isResolved,
+    required this.type,
+    required this.actor,
+    required this.actorName,
+    required this.post,
+    required this.postTitle,
+    required this.read,
     required this.created,
   });
 
   final String id;
-  final String title;
-  final String description;
-  final String reportedBy;    // relation-id → users
-  final String reporterName;  // från expand.reported_by
-  final bool isResolved;
+  final NotificationType type;
+  final String actor; // relation-id → users
+  final String actorName; // från expand.actor
+  final String post; // relation-id → posts, '' för "follow"
+  final String postTitle; // från expand.post
+  final bool read;
   final DateTime? created;
 
-  factory IssueRecord.fromJson(Map<String, dynamic> json) {
+  /// "Bo gillade ditt inlägg" osv.
+  String get text => switch (type) {
+        NotificationType.like => '$actorName gillade ditt inlägg',
+        NotificationType.comment => '$actorName kommenterade ditt inlägg',
+        NotificationType.follow => '$actorName började följa dig',
+      };
+
+  NotificationRecord copyWith({bool? read}) => NotificationRecord(
+        id: id,
+        type: type,
+        actor: actor,
+        actorName: actorName,
+        post: post,
+        postTitle: postTitle,
+        read: read ?? this.read,
+        created: created,
+      );
+
+  factory NotificationRecord.fromJson(Map<String, dynamic> json) {
     final expand = json['expand'] as Map<String, dynamic>? ?? const {};
-    final reporter = expand['reported_by'] as Map<String, dynamic>?;
-    return IssueRecord(
+    final actor = expand['actor'] as Map<String, dynamic>?;
+    final post = expand['post'] as Map<String, dynamic>?;
+    return NotificationRecord(
       id: json['id'] as String,
-      title: json['title'] as String? ?? '',
-      description: json['description'] as String? ?? '',
-      reportedBy: json['reported_by'] as String? ?? '',
-      reporterName: reporter?['name'] as String? ?? 'Okänd',
-      isResolved: json['is_resolved'] as bool? ?? false,
+      type: NotificationType.values.asNameMap()[json['type']] ??
+          NotificationType.like,
+      actor: json['actor'] as String? ?? '',
+      actorName: actor?['name'] as String? ?? 'Någon',
+      post: json['post'] as String? ?? '',
+      postTitle: post?['title'] as String? ?? '',
+      read: json['read'] as bool? ?? false,
       created: DateTime.tryParse(json['created'] as String? ?? '')?.toLocal(),
     );
   }
 }
 ```
 
-#### Store: `lib/features/issues/issues_store.dart`
+Lägg också till `static const notifications = 'notifications';` i `Collections`.
+
+#### Store: `lib/features/notifications/notifications_store.dart`
+
+Store:n använder en ny metod i `Paginated<T>` från kapitel 9, `updateWhere`, för att
+byta ut ett element lokalt:
+
+```dart
+/// Byt ut element lokalt (t.ex. efter en uppdatering) utan att hämta om.
+void updateWhere(bool Function(T item) test, T Function(T item) update) {
+  _items.value = [for (final i in _items.value) test(i) ? update(i) : i];
+}
+```
 
 ```dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
-import 'package:pocketbase/pocketbase.dart' hide AuthStore;
+import 'package:pocketbase/pocketbase.dart';
 
-import '../../core/models/issue_record.dart';
+import '../../core/models/collections.dart';
+import '../../core/models/notification_record.dart';
 import '../../core/pagination/paginated.dart';
-import '../auth/auth_store.dart';
 
-class IssuesStore {
-  IssuesStore(this._pb, this._auth);
+class NotificationsStore {
+  NotificationsStore(this._pb);
 
   final PocketBase _pb;
-  final AuthStore _auth;
 
-  static const _collection = 'issues';
+  RecordService get _col => _pb.collection(Collections.notifications);
 
-  /// Filter: visa åtgärdade felanmälningar eller inte.
-  final showResolved = ref(false);
-
-  late final issues = Paginated<IssueRecord>((page, perPage) async {
-    final res = await _pb.collection(_collection).getList(
-          page: page,
-          perPage: perPage,
-          filter: showResolved.value ? '' : 'is_resolved = false',
-          sort: '-created',
-          expand: 'reported_by',
-        );
+  /// Mina notiser, nyast först. listRule ser till att jag bara får mina.
+  late final notifications = Paginated<NotificationRecord>((
+    page,
+    perPage,
+  ) async {
+    final res = await _col.getList(
+      page: page,
+      perPage: perPage,
+      sort: '-created',
+      expand: 'actor,post',
+    );
     return PageResult(
-      res.items.map((r) => IssueRecord.fromJson(r.toJson())).toList(),
+      res.items.map((r) => NotificationRecord.fromJson(r.toJson())).toList(),
       res.totalPages,
     );
   });
 
-  final _saving = ref(false);
-  ReadonlyRef<bool> get saving => _saving;
+  final _unread = ref(0);
+  ReadonlyRef<int> get unreadCount => _unread;
+  late final ReadonlyRef<String> badgeLabel = computed(
+    () => _unread.value > 9 ? '9+' : '${_unread.value}',
+  );
 
-  Future<IssueRecord?> fetchIssue(String id) async {
+  @visibleForTesting
+  void debugSetUnread(int n) => _unread.value = n;
+
+  Future<void> refreshUnreadCount() async {
     try {
-      final r = await _pb.collection(_collection).getOne(id, expand: 'reported_by');
-      return IssueRecord.fromJson(r.toJson());
+      final res = await _col.getList(perPage: 1, filter: 'read = false');
+      _unread.value = res.totalItems;
     } catch (e) {
-      debugPrint('IssuesStore.fetchIssue: $e');
-      return null;
+      debugPrint('NotificationsStore.refreshUnreadCount: $e');
     }
   }
 
-  Future<bool> saveIssue({
-    String? id,
-    required String title,
-    required String description,
-  }) async {
-    final user = _auth.user.value;
-    if (user == null) return false;
-    _saving.value = true;
+  // ---- Realtime, styrs av MyApp vid in-/utloggning ------------------------
+
+  UnsubscribeFunc? _unsubscribe;
+  int _session = 0; // ökas vid varje start/stop, skyddar mot race-fall
+
+  Future<void> start() async {
+    await stop();
+    final session = _session;
+    await refreshUnreadCount();
     try {
-      final data = {'title': title, 'description': description};
-      if (id == null) {
-        await _pb.collection(_collection).create(
-              // is_resolved skickas inte: create-regeln förbjuder det.
-              body: {...data, 'reported_by': user.id},
-            );
+      final unsub = await _col.subscribe('*', (e) {
+        if (session != _session) return; // gammal prenumeration
+        if (e.action == 'create') {
+          _unread.value++;
+          notifications.refresh();
+        } else {
+          refreshUnreadCount();
+        }
+      });
+      if (session != _session) {
+        await unsub(); // stop() hann anropas medan vi prenumererade
       } else {
-        await _pb.collection(_collection).update(id, body: data);
+        _unsubscribe = unsub;
       }
-      await issues.refresh();
-      return true;
     } catch (e) {
-      debugPrint('IssuesStore.saveIssue: $e');
-      return false;
-    } finally {
-      _saving.value = false;
+      debugPrint('NotificationsStore.start: $e');
     }
   }
 
-  Future<bool> setResolved(String id, bool resolved) async {
+  Future<void> stop() async {
+    _session++;
+    _unread.value = 0;
+    final unsub = _unsubscribe;
+    _unsubscribe = null;
+    if (unsub != null) await unsub();
+  }
+
+  // ---- Mutationer -----------------------------------------------------------
+
+  /// Optimistisk: listan och räknaren uppdateras direkt, och ångras vid fel.
+  Future<bool> markAsRead(NotificationRecord n) async {
+    if (n.read) return true;
+    notifications.updateWhere(
+      (x) => x.id == n.id,
+      (x) => x.copyWith(read: true),
+    );
+    _unread.value = _unread.value > 0 ? _unread.value - 1 : 0;
     try {
-      await _pb.collection(_collection).update(id, body: {'is_resolved': resolved});
-      await issues.refresh();
+      await _col.update(n.id, body: {'read': true});
       return true;
-    } catch (e) {
-      debugPrint('IssuesStore.setResolved: $e');
+    } on ClientException catch (e) {
+      debugPrint('NotificationsStore.markAsRead: ${e.response}');
+      notifications.updateWhere(
+        (x) => x.id == n.id,
+        (x) => x.copyWith(read: false),
+      );
+      _unread.value++;
       return false;
     }
   }
 
-  Future<bool> deleteIssue(String id) async {
+  Future<bool> markAllAsRead() async {
     try {
-      await _pb.collection(_collection).delete(id);
-      issues.removeWhere((i) => i.id == id);
+      final unread = await _col.getFullList(filter: 'read = false');
+      await Future.wait([
+        for (final r in unread) _col.update(r.id, body: {'read': true}),
+      ]);
+      await Future.wait([notifications.refresh(), refreshUnreadCount()]);
       return true;
-    } catch (e) {
-      debugPrint('IssuesStore.deleteIssue: $e');
+    } on ClientException catch (e) {
+      debugPrint('NotificationsStore.markAllAsRead: ${e.response}');
       return false;
     }
   }
 }
 ```
 
-#### Koppla in: DI, `MyApp`, router, behörighet och dashboard
+#### Koppla in: DI, `MyApp`, router och flödet
 
 ```dart
 // lib/core/di/injection_keys.dart
-import '../../features/issues/issues_store.dart';
-const issuesStoreKey = InjectionKey<IssuesStore>('issuesStore');
+import '../../features/notifications/notifications_store.dart';
+const notificationsStoreKey =
+    InjectionKey<NotificationsStore>('notificationsStore');
 
 // lib/main.dart, i MyApp.setup()
-final issuesStore = IssuesStore(pb, authStore);
-provide(issuesStoreKey, issuesStore);
+final notificationsStore = NotificationsStore(pb);
+provide(notificationsStoreKey, notificationsStore);
 
-// lib/core/router/router.dart, '/issues/new' före '/issues/:id'
-GoRoute(path: IssuesListPage.path, builder: (_, _) => const IssuesListPage()),
-GoRoute(path: CreateIssuePage.path, builder: (_, _) => const CreateIssuePage()),
+// ... och i den befintliga watch:en på användarens id:
+watch(() => authStore.user.value?.id, (userId, _) {
+  if (userId == null) {
+    groupsStore.clear();
+    notificationsStore.stop();
+  } else {
+    groupsStore.loadMyRoles();
+    notificationsStore.start();
+  }
+}, immediate: true);
+
+// lib/core/router/router.dart
 GoRoute(
-  path: CreateIssuePage.editPath,
-  builder: (_, state) => CreateIssuePage(issueId: state.pathParameters['id']),
-),
-GoRoute(
-  path: IssueDetailPage.path,
-  builder: (_, state) => IssueDetailPage(issueId: state.pathParameters['id']!),
+  path: NotificationsPage.path,
+  builder: (_, _) => const NotificationsPage(),
 ),
 
-// lib/core/utils/permissions.dart
-enum AppMenu { posts, bookings, members, issues }
-// ... och i defaultPermissions:
-AppMenu.issues: {
-  UserRole.admin: {PermissionOp.read, PermissionOp.create, PermissionOp.update, PermissionOp.delete},
-  UserRole.styrelse: {PermissionOp.read, PermissionOp.create, PermissionOp.update},
-  UserRole.member: {PermissionOp.read, PermissionOp.create},
-},
-
-// lib/features/dashboard/pages/dashboard_page.dart, i _allItems
-_MenuItem(AppMenu.issues, 'Felanmälan', Icons.build, IssuesListPage.path),
+// lib/features/feed/pages/posts_feed_page.dart, först i AppBar:ens actions
+const NotificationsBell(),
 ```
 
-#### Lista: `lib/features/issues/pages/issues_list_page.dart`
+#### Sida: `lib/features/notifications/pages/notifications_page.dart`
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../shared/widgets/paginated_list_view.dart';
 import '../../../core/di/injection_keys.dart';
-import 'create_issue_page.dart';
-import 'issue_detail_page.dart';
+import '../../../core/models/notification_record.dart';
+import '../../../core/utils/time_ago.dart';
+import '../../../shared/widgets/paginated_list_view.dart';
+import '../../posts/pages/post_detail_page.dart';
+import '../../profile/pages/profile_page.dart';
 
-class IssuesListPage extends CompositionWidget {
-  const IssuesListPage({super.key});
+class NotificationsPage extends CompositionWidget {
+  const NotificationsPage({super.key});
 
-  static const path = '/issues';
+  static const path = '/notifications';
 
   @override
   Widget Function(BuildContext) setup() {
-    final store = inject(issuesStoreKey);
-    final issues = store.issues;
+    final store = inject(notificationsStoreKey);
+    final list = store.notifications;
+    final context = useContext();
+
     final showSpinner = computed(
-      () => issues.loading.value && issues.items.value.isEmpty,
+      () => list.loading.value && list.items.value.isEmpty,
+    );
+    final hasUnread = computed(() => store.unreadCount.value > 0);
+    final title = computed(
+      () => hasUnread.value
+          ? 'Notiser (${store.unreadCount.value} olästa)'
+          : 'Notiser',
     );
 
-    // Byt filter → hämta om första sidan.
-    watch(() => store.showResolved.value, (_, _) => issues.refresh());
-    onMounted(issues.refresh);
+    onMounted(list.refresh);
+
+    Future<void> open(NotificationRecord n) async {
+      final ok = await store.markAsRead(n);
+      final ctx = context.value;
+      if (ctx == null || !ctx.mounted) return;
+      if (!ok) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Kunde inte markera som läst')),
+        );
+      }
+      // Följ-notiser leder till profilen, övriga till inlägget.
+      ctx.push(
+        n.type == NotificationType.follow
+            ? ProfilePage.pathFor(n.actor)
+            : PostDetailPage.pathFor(n.post),
+      );
+    }
+
+    IconData iconFor(NotificationType type) => switch (type) {
+          NotificationType.like => Icons.favorite,
+          NotificationType.comment => Icons.chat_bubble,
+          NotificationType.follow => Icons.person_add,
+        };
 
     return (context) => Scaffold(
           appBar: AppBar(
-            title: const Text('Felanmälan'),
+            title: Text(title.value),
             actions: [
-              Row(
-                children: [
-                  const Text('Visa åtgärdade'),
-                  Switch(
-                    value: store.showResolved.value,
-                    onChanged: (v) => store.showResolved.value = v,
-                  ),
-                ],
+              IconButton(
+                tooltip: 'Markera alla som lästa',
+                icon: const Icon(Icons.done_all),
+                onPressed: hasUnread.value ? store.markAllAsRead : null,
               ),
             ],
-          ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => context.push(CreateIssuePage.path),
-            child: const Icon(Icons.add),
           ),
           body: showSpinner.value
               ? const Center(child: CircularProgressIndicator())
               : PaginatedListView(
-                  itemCount: issues.items.value.length,
-                  hasMore: issues.hasMore.value,
-                  loadingMore: issues.loadingMore.value,
-                  onLoadMore: issues.loadMore,
-                  onRefresh: issues.refresh,
-                  emptyText: 'Inga felanmälningar',
+                  itemCount: list.items.value.length,
+                  hasMore: list.hasMore.value,
+                  loadingMore: list.loadingMore.value,
+                  onLoadMore: list.loadMore,
+                  onRefresh: list.refresh,
+                  emptyText: 'Inga notiser ännu',
                   itemBuilder: (context, i) {
-                    final issue = issues.items.value[i];
+                    final n = list.items.value[i];
                     return ListTile(
-                      leading: Icon(
-                        issue.isResolved ? Icons.check_circle : Icons.report_problem,
-                        color: issue.isResolved ? Colors.green : Colors.orange,
+                      leading: Icon(iconFor(n.type)),
+                      title: Text(
+                        n.text,
+                        style: TextStyle(
+                          fontWeight:
+                              n.read ? FontWeight.normal : FontWeight.bold,
+                        ),
                       ),
-                      title: Text(issue.title),
-                      subtitle: Text(issue.reporterName),
-                      onTap: () => context.push(IssueDetailPage.pathFor(issue.id)),
+                      subtitle: Text(
+                        n.postTitle.isEmpty
+                            ? timeAgo(n.created)
+                            : '${n.postTitle} · ${timeAgo(n.created)}',
+                      ),
+                      trailing: n.read
+                          ? null
+                          : const Icon(Icons.circle,
+                              size: 10, color: Colors.blue),
+                      onTap: () => open(n),
                     );
                   },
                 ),
@@ -1138,7 +1418,7 @@ class IssuesListPage extends CompositionWidget {
 }
 ```
 
-#### Detalj: `lib/features/issues/pages/issue_detail_page.dart`
+#### Klockan: `lib/features/notifications/widgets/notifications_bell.dart`
 
 ```dart
 import 'package:flutter/material.dart';
@@ -1146,222 +1426,77 @@ import 'package:flutter_compositions/flutter_compositions.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/di/injection_keys.dart';
-import '../../../core/models/issue_record.dart';
-import '../../../core/models/user_record.dart';
-import '../../../shared/widgets/entity_action_menu.dart';
-import 'create_issue_page.dart';
-import 'issues_list_page.dart';
+import '../pages/notifications_page.dart';
 
-class IssueDetailPage extends CompositionWidget {
-  const IssueDetailPage({super.key, required this.issueId});
-
-  final String issueId;
-
-  static const path = '${IssuesListPage.path}/:id';
-  static String pathFor(String id) => '${IssuesListPage.path}/$id';
+/// Klocka med antal olästa. Läggs i AppBar:ens actions.
+class NotificationsBell extends CompositionWidget {
+  const NotificationsBell({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
-    final props = widget();
-    final store = inject(issuesStoreKey);
-    final auth = inject(authStoreKey);
-    final context = useContext();
+    final store = inject(notificationsStoreKey);
+    final hasUnread = computed(() => store.unreadCount.value > 0);
 
-    final issue = ref<IssueRecord?>(null);
-
-    final isOwner = computed(
-      () => issue.value != null && issue.value!.reportedBy == auth.user.value?.id,
-    );
-    final isBoard = computed(() {
-      final role = auth.user.value?.role;
-      return role == UserRole.styrelse || role == UserRole.admin;
-    });
-    final canEdit = computed(() => isOwner.value && !(issue.value?.isResolved ?? true));
-    final canDelete = computed(() => isOwner.value || auth.isAdmin.value);
-    final statusLabel = computed(
-      () => (issue.value?.isResolved ?? false) ? 'Åtgärdad' : 'Öppen',
-    );
-    final toggleLabel = computed(
-      () => (issue.value?.isResolved ?? false) ? 'Öppna igen' : 'Markera som åtgärdad',
-    );
-
-    Future<void> load() async {
-      issue.value = await store.fetchIssue(props.value.issueId);
-    }
-
-    onMounted(load);
-
-    void snack(String text) {
-      final ctx = context.value;
-      if (ctx != null && ctx.mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(text)));
-      }
-    }
-
-    Future<void> toggleResolved() async {
-      final current = issue.value;
-      if (current == null) return;
-      final ok = await store.setResolved(current.id, !current.isResolved);
-      if (ok) {
-        await load();
-      } else {
-        snack('Kunde inte uppdatera');
-      }
-    }
-
-    Future<void> delete() async {
-      final ok = await store.deleteIssue(props.value.issueId);
-      final ctx = context.value;
-      if (ok && ctx != null && ctx.mounted) {
-        ctx.pop();
-      } else if (!ok) {
-        snack('Kunde inte radera');
-      }
-    }
-
-    return (context) => Scaffold(
-          appBar: AppBar(
-            title: Text(issue.value?.title ?? 'Felanmälan'),
-            actions: [
-              EntityActionMenu(actions: [
-                if (canEdit.value)
-                  EntityAction.update(
-                    () => context.push(CreateIssuePage.editPathFor(props.value.issueId)),
-                  ),
-                if (canDelete.value) EntityAction.delete(delete),
-              ]),
-            ],
-          ),
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Chip(label: Text(statusLabel.value)),
-              const SizedBox(height: 8),
-              Text(issue.value?.description ?? ''),
-              const SizedBox(height: 8),
-              Text('Anmäld av ${issue.value?.reporterName ?? ''}'),
-              const SizedBox(height: 24),
-              if (isBoard.value)
-                FilledButton(onPressed: toggleResolved, child: Text(toggleLabel.value)),
-            ],
+    return (context) => IconButton(
+          tooltip: 'Notiser',
+          onPressed: () => context.push(NotificationsPage.path),
+          icon: Badge(
+            isLabelVisible: hasUnread.value,
+            label: Text(store.badgeLabel.value),
+            child: const Icon(Icons.notifications),
           ),
         );
   }
 }
 ```
 
-#### Skapa och redigera: `lib/features/issues/pages/create_issue_page.dart`
+#### Test: `test/notifications_bell_test.dart`
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pocketbase/pocketbase.dart';
+import 'package:kvittra/core/di/injection_keys.dart';
+import 'package:kvittra/features/notifications/notifications_store.dart';
+import 'package:kvittra/features/notifications/widgets/notifications_bell.dart';
 
-import '../../../core/di/injection_keys.dart';
-import 'issues_list_page.dart';
+void main() {
+  testWidgets('klockan visar antal olästa', (tester) async {
+    final store = NotificationsStore(PocketBase('http://127.0.0.1:8090'));
 
-class CreateIssuePage extends CompositionWidget {
-  const CreateIssuePage({super.key, this.issueId});
+    await tester.pumpWidget(CompositionBuilder(setup: () {
+      provide(notificationsStoreKey, store);
+      return (context) => MaterialApp(
+            home: Scaffold(appBar: AppBar(actions: const [NotificationsBell()])),
+          );
+    }));
 
-  final String? issueId;
+    // 0 olästa: ingen siffra syns.
+    expect(find.text('0'), findsNothing);
 
-  static const path = '${IssuesListPage.path}/new';
-  static const editPath = '${IssuesListPage.path}/:id/edit';
-  static String editPathFor(String id) => '${IssuesListPage.path}/$id/edit';
+    store.debugSetUnread(3);
+    await tester.pumpAndSettle();
+    expect(find.text('3'), findsOneWidget);
 
-  @override
-  Widget Function(BuildContext) setup() {
-    final props = widget();
-    final store = inject(issuesStoreKey);
-    final context = useContext();
-
-    final (titleController, title, _) = useTextEditingController();
-    final (descController, description, _) = useTextEditingController();
-    final touched = ref(false);
-
-    final pageTitle = computed(
-      () => props.value.issueId == null ? 'Ny felanmälan' : 'Redigera felanmälan',
-    );
-    final titleError = computed(
-      () => title.value.trim().length < 3 ? 'Beskriv felet kort (minst 3 tecken)' : null,
-    );
-    final descError = computed(
-      () => description.value.trim().length < 10 ? 'Minst 10 tecken' : null,
-    );
-    final visibleTitleError = computed(() => touched.value ? titleError.value : null);
-    final visibleDescError = computed(() => touched.value ? descError.value : null);
-    final canSave = computed(() => !store.saving.value);
-
-    onMounted(() async {
-      final id = props.value.issueId;
-      if (id == null) return;
-      final existing = await store.fetchIssue(id);
-      if (existing != null) {
-        title.value = existing.title;
-        description.value = existing.description;
-      }
-    });
-
-    Future<void> save() async {
-      touched.value = true;
-      if (titleError.value != null || descError.value != null) return;
-      final ok = await store.saveIssue(
-        id: props.value.issueId,
-        title: title.value.trim(),
-        description: description.value.trim(),
-      );
-      final ctx = context.value;
-      if (ctx == null || !ctx.mounted) return;
-      if (ok) {
-        ctx.pop();
-      } else {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('Kunde inte spara')),
-        );
-      }
-    }
-
-    return (context) => Scaffold(
-          appBar: AppBar(title: Text(pageTitle.value)),
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: InputDecoration(
-                  labelText: 'Rubrik',
-                  errorText: visibleTitleError.value,
-                ),
-              ),
-              TextField(
-                controller: descController,
-                minLines: 3,
-                maxLines: 8,
-                decoration: InputDecoration(
-                  labelText: 'Beskrivning',
-                  errorText: visibleDescError.value,
-                ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: canSave.value ? save : null,
-                child: const Text('Spara'),
-              ),
-            ],
-          ),
-        );
-  }
+    store.debugSetUnread(12);
+    await tester.pumpAndSettle();
+    expect(find.text('9+'), findsOneWidget);
+  });
 }
 ```
 
 **Kommentarer:**
 
-- `showResolved` ligger i store:n, så filtret överlever att man går in i en anmälan och
-  tillbaka. Listan hämtar om via `watch`. Det är en sidoeffekt (ett nätverksanrop),
-  inte ett härlett värde.
-- I `IssueDetailPage` är alla behörighetsbeslut (`canEdit`, `canDelete`, `isBoard`)
-  `computed`. Builder-funktionen bara läser dem.
-- `CreateIssuePage` visar fel först efter första sparförsöket (`touched`), precis som
-  i övning 2.2.
-- Behörigheterna i appen speglar API-reglerna. Om de skulle skilja sig åt vinner alltid
-  servern.
+- Notiser skapas **bara på servern**. Appen kan inte fuska fram en notis, och
+  logiken "ingen notis till sig själv" finns på ett enda ställe.
+- Realtime startas och stoppas av `MyApp`, inte av en sida, eftersom klockan ska
+  uppdateras var man än är i appen. `_session` skyddar mot att en gammal prenumeration
+  (från förra inloggningen) blir kvar, på samma sätt som `_activePostId` i
+  `CommentsStore`.
+- `markAsRead` är optimistisk: fetstilen försvinner och siffran minskar direkt, och
+  allt rullas tillbaka om servern säger nej.
+- `badgeLabel` och `hasUnread` är `computed`, så klockan byggs bara om när siffran
+  faktiskt ändras.
+- Testet använder `pumpAndSettle()` efter att ha ändrat en ref direkt (se
+  [kapitel 8](08-best-practices-och-lints.md#testa)).

@@ -17,13 +17,15 @@ använder den. Ett par timmars eftertanke i början sparar veckor senare.
   └───────────────┘   └───────────────┘   └───────────────┘   └───────────────┘   └───────────────┘
 ```
 
-Vi går igenom stegen med Föreningsappen. Utgångspunkten är styrelsens
-önskemål, skrivet i vanlig text:
+Vi går igenom stegen med Kvittra. Utgångspunkten är produktidén, skriven i
+vanlig text:
 
-> *"Föreningen har ett antal **lägenheter**. **Medlemmar** bor i lägenheterna och
-> loggar in med e-post. Medlemmar ska kunna **boka** tvättstugor och festlokalen –
-> vi kallar dem **resurser**. En resurs kan bara bokas ett visst antal timmar åt
-> gången. Styrelsen ska kunna skriva **anslag** som alla kan läsa."*
+> *"Kvittra är en enkel social app. **Användare** registrerar sig med e-post och
+> ett unikt **användarnamn**, och kan skriva en kort bio och länka till sin
+> webbplats. Användare skriver **inlägg** med rubrik och text. Andra kan
+> **kommentera** och **gilla** inlägg – men bara gilla samma inlägg en gång. Man
+> kan **följa** andra användare och ser då deras inlägg i sitt **flöde**. Vid
+> varje inlägg visas **antal gillningar**."*
 
 ### Steg 1: Entiteter – leta efter substantiv
 
@@ -32,18 +34,18 @@ identitet. Ett bra knep är att stryka under substantiven i texten:
 
 | Substantiv | Entitet? | Motivering |
 |------------|----------|------------|
-| lägenhet | ✅ `apartments` | Har egna egenskaper (nummer, våning, storlek) |
-| medlem | ✅ `users` | Loggar in, gör saker |
-| resurs (tvättstuga, festlokal) | ✅ `resources` | Bokas, har egna regler |
-| bokning | ✅ `bookings` | En händelse med egen tid och egna data |
-| anslag | ✅ `posts` | Har titel, text, författare |
-| e-post | ❌ attribut | En egenskap hos en medlem |
-| timmar | ❌ attribut | `max_hours` på en resurs |
-| styrelsen | ❌ attribut (just nu) | En **roll** en medlem har – `role = 'board'` |
+| användare | ✅ `users` | Loggar in, gör saker, har egna egenskaper |
+| inlägg | ✅ `posts` | Har rubrik, text, författare, tidpunkt |
+| kommentar | ✅ `comments` | Har egen text, egen författare, egen tidpunkt |
+| gillning | ✅ `likes` | En händelse: *vem* gillade *vad*, *när* |
+| följa | ✅ `follows` | En händelse: *vem* följer *vem*, sedan *när* |
+| användarnamn, e-post, bio | ❌ attribut | Egenskaper hos en användare |
+| flöde | ❌ en **fråga** | Inlägg från dem jag följer – räknas fram, sparas inte |
+| antal gillningar | ❌ **härlett** | Kan räknas fram ur `likes` (se 4.3 och 4.9) |
 
-💡 **Tips:** Om något bara har *ett* värde och inga egna egenskaper är det ofta ett
-attribut. Börjar du vilja spara saker *om* det (t.ex. styrelsens mötesdatum) kan
-det behöva bli en egen entitet.
+💡 **Tips:** Verb kan också bli entiteter! "Gilla" och "följa" är handlingar, men
+eftersom vi vill spara *vem*, *vad* och *när* blir de egna tabeller. Om något bara
+har *ett* värde och inga egna egenskaper är det däremot ofta ett attribut.
 
 ### Steg 2: Attribut
 
@@ -52,89 +54,123 @@ söka på eller räkna med?"*
 
 | Entitet | Attribut |
 |---------|----------|
-| `apartments` | `number`, `floor`, `size_sqm` |
-| `users` | `email`, `name`, `role` (+ lösenord, som PocketBase sköter) |
-| `resources` | `name`, `description`, `max_hours`, `active` |
-| `bookings` | `start`, `end`, `note` |
-| `posts` | `title`, `body`, `published`, `created` |
+| `users` | `username`, `name`, `email`, `bio`, `website`, `created` (+ lösenord, som PocketBase sköter) |
+| `posts` | `title`, `body`, `created` |
+| `comments` | `body`, `created` |
+| `likes` | `created` |
+| `follows` | `created` |
+
+Relationerna (vem som skrev, vilket inlägg) lägger vi till i steg 3.
 
 ### Steg 3: Relationer och kardinalitet
 
 Nu frågar vi hur entiteterna hänger ihop, och **hur många** av varje som kan höra
 ihop – det kallas **kardinalitet**. Ställ alltid frågan *åt båda hållen*:
 
-- *En lägenhet* kan ha *hur många* medlemmar? → **många** (ett par, en familj).
-- *En medlem* kan bo i *hur många* lägenheter? → **en** (i vår app).
-- ⇒ apartments **1 : N** users.
+- *En användare* kan skriva *hur många* inlägg? → **många**.
+- *Ett inlägg* har *hur många* författare? → **en**.
+- ⇒ users **1 : N** posts.
+
+- *En användare* kan gilla *hur många* inlägg? → **många**.
+- *Ett inlägg* kan gillas av *hur många* användare? → **många**.
+- ⇒ users **N : M** posts (via `likes`).
 
 | Typ | Betydelse | Exempel | Hur det lagras |
 |-----|-----------|---------|----------------|
-| **1 : 1** | En till en | En medlem ↔ en medlemsprofil med extra uppgifter | FK med `UNIQUE` i ena tabellen (eller samma tabell) |
-| **1 : N** | En till många | En resurs ↔ många bokningar | FK på **N**-sidan: `bookings.resource` |
-| **N : M** | Många till många | Medlemmar ↔ styrelsemöten de deltagit i | **Kopplingstabell** med två FK |
+| **1 : 1** | En till en | En användare ↔ en rad med notisinställningar | FK med `UNIQUE` i ena tabellen (eller samma tabell) |
+| **1 : N** | En till många | Ett inlägg ↔ många kommentarer | FK på **N**-sidan: `comments.post` |
+| **N : M** | Många till många | Användare ↔ inlägg de gillat | **Kopplingstabell** med två FK: `likes` |
 
 ### 1:N – främmande nyckel på "många"-sidan
 
 ```
-resources (1) ─────────< (N) bookings
-                              └─ resource INTEGER REFERENCES resources(id)
+posts (1) ─────────< (N) comments
+                         └─ post TEXT REFERENCES posts(id)
 ```
 
-Försök aldrig lägga det åt andra hållet, med en lista av boknings-id:n i
-`resources`. Mer om det i avsnitt 4.9.
+Försök aldrig lägga det åt andra hållet, med en lista av kommentar-id:n i
+`posts`. Mer om det i avsnitt 4.9.
 
 ### N:M – kopplingstabell
 
-Säg att föreningen vill kunna märka anslag med **taggar** ("Tvättstuga",
-"Ekonomi", "Stämma"). Ett anslag kan ha många taggar och en tagg kan sitta på
-många anslag. Det går inte att lösa med en främmande nyckel i någon av tabellerna.
-Lösningen är en tredje tabell, en **kopplingstabell** (*junction table*):
+Ett inlägg kan gillas av många, och en användare kan gilla många inlägg. Det går
+inte att lösa med en främmande nyckel i någon av tabellerna. Lösningen är en
+tredje tabell, en **kopplingstabell** (*junction table*): `likes`.
 
 ```
-posts (1) ───< (N) post_tags (N) >─── (1) tags
+users (1) ───< (N) likes (N) >─── (1) posts
 
-┌──────────┐      ┌───────────────┐      ┌──────────┐
-│  posts   │      │   post_tags   │      │   tags   │
-│──────────│      │───────────────│      │──────────│
-│ id    PK │◄─────│ post   FK     │      │ id    PK │
-│ title    │      │ tag    FK     │─────►│ name     │
-│ …        │      │ PK(post, tag) │      └──────────┘
-└──────────┘      └───────────────┘
+┌──────────┐      ┌──────────────────┐      ┌──────────┐
+│  users   │      │      likes       │      │  posts   │
+│──────────│      │──────────────────│      │──────────│
+│ id    PK │◄─────│ user   FK        │      │ id    PK │
+│ username │      │ post   FK        │─────►│ title    │
+│ …        │      │ created          │      │ …        │
+└──────────┘      │ UNIQUE(post,user)│      └──────────┘
+                  └──────────────────┘
 ```
+
+Kopplingstabellen kan ha egna attribut – här `created` ("gillade för 2 timmar
+sedan"). Den har två varianter av nyckel:
+
+| Variant | Exempel | När |
+|---------|---------|-----|
+| Sammansatt primärnyckel | `PRIMARY KEY (post, user)` | Klassisk SQL, ingen extra kolumn |
+| Eget `id` + `UNIQUE (post, user)` | Kvittras `likes` | När varje rad behöver ett eget id – som i PocketBase, där varje record alltid har ett `id` |
+
+Båda ger samma skydd mot dubbelgillningar.
+
+Ett andra exempel på N:M: **hashtaggar**. Ett inlägg kan ha många taggar och en
+tagg kan sitta på många inlägg:
 
 ```sql
 CREATE TABLE tags (
-    id    INTEGER PRIMARY KEY,
+    id    TEXT PRIMARY KEY,
     name  TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE post_tags (
-    post  INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-    tag   INTEGER NOT NULL REFERENCES tags(id)  ON DELETE CASCADE,
+    post  TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    tag   TEXT NOT NULL REFERENCES tags(id)  ON DELETE CASCADE,
     PRIMARY KEY (post, tag)          -- samma tagg kan inte sättas två gånger
 );
 CREATE INDEX idx_post_tags_tag ON post_tags(tag);
 
-INSERT INTO tags (name) VALUES ('Tvättstuga'), ('Stämma'), ('Gården');
-INSERT INTO post_tags (post, tag) VALUES (2, 3), (4, 2), (5, 1);
-
--- Alla anslag med taggen 'Stämma'
+-- Alla inlägg med #kaffe
 SELECT p.title
 FROM posts p
 JOIN post_tags pt ON pt.post = p.id
 JOIN tags t       ON t.id = pt.tag
-WHERE t.name = 'Stämma';
+WHERE t.name = 'kaffe';
 ```
 
-Lägg märke till att `bookings` faktiskt också är en sorts kopplingstabell mellan
-`users` och `resources` (medlemmar ↔ resurser är N:M) – fast med egna attribut
-(`start`, `end`, `note`). Det är väldigt vanligt: kopplingen i sig är en händelse
-med egen data.
+### N:M mot samma tabell – `follows`
 
-💡 **Tips:** I PocketBase gör man N:M med ett *Relation*-fält som tillåter flera
-värden. Det lagras som en JSON-lista i en kolumn – praktiskt, men bakom kulisserna
-en annan lösning än en kopplingstabell. Vill du ha extra data på kopplingen (t.ex.
-"närvarande: ja/nej") behöver du ändå en egen collection för kopplingen.
+`follows` kopplar ihop `users` med `users`. Båda främmande nycklarna pekar på
+samma tabell, så de får namn efter sin **roll**: `follower` (den som följer) och
+`following` (den som blir följd).
+
+```
+          ┌────────────── follower ──────────────┐
+          ▼                                      │
+   ┌──────────┐                           ┌──────┴──────┐
+   │  users   │◄──────── following ───────│   follows   │
+   └──────────┘                           └─────────────┘
+```
+
+Att följa är **riktat**: att anna följer bertil betyder inte att bertil följer
+anna. Därför är `(anna, bertil)` och `(bertil, anna)` två olika rader.
+
+💡 **Tips:** Facebooks "vänner" är däremot **symmetriskt** – är anna vän med
+bertil är bertil vän med anna. Då vill man inte spara samma vänskap två gånger.
+Ett vanligt knep är en rad per par med `CHECK (user_a < user_b)`, så att
+`(anna, bertil)` bara kan sparas på ett sätt.
+
+💡 **Tips:** I PocketBase kan ett *Relation*-fält tillåta flera värden
+(*Multiple*). Det lagras som en JSON-lista i en kolumn – praktiskt, men bakom
+kulisserna en annan lösning än en kopplingstabell. Vill du ha extra data på
+kopplingen (som `created` för en gillning) eller ett unikt villkor behöver du en
+egen collection för kopplingen, precis som `likes` och `follows`.
 
 ## 4.2 ER-diagram
 
@@ -148,39 +184,48 @@ relationer. Det finns flera notationer. Den vanligaste i praktiken är
   ──┼<    en eller många
 ```
 
-Föreningsappen:
+Kvittra:
 
 ```
-┌──────────────┐           ┌──────────────┐            ┌──────────────┐
-│  apartments  │           │    users     │            │    posts     │
-│──────────────│           │──────────────│            │──────────────│
-│ PK id        │┼○──────○< │ PK id        │┼○──────○<  │ PK id        │
-│    number  U │           │    email   U │            │    title     │
-│    floor     │           │    name      │            │    body      │
-│    size_sqm  │           │ FK apartment │            │ FK author    │
-└──────────────┘           │    role      │            │    published │
-                           │    created   │            │    created   │
-                           └──────┬───────┘            └──────────────┘
-                                  ┼
-                                  │
-                                  ○<
-                           ┌──────┴───────┐            ┌──────────────┐
-                           │   bookings   │            │  resources   │
-                           │──────────────│            │──────────────│
-                           │ PK id        │ >○──────┼  │ PK id        │
-                           │ FK resource  │            │    name    U │
-                           │ FK user      │            │   description│
-                           │    start     │            │    max_hours │
-                           │    end       │            │    active    │
-                           │    note      │            └──────────────┘
-                           └──────────────┘
+                         ┌──────────────┐
+                         │   follows    │
+                         │──────────────│
+          ┌─────────────<│ FK follower  │
+          │   ┌─────────<│ FK following │
+          │   │          │    created   │
+          │   │          │ U(follower,  │
+          │   │          │   following) │
+          │   │          └──────────────┘
+          ┼   ┼
+     ┌────┴───┴─────┐            ┌──────────────┐
+     │    users     │            │    posts     │
+     │──────────────│            │──────────────│
+     │ PK id        │┼────────○< │ PK id        │
+     │    username U│            │ FK author    │
+     │    name      │            │    title     │
+     │    email    U│            │    body      │
+     │    bio       │            │    created   │
+     │    website   │            └──┬────────┬──┘
+     │    created   │               ┼        ┼
+     └──┬────────┬──┘               │        │
+        ┼        ┼                  │        │
+        │        │                  ○<       ○<
+        │        │       ┌──────────┴───┐  ┌─┴────────────┐
+        │        └─────○<│   comments   │  │    likes     │
+        │                │──────────────│  │──────────────│
+        │                │ PK id        │  │ PK id        │
+        │                │ FK post      │  │ FK post      │
+        │                │ FK author    │  │ FK user      │>○─────┐
+        │                │    body      │  │    created   │       │
+        │                │    created   │  │ U(post,user) │       │
+        │                └──────────────┘  └──────────────┘       │
+        └─────────────────────────────────────────────────────────┘
 
 PK = primärnyckel, FK = främmande nyckel, U = unik
 ```
 
-Läs t.ex. linjen mellan `apartments` och `users`: en medlem hör till *noll eller
-en* lägenhet (`apartment` kan vara `NULL`), och en lägenhet har *noll eller många*
-medlemmar.
+Läs t.ex. linjen mellan `users` och `posts`: ett inlägg har *exakt en* författare,
+och en användare har *noll eller många* inlägg (Johan har inga).
 
 💡 **Tips:** Rita gärna på papper eller använd verktyg som
 [dbdiagram.io](https://dbdiagram.io) eller [drawio](https://app.diagrams.net).
@@ -192,41 +237,65 @@ Ett ER-diagram är också det bästa sättet att diskutera en design med andra.
 risken att samma sak står olika på olika ställen. Man pratar om *normalformer*.
 I praktiken räcker de tre första.
 
-Vi utgår från styrelsens gamla bokningsark:
+### Verklig data är sällan normaliserad
 
-| booking | resource | resource_max_hours | member | member_email | apartment | floor | times |
-|---------|----------|--------------------|--------|--------------|-----------|-------|-------|
-| 1 | Tvättstuga 1 | 3 | Anna Andersson | anna@example.com | 1101 | 1 | 2026-10-12 07–10, 2026-10-14 16–19 |
-| 2 | Tvättstuga 1 | 3 | Cecilia Carlsson | cecilia@example.com | 1001 | 0 | 2026-10-12 10–13 |
-| 3 | Festlokalen | 12 | David Dahl | david@example.com | 1002 | 0 | 2026-10-17 15–23 |
-| 4 | Tvättstuga 1 | **4** | Anna Andersson | **anna@exmaple.com** | 1101 | 1 | 2026-10-16 07–10 |
+Test-API:t [JSONPlaceholder](https://jsonplaceholder.typicode.com), som du
+använder i modul 03, returnerar kommentarer i den här formen (förkortat, med
+påhittade adresser):
 
-Problemen syns redan: Annas e-post är felstavad på rad 4, och tvättstuga 1 har
-plötsligt `max_hours = 4`. Vilken är rätt? Det här är **uppdateringsanomalier**:
+```json
+[
+  { "postId": 1, "id": 1, "name": "id labore ex et quam",  "email": "eliseo@example.com",  "body": "…" },
+  { "postId": 1, "id": 2, "name": "quo vero reiciendis",   "email": "jayne@example.com",   "body": "…" },
+  { "postId": 2, "id": 6, "name": "et fugit eligendi",     "email": "eliseo@example.com",  "body": "…" }
+]
+```
+
+Lägg märke till att kommentarens **författare** inte är en främmande nyckel till
+`users` – det är bara en e-postadress som upprepas på varje kommentar personen
+skrivit. Byter Eliseo e-post finns det inget sätt att veta att de gamla
+kommentarerna är hans. Och vem som helst kan skriva vilken adress som helst.
+I Kvittra ersätter vi `email` med `author → users`. Det är exakt vad
+normalisering handlar om.
+
+### Från kalkylark till tabeller
+
+Vi utgår från Kvittras allra första version – ett kalkylark med inlägg och vem som
+gillat dem:
+
+| post | title | author | author_email | author_website | liked_by |
+|------|-------|--------|--------------|----------------|----------|
+| 1 | Höstpromenad i Slottsskogen | Anna Andersson | anna@example.com | https://anna.example.com | bertil, cissi, dahl |
+| 2 | Mitt första surdegsbröd | Bertil Berg | bertil@example.com | – | anna |
+| 3 | Morgondimma | Anna Andersson | **ana@example.com** | https://anna.example.com | bertil, cissi |
+
+Problemen syns redan: Annas e-post är felstavad på rad 3. Vilken är rätt? Det här
+är **uppdateringsanomalier**:
 
 | Anomali | Exempel |
 |---------|---------|
 | **Uppdatering** | Anna byter e-post → måste ändras på alla hennes rader. Missas en blir det motsägelser. |
-| **Insättning** | Vi kan inte lägga in en ny resurs (t.ex. bastun) förrän någon har bokat den. |
-| **Borttagning** | Tar vi bort Davids enda bokning försvinner all info om att lägenhet 1002 ligger på plan 0. |
+| **Insättning** | Vi kan inte lägga in en ny användare (t.ex. Johan) förrän han har skrivit ett inlägg. |
+| **Borttagning** | Tar vi bort Bertils enda inlägg försvinner all information om Bertil. |
 
 ### Första normalformen (1NF): ett värde per cell
 
 > **Regel:** Varje cell innehåller ett **enda, odelbart** värde. Inga listor,
-> inga upprepade kolumner (`time1`, `time2`, `time3`). Varje rad är unik.
+> inga upprepade kolumner (`liker1`, `liker2`, `liker3`). Varje rad är unik.
 
-Kolumnen `times` bryter mot 1NF – den innehåller en lista. Vi delar upp den så
-att varje bokat pass blir en egen rad, och delar `start`/`end` i separata kolumner:
+Kolumnen `liked_by` bryter mot 1NF – den innehåller en lista. Vi delar upp den så
+att varje gillning blir en egen rad:
 
-| resource | resource_max_hours | member | member_email | apartment | floor | start | end |
-|----------|--------------------|--------|--------------|-----------|-------|-------|-----|
-| Tvättstuga 1 | 3 | Anna Andersson | anna@example.com | 1101 | 1 | 2026-10-12 07:00 | 2026-10-12 10:00 |
-| Tvättstuga 1 | 3 | Anna Andersson | anna@example.com | 1101 | 1 | 2026-10-14 16:00 | 2026-10-14 19:00 |
-| Tvättstuga 1 | 3 | Cecilia Carlsson | cecilia@example.com | 1001 | 0 | 2026-10-12 10:00 | 2026-10-12 13:00 |
-| Festlokalen | 12 | David Dahl | david@example.com | 1002 | 0 | 2026-10-17 15:00 | 2026-10-17 23:00 |
-| Tvättstuga 1 | 3 | Anna Andersson | anna@example.com | 1101 | 1 | 2026-10-16 07:00 | 2026-10-16 10:00 |
+| post | title | author | author_email | author_website | liker |
+|------|-------|--------|--------------|----------------|-------|
+| 1 | Höstpromenad i Slottsskogen | Anna Andersson | anna@example.com | https://anna.example.com | bertil |
+| 1 | Höstpromenad i Slottsskogen | Anna Andersson | anna@example.com | https://anna.example.com | cissi |
+| 1 | Höstpromenad i Slottsskogen | Anna Andersson | anna@example.com | https://anna.example.com | dahl |
+| 2 | Mitt första surdegsbröd | Bertil Berg | bertil@example.com | – | anna |
+| 3 | Morgondimma | Anna Andersson | anna@example.com | https://anna.example.com | bertil |
+| 3 | Morgondimma | Anna Andersson | anna@example.com | https://anna.example.com | cissi |
 
-Nu är tabellen i 1NF. En rad identifieras av `(resource, start)`. Men upprepningen
+Nu är tabellen i 1NF. En rad identifieras av `(post, liker)`. Men upprepningen
 är ännu värre!
 
 ### Andra normalformen (2NF): hela nyckeln
@@ -234,21 +303,25 @@ Nu är tabellen i 1NF. En rad identifieras av `(resource, start)`. Men upprepnin
 > **Regel:** 1NF + varje kolumn som inte ingår i nyckeln ska bero på **hela**
 > nyckeln, inte bara en del av den.
 
-Nyckeln är `(resource, start)`. Men `resource_max_hours` beror bara på
-`resource` – inte på `start`. Det är ett **partiellt beroende**. Lösning: flytta
-ut det som bara beror på resursen till en egen tabell.
+Nyckeln är `(post, liker)`. Men `title`, `author`, `author_email` och
+`author_website` beror bara på `post` – inte på vem som gillade. Det är ett
+**partiellt beroende**. Lösning: flytta ut det som bara beror på inlägget till en
+egen tabell.
 
 ```
-resources                          bookings_2nf
-┌──────────────┬───────────┐      ┌──────────────┬──────────────────┬───────────────┬─────┐
-│ name (PK)    │ max_hours │      │ resource     │ start            │ member        │ ... │
-├──────────────┼───────────┤      ├──────────────┼──────────────────┼───────────────┼─────┤
-│ Tvättstuga 1 │ 3         │      │ Tvättstuga 1 │ 2026-10-12 07:00 │ Anna Andersson│ ... │
-│ Festlokalen  │ 12        │      │ ...          │                  │               │     │
-└──────────────┴───────────┘      └──────────────┴──────────────────┴───────────────┴─────┘
+posts_2nf                                                    likes
+┌──────┬─────────────────────────────┬────────────────┬───┐  ┌──────┬────────┐
+│ post │ title                       │ author         │ … │  │ post │ liker  │
+├──────┼─────────────────────────────┼────────────────┼───┤  ├──────┼────────┤
+│ 1    │ Höstpromenad i Slottsskogen │ Anna Andersson │ … │  │ 1    │ bertil │
+│ 2    │ Mitt första surdegsbröd     │ Bertil Berg    │ … │  │ 1    │ cissi  │
+│ 3    │ Morgondimma                 │ Anna Andersson │ … │  │ 1    │ dahl   │
+└──────┴─────────────────────────────┴────────────────┴───┘  │ 2    │ anna   │
+                                                             │ …    │ …      │
+                                                             └──────┴────────┘
 ```
 
-`max_hours` står nu på exakt ett ställe.
+Varje inläggs titel står nu på exakt ett ställe.
 
 💡 **Tips:** 2NF är bara intressant när nyckeln består av flera kolumner. Har
 tabellen en enkel `id`-nyckel är den automatiskt i 2NF (om den är i 1NF) – men
@@ -260,43 +333,43 @@ läs vidare, för då flyttar problemet till 3NF.
 > som inte är nyckel. "Varje kolumn ska bero på nyckeln, hela nyckeln och inget
 > annat än nyckeln."
 
-I `bookings_2nf` gäller: bokning → `member` → `member_email` och
-`member` → `apartment` → `floor`. E-posten beror på medlemmen, inte på bokningen.
-Våningen beror på lägenheten. Det är **transitiva beroenden**.
+I `posts_2nf` gäller: inlägg → `author` → `author_email` och
+`author` → `author_website`. E-posten beror på författaren, inte på inlägget. Det
+är ett **transitivt beroende** – och det är därför Annas e-post kunde stå på två
+olika sätt.
 
-Lösning: bryt ut `users` och `apartments`, och låt bokningen bara peka på
-medlemmen med en främmande nyckel. Vi inför samtidigt `id`-kolumner:
+Lösning: bryt ut `users`, och låt inlägget bara peka på författaren med en
+främmande nyckel. Samtidigt låter vi `likes` peka på `users` i stället för att
+spara namnet:
 
 ```
-apartments                users                              resources
-┌────┬────────┬───────┐   ┌────┬──────────────────┬───────┐   ┌────┬──────────────┬───────────┐
-│ id │ number │ floor │   │ id │ name             │ apart.│   │ id │ name         │ max_hours │
-├────┼────────┼───────┤   ├────┼──────────────────┼───────┤   ├────┼──────────────┼───────────┤
-│ 1  │ 1001   │ 0     │   │ 1  │ Anna Andersson   │ 3     │   │ 1  │ Tvättstuga 1 │ 3         │
-│ 2  │ 1002   │ 0     │   │ 3  │ Cecilia Carlsson │ 1     │   │ 3  │ Festlokalen  │ 12        │
-│ 3  │ 1101   │ 1     │   │ 4  │ David Dahl       │ 2     │   └────┴──────────────┴───────────┘
-└────┴────────┴───────┘   └────┴──────────────────┴───────┘
-                                       (+ email)
-bookings
-┌────┬──────────┬──────┬──────────────────┬──────────────────┐
-│ id │ resource │ user │ start            │ end              │
-├────┼──────────┼──────┼──────────────────┼──────────────────┤
-│ 1  │ 1        │ 1    │ 2026-10-12 07:00 │ 2026-10-12 10:00 │
-│ 7  │ 1        │ 1    │ 2026-10-14 16:00 │ 2026-10-14 19:00 │
-│ 2  │ 1        │ 3    │ 2026-10-12 10:00 │ 2026-10-12 13:00 │
-│ 4  │ 3        │ 4    │ 2026-10-17 15:00 │ 2026-10-17 23:00 │
-│ 12 │ 1        │ 1    │ 2026-10-16 07:00 │ 2026-10-16 10:00 │
-└────┴──────────┴──────┴──────────────────┴──────────────────┘
+users                                              posts
+┌─────┬──────────┬──────────────────┬─────────┐    ┌─────┬────────┬─────────────────────────────┐
+│ id  │ username │ email            │ website │    │ id  │ author │ title                       │
+├─────┼──────────┼──────────────────┼─────────┤    ├─────┼────────┼─────────────────────────────┤
+│ u1  │ anna     │ anna@example.com │ https…  │    │ p1  │ u1     │ Höstpromenad i Slottsskogen │
+│ u2  │ bertil   │ bertil@example…  │         │    │ p2  │ u2     │ Mitt första surdegsbröd     │
+│ u3  │ cissi    │ cecilia@example… │ https…  │    │ p3  │ u1     │ Morgondimma                 │
+│ …   │ …        │ …                │ …       │    └─────┴────────┴─────────────────────────────┘
+└─────┴──────────┴──────────────────┴─────────┘
+likes
+┌─────┬──────┬──────┐
+│ id  │ post │ user │
+├─────┼──────┼──────┤
+│ l1  │ p1   │ u2   │
+│ l2  │ p1   │ u3   │
+│ …   │ …    │ …    │
+└─────┴──────┴──────┘
 ```
 
-Och vips – vi har landat i precis Föreningsappens datamodell. Alla tre
-anomalierna är borta:
+Och vips – vi har landat i precis Kvittras datamodell. Alla tre anomalierna är
+borta:
 
 | Anomali | Efter normalisering |
 |---------|---------------------|
 | Anna byter e-post | En rad i `users` ändras |
-| Ny resurs utan bokningar | En rad i `resources` |
-| Davids enda bokning tas bort | Lägenhet 1002 finns kvar i `apartments` |
+| Ny användare utan inlägg | En rad i `users` |
+| Bertils enda inlägg tas bort | Bertil finns kvar i `users` |
 
 💡 **Tips:** En snabb tumregel för 3NF: *"Om jag ändrar det här värdet, måste jag
 då ändra det på flera rader?"* Om ja – bryt ut det i en egen tabell.
@@ -307,11 +380,40 @@ då ändra det på flera rader?"* Om ja – bryt ut det i en egen tabell.
 för att vinna prestanda eller enkelhet. Det är okej – men gör det medvetet och
 med en plan för hur datan hålls synkad.
 
+Det klassiska exemplet i en social app är `likes_count` på `posts`. Antalet
+gillningar är ett **härlett värde** – det kan alltid räknas fram:
+
+```sql
+SELECT COUNT(*) FROM likes WHERE post = ?;
+```
+
+Så länge Kvittra är litet är det precis vad vi ska göra. Men när ett flöde ska
+visa 20 inlägg med räknare för miljontals användare kan det löna sig att spara
+räknaren. Då måste den hållas synkad, alltid i **samma transaktion** som
+gillningen (kapitel 3). Ett sätt är en **trigger** – SQL som databasen kör
+automatiskt vid varje ändring:
+
+```sql
+CREATE TRIGGER likes_after_insert AFTER INSERT ON likes
+BEGIN
+    UPDATE posts SET likes_count = likes_count + 1 WHERE id = NEW.post;
+END;
+
+CREATE TRIGGER likes_after_delete AFTER DELETE ON likes
+BEGIN
+    UPDATE posts SET likes_count = likes_count - 1 WHERE id = OLD.post;
+END;
+```
+
+En trigger körs i samma transaktion som satsen som utlöste den, så räknaren och
+gillningarna kan aldrig komma i otakt. (I PocketBase gör man samma sak med en
+hook, se kapitel 3.6.)
+
 | Situation | Exempel | Varför det kan vara okej |
 |-----------|---------|--------------------------|
-| Historik som *inte* ska ändras | Spara `price_ore` på bokningen i stället för att alltid läsa resursens nuvarande pris | Priset på en gammal bokning ska inte ändras när avgiften höjs |
-| Tunga beräkningar som läses ofta | `comment_count` på ett anslag | Slipper räkna alla kommentarer vid varje listvisning |
-| Rapporter/statistik | En separat sammanställningstabell per månad | Rapporter ska inte belasta den vanliga databasen |
+| Tunga beräkningar som läses ofta | `likes_count`, `comment_count` på `posts` | Slipper räkna vid varje visning av flödet |
+| Historik som *inte* ska ändras | En tabell `post_edits` som sparar den gamla texten när ett inlägg redigeras | En kopia med flit: historiken ska visa hur det *såg ut då* |
+| Rapporter/statistik | En sammanställningstabell "aktiva användare per dag" | Rapporter ska inte belasta den vanliga databasen |
 
 ⚠️ **Varning:** Börja alltid normaliserat. Denormalisera först när du har ett
 *mätt* prestandaproblem. Det är mycket lättare att lägga till en kopia senare än
@@ -324,28 +426,29 @@ att städa upp i inkonsekvent data.
 | | Naturlig nyckel | Surrogatnyckel |
 |---|-----------------|----------------|
 | Vad | Ett värde som finns "på riktigt" | Ett påhittat id utan betydelse |
-| Exempel | `email`, personnummer, lägenhetsnummer | `id = 17`, `id = 'k3j9x0p2m1q8w7e'` |
+| Exempel | `username`, `email`, personnummer | `id = 17`, `id = 'k3j9x0p2m1q8w7e'` |
 | Fördel | Ingen extra kolumn, betyder något | Ändras aldrig, alltid unik, kort |
-| Nackdel | Kan ändras (folk byter e-post!), kan vara känsligt (personnummer) | Måste joinas för att få något läsbart |
+| Nackdel | Kan ändras (folk byter användarnamn och e-post!), kan vara känsligt (personnummer) | Måste joinas för att få något läsbart |
 
 **Rekommendation:** Använd en surrogatnyckel (`id`) som primärnyckel, och lägg
-`UNIQUE` på de naturliga nycklarna. Det är precis vad vi gör med `users.email`
-och `apartments.number`.
+`UNIQUE` på de naturliga nycklarna. Det är precis vad vi gör med
+`users.username` och `users.email`. Användaren kan byta användarnamn utan att
+ett enda inlägg, en kommentar eller en gillning behöver ändras.
 
-### Auto-increment eller UUID?
+### Auto-increment eller slumpat id?
 
 | | `INTEGER` auto-increment | UUID / slumpad sträng |
 |---|--------------------------|------------------------|
-| Exempel | `1, 2, 3, …` | `'550e8400-e29b-41d4-a716-446655440000'` |
+| Exempel | `1, 2, 3, …` | `'550e8400-e29b-41d4-a716-446655440000'`, `'k3j9x0p2m1q8w7e'` |
 | Storlek | Liten, snabb | Större |
-| Läsbarhet | Lätt att prata om ("bokning 5") | Svårt |
-| Kan gissas? | Ja – `/bookings/6` ligger nog efter `/bookings/5` | Nej |
+| Läsbarhet | Lätt att prata om ("inlägg 5") | Svårt |
+| Kan gissas? | Ja – `/posts/6` ligger nog efter `/posts/5`, och avslöjar hur många inlägg som finns | Nej |
 | Kan skapas i appen (offline)? | Nej, databasen delar ut | Ja |
-| Sammanslagning av databaser | Krockar | Krockar (praktiskt taget) aldrig |
+| Slå ihop två databaser | Krockar | Krockar (praktiskt taget) aldrig |
 
 PocketBase använder slumpade 15-teckens id:n som `k3j9x0p2m1q8w7e` – i praktiken
-samma idé som UUID. I seed-skriptet använder vi heltal för att det är lättare att
-läsa och skriva för hand.
+samma idé som UUID. JSONPlaceholder använder heltal (`"id": 1`), vilket är lättare
+att läsa i exempel.
 
 ⚠️ **Varning:** Att id:n går att gissa är ingen säkerhetsbrist i sig, men du får
 aldrig lita på att "ingen vet id:t". Behörighet ska alltid kontrolleras
@@ -357,24 +460,24 @@ Det viktigaste är att vara **konsekvent**. I den här kursen gäller:
 
 | Regel | Exempel | Inte |
 |-------|---------|------|
-| `snake_case` | `size_sqm`, `max_hours` | `sizeSqm`, `MaxHours` |
-| Engelska namn | `bookings`, `published` | `bokningar`, `publicerad` |
-| Tabeller i plural | `users`, `resources` | `user`, `resource` |
+| `snake_case` | `likes_count`, `avatar_url` | `likesCount`, `LikesCount` |
+| Engelska namn | `posts`, `comments` | `inlagg`, `kommentarer` |
+| Tabeller i plural | `users`, `likes` | `user`, `like` |
 | Primärnyckel heter `id` | `id` | `user_id` i `users`-tabellen |
-| FK heter som det den pekar på (singular) | `bookings.user`, `posts.author` | `bookings.users` |
-| Enhet i namnet när det inte är självklart | `size_sqm`, `price_ore`, `duration_min` | `size`, `price` |
-| Booleans som påståenden | `active`, `published`, `is_paid` | `status2`, `flag` |
-| Undvik reserverade ord | `starts_at` | `start`, `end`, `order`, `user`, `group` |
+| FK heter som det den pekar på (singular)… | `comments.post`, `likes.user` | `comments.posts` |
+| … eller efter sin **roll** | `posts.author`, `follows.follower`, `follows.following` | `follows.user1`, `follows.user2` |
+| Enhet i namnet när det inte är självklart | `duration_sec`, `size_bytes` | `duration`, `size` |
+| Booleans som påståenden | `is_private`, `verified` | `status2`, `flag` |
+| Undvik reserverade ord | `created`, `author` | `order`, `group`, `user`, `end` |
 
-💡 **Tips:** Många projekt döper främmande nycklar till `user_id`, `resource_id`
-osv. Det är också en bra konvention. Vi använder `user`, `resource` eftersom det
-är så PocketBase-relationer brukar heta. Huvudsaken är att man väljer *en* stil.
+💡 **Tips:** Många projekt döper främmande nycklar till `user_id`, `post_id` osv.
+Det är också en bra konvention. Vi använder `user`, `post` eftersom det är så
+PocketBase-relationer brukar heta. Huvudsaken är att man väljer *en* stil.
 
-⚠️ **Varning:** Som tabellen visar är `start`, `end` och `user` egentligen dåliga
-kolumnnamn – de är reserverade ord i SQL (`user` är reserverat i PostgreSQL).
-Vi behåller dem i kursen eftersom det är kursens datamodell och PocketBase
-hanterar det åt oss, men i en ny design skulle `starts_at` och `ends_at` vara
-bättre.
+⚠️ **Varning:** Som tabellen visar är `user` egentligen ett dåligt kolumnnamn –
+det är ett reserverat ord i SQL, och i PostgreSQL måste det skrivas `"user"`. Vi
+behåller `likes.user` i kursen eftersom det är kursens datamodell och SQLite
+accepterar det, men i en ny design vore `liked_by` eller `user_id` säkrare.
 
 ## 4.6 Datatyper – välj rätt
 
@@ -382,27 +485,45 @@ bättre.
 
 - Spara **alltid i UTC** (svensk tid är UTC+1 på vintern och UTC+2 på sommaren).
   Konvertera till lokal tid först när du visar det för användaren.
-- Använd formatet **ISO 8601**: `2026-10-12 07:00:00` eller `2026-10-12T07:00:00Z`.
-  Det är entydigt (inte "10/12" – oktober eller december?) och sorteras rätt som text.
+- Använd formatet **ISO 8601**: `2026-10-11 06:45:00` eller
+  `2026-10-11T06:45:00Z`. Det är entydigt (inte "10/11" – oktober eller
+  november?) och sorteras rätt som text. PocketBase sparar
+  `2026-10-11 06:45:00.000Z`, där `Z` betyder UTC.
 
 ```sql
-SELECT datetime('now');                              -- nu, i UTC
-SELECT datetime('now', 'localtime');                 -- nu, i datorns lokala tid
-SELECT date('2026-10-12 07:00:00', '+7 days');       -- 2026-10-19
-SELECT (unixepoch('2026-10-17 23:00:00')
-      - unixepoch('2026-10-17 15:00:00')) / 3600.0 AS timmar;   -- 8.0
+SELECT datetime('now');                        -- nu, i UTC
+SELECT datetime('now', 'localtime');           -- nu, i datorns lokala tid
+SELECT date('2026-10-12', '-7 days');          -- 2026-10-05: "senaste veckan" börjar här
+SELECT (unixepoch('2026-10-11 06:45:00.000Z')
+      - unixepoch('2026-10-10 14:00:00.000Z')) / 3600.0 AS timmar;   -- 16.75
 ```
 
 `unixepoch()` ger antal sekunder sedan 1970-01-01 (finns från SQLite 3.38). Har du
 en äldre version, använd `strftime('%s', ...)` i stället.
 
 ⚠️ **Varning:** Ett klassiskt fel är att spara lokal tid utan tidszon. Två gånger
-om året (sommartid) blir det då en timme som finns två gånger, eller inte alls.
+om året (sommartid) blir det då en timme som finns två gånger, eller inte alls –
+och ett inlägg kan se ut att vara skrivet *före* kommentaren till det.
 
-### Pengar: heltal i öre
+### Bilder och filer: spara en sökväg, inte filen
 
-Spara **aldrig** pengar som flyttal (`REAL`). Flyttal kan inte representera alla
-decimaltal exakt:
+En profilbild eller ett foto till ett inlägg *kan* lagras som `BLOB` i databasen,
+men gör det inte:
+
+- databasen blir enorm, och varje backup tar med alla bilder,
+- bilder kan inte cachas och levereras effektivt av en webbserver eller ett CDN,
+- varje fråga som råkar läsa kolumnen drar med sig megabyte av data.
+
+Spara i stället **filen på disk eller i en molnlagring** och bara **filnamnet
+eller URL:en** i databasen: `avatar TEXT`, `image_url TEXT`. Så gör PocketBase:
+fältet *File* (som `avatar` i `users`) sparar filnamnet i tabellen, och själva
+filen hamnar i `pb_data/storage/`. JSONPlaceholder gör likadant – ett foto har
+`url` och `thumbnailUrl`, inte bilddata.
+
+### Pengar: heltal i ören
+
+Kvittra hanterar inga pengar än, men om ni inför en betalversion: spara **aldrig**
+pengar som flyttal (`REAL`). Flyttal kan inte representera alla decimaltal exakt:
 
 ```sql
 SELECT 0.1 + 0.2;                 -- 0.30000000000000004 😱
@@ -410,30 +531,34 @@ SELECT 10 + 20 AS ore;            -- 30 (exakt)
 ```
 
 Spara i stället i **minsta enheten som heltal**: `price_ore INTEGER`,
-`12950` = 129,50 kr. Dela med 100 först när du visar beloppet. (PostgreSQL har även
+`4900` = 49,00 kr. Dela med 100 först när du visar beloppet. (PostgreSQL har även
 den exakta typen `numeric(10,2)`.)
 
 ### Booleans
 
 SQLite saknar `BOOLEAN`. Använd `INTEGER` med `CHECK (x IN (0, 1))` och
-`NOT NULL DEFAULT 0` (eller `1`), som `resources.active` och `posts.published`.
+`NOT NULL DEFAULT 0`, t.ex. `is_private` för ett privat konto. PocketBase-fältet
+*Bool* gör just så.
 
 ### Text med fasta val (enum)
 
-Använd `TEXT` + `CHECK (... IN (...))`, som `users.role`. Om listan ofta ändras
-eller behöver egna egenskaper – gör en egen tabell i stället.
+Använd `TEXT` + `CHECK (... IN (...))`, t.ex.
+`visibility TEXT NOT NULL DEFAULT 'public' CHECK (visibility IN ('public', 'followers', 'private'))`.
+I PocketBase heter fälttypen *Select*. Om listan ofta ändras eller behöver egna
+egenskaper – gör en egen tabell i stället.
 
 ## 4.7 NULL eller standardvärde?
 
 `NULL` betyder **"okänt" eller "saknas"** – inte "noll" och inte "tom sträng".
 
-| Kolumn | NULL tillåtet? | Varför |
+| Kolumn | Tomt tillåtet? | Varför |
 |--------|----------------|--------|
-| `bookings.note` | ✅ | Det är frivilligt att skriva en anteckning |
-| `users.apartment` | ✅ | En medlem kan sakna kopplad lägenhet (t.ex. Johan) |
-| `resources.active` | ❌ `NOT NULL DEFAULT 1` | En resurs är alltid antingen aktiv eller inte |
-| `users.role` | ❌ `NOT NULL DEFAULT 'member'` | Alla har en roll |
-| `bookings.start` | ❌ `NOT NULL` | En bokning utan tid är meningslös |
+| `users.website` | ✅ | Alla har inte en webbplats |
+| `users.bio` | ✅ | Frivilligt att skriva |
+| `posts.title` | ❌ *Required* | Ett inlägg utan rubrik är inte meningsfullt |
+| `comments.body` | ❌ *Required* | En tom kommentar är inte en kommentar |
+| `posts.author` | ❌ med `CASCADE` | Varje inlägg har en författare. (Med `SET NULL` hade den *behövt* få vara tom.) |
+| `likes.created` | ❌ `DEFAULT` nu | Tiden finns alltid |
 
 Tumregler:
 
@@ -441,6 +566,7 @@ Tumregler:
   verkligt, meningsfullt tillstånd.
 - Använd `DEFAULT` när det finns ett naturligt utgångsvärde.
 - Blanda inte ihop "saknas" (`NULL`) och "tom" (`''`) – välj ett av dem.
+  PocketBase har valt åt dig: tomma textfält är alltid `''`.
 
 ⚠️ **Varning:** `NULL` beter sig konstigt i jämförelser: `NULL = NULL` är inte sant,
 `COUNT(kolumn)` hoppar över `NULL`, och `NOT IN` med en `NULL` i listan ger inga
@@ -455,49 +581,57 @@ gäller alltid – oavsett om datan kommer från appen, adminpanelen eller ett s
 
 ```sql
 -- utdrag ur CREATE TABLE-satser
-CHECK (size_sqm > 0)
-CHECK ("end" > "start")
-CHECK (role IN ('member', 'board', 'admin'))
-email TEXT NOT NULL UNIQUE
+username  TEXT NOT NULL UNIQUE CHECK (length(username) BETWEEN 3 AND 20)
+UNIQUE (post, user)
+UNIQUE (follower, following)
+CHECK (follower <> following)
+CHECK (likes_count >= 0)
 ```
+
+I PocketBase blir motsvarigheten: *Required*, *Min/Max length*, unika index och –
+för regler som "inte följa sig själv" – API-regler eller hooks (modul 02).
 
 ### Index
 
 - Skapa index på **främmande nycklar** – de används i nästan varje `JOIN`.
   (SQLite och PostgreSQL skapar inte det automatiskt!)
 - Skapa index på kolumner du ofta **filtrerar** eller **sorterar** på, t.ex.
-  `bookings(resource, "start")` för "visa tvättstugans schema".
+  `posts(created)` för flödet.
+- Ett sammansatt index `(a, b)` hjälper sökningar på `a`, men inte på bara `b`.
 - Låt bli att indexera allt. Varje index kostar vid skrivning.
 
 ### Soft delete eller hard delete?
 
+När Anna tar bort ett inlägg – ska det försvinna på riktigt?
+
 | | Hard delete | Soft delete |
 |---|-------------|-------------|
-| Hur | `DELETE FROM posts WHERE id = 3;` | `UPDATE posts SET deleted_at = datetime('now') WHERE id = 3;` |
-| Data | Borta för alltid | Ligger kvar, döljs |
-| Fördel | Enkelt, inga spöken, bra för integritet (GDPR) | Går att ångra, historik bevaras |
-| Nackdel | Går inte att ångra | **Varje** fråga måste ha `WHERE deleted_at IS NULL`; `UNIQUE` krånglar till sig |
+| Hur | `DELETE FROM posts WHERE id = ?;` | `UPDATE posts SET deleted = '2026-10-12 10:00:00.000Z' WHERE id = ?;` |
+| Data | Borta för alltid (och kommentarer/gillningar kaskadraderas) | Ligger kvar, döljs |
+| Fördel | Enkelt, inga spöken, bra för integritet (GDPR) | Går att ångra, moderatorer kan se vad som togs bort |
+| Nackdel | Går inte att ångra | **Varje** fråga – flödet, räknare, sökningar – måste ha `WHERE deleted = ''`; `UNIQUE` krånglar till sig |
 
 ```sql
-ALTER TABLE posts ADD COLUMN deleted_at TEXT;   -- NULL = inte borttagen
-UPDATE posts SET deleted_at = datetime('now') WHERE id = 5;
-SELECT id, title FROM posts WHERE deleted_at IS NULL;
+-- Exempel (kör inte på din Kvittra-data):
+-- ett Date-fält "deleted" på posts, där tomt ('') betyder "inte borttaget"
+UPDATE posts SET deleted = '2026-10-12 10:00:00.000Z' WHERE id = 'id-på-inlägget';
+SELECT id, title FROM posts WHERE deleted = '';
 ```
+
+Ett mellanting som många sociala appar använder: inlägget *döljs* direkt (soft
+delete), och raderas på riktigt efter t.ex. 30 dagar.
 
 💡 **Tips:** Använd hard delete som standard. Välj soft delete för data där
 "ångra" eller historik verkligen behövs. Personuppgifter som någon begärt ska
-raderas måste raderas på riktigt (GDPR).
+raderas måste raderas på riktigt (GDPR). En View collection som bara visar
+inlägg som inte är borttagna gör det lättare att inte glömma villkoret.
 
 ### Audit-fält: created och updated
 
 Lägg till `created` och `updated` på nästan alla tabeller. De kostar nästan
-ingenting och är ovärderliga vid felsökning ("när ändrades den här bokningen?").
-
-```sql
--- kolumner att lägga till i CREATE TABLE
-created TEXT NOT NULL DEFAULT (datetime('now')),
-updated TEXT NOT NULL DEFAULT (datetime('now'))
-```
+ingenting och är ovärderliga vid felsökning ("när ändrades den här
+kommentaren?") – och i en social app syns de direkt: "för 5 minuter sedan",
+"redigerad".
 
 `updated` måste sättas vid varje ändring – i appen eller med en trigger.
 PocketBase lägger till och sköter `created` och `updated` automatiskt.
@@ -510,57 +644,66 @@ Spara inte det som kan räknas fram från annan data:
 
 | Spara inte | Räkna i stället |
 |------------|-----------------|
-| `bookings.duration_hours` | `(unixepoch("end") - unixepoch("start")) / 3600.0` |
-| `users.booking_count` | `SELECT COUNT(*) FROM bookings WHERE user = ?` |
+| `posts.likes_count` | `SELECT COUNT(*) FROM likes WHERE post = ?` |
+| `users.followers_count` | `SELECT COUNT(*) FROM follows WHERE following = ?` |
 | `users.age` | Spara `birth_date` och räkna |
 
 Ett härlett värde kan bli **fel** så fort originaldatan ändras och någon glömmer
-att uppdatera kopian. (Undantag: medveten denormalisering, se 4.3.)
+att uppdatera kopian – t.ex. när en gillning tas bort via kaskad och räknaren
+inte minskas. (Undantag: medveten denormalisering, se 4.3.)
 
 ### Misstag 2: kommaseparerade listor i en kolumn
 
 ```
-resources (FEL!)
-┌────┬──────────────┬───────────────────────┐
-│ id │ name         │ booked_by             │
-├────┼──────────────┼───────────────────────┤
-│ 1  │ Tvättstuga 1 │ '1,3,2,1,5,7'         │
-└────┴──────────────┴───────────────────────┘
+posts (FEL!)
+┌─────┬─────────────┬──────────────────────┐
+│ id  │ title       │ liked_by             │
+├─────┼─────────────┼──────────────────────┤
+│ 1   │ Morgondimma │ '2,3,10'             │
+└─────┴─────────────┴──────────────────────┘
 ```
 
 Det här bryter mot 1NF och ger massor av problem:
 
-- Du kan inte ha en främmande nyckel – `'1,3,99'` accepteras utan protest.
-- Att hitta "alla resurser som medlem 1 bokat" kräver `LIKE '%1%'`, som även
-  matchar 11, 21 och 100 – och kan inte använda index.
-- Att ta bort ett värde ur listan kräver strängmanipulering.
-- Det går inte att lägga till extra info per koppling (t.ex. tid).
+- Du kan inte ha en främmande nyckel – `'2,3,999'` accepteras utan protest.
+- Att hitta "alla inlägg som användare 1 gillat" kräver `LIKE '%1%'`, som även
+  matchar 10, 21 och 100 – och kan inte använda index.
+- Att ta bort en gillning kräver strängmanipulering.
+- Det går inte att lägga till extra info per koppling (t.ex. *när* man gillade).
+- Två personer som gillar samtidigt skriver över varandras ändring av listan
+  (lost update!).
 
-Lösningen är alltid en egen tabell (1:N) eller en kopplingstabell (N:M).
+Lösningen är alltid en egen tabell (1:N) eller en kopplingstabell (N:M) – som
+`likes`.
 
 ## 4.10 Checklista: Bra att tänka på när du skapar tabeller
 
 **Struktur**
 - [ ] Varje tabell representerar **en** sorts sak (en entitet).
 - [ ] Varje tabell har en primärnyckel – helst en surrogatnyckel `id`.
-- [ ] Inga listor eller upprepade kolumner (`phone1`, `phone2`) – 1NF.
+- [ ] Inga listor eller upprepade kolumner (`liker1`, `liker2`) – 1NF.
 - [ ] Varje fakta finns på **ett** ställe – 2NF/3NF.
 - [ ] 1:N-relationer har FK på N-sidan; N:M har en kopplingstabell.
-- [ ] Inga härledda värden sparas (om du inte medvetet denormaliserar).
+- [ ] Inga härledda värden sparas (om du inte medvetet denormaliserar och har en
+      plan för att hålla dem synkade).
 
 **Kolumner**
-- [ ] Konsekventa namn: `snake_case`, engelska, tabeller i plural.
+- [ ] Konsekventa namn: `snake_case`, engelska, tabeller i plural, FK efter roll.
 - [ ] Rätt datatyp: heltal för antal, `TEXT` i ISO 8601 (UTC) för tid, heltal i
-      öre för pengar, `0/1` för booleans.
-- [ ] Enhet i namnet när den inte är självklar (`size_sqm`, `price_ore`).
-- [ ] `NOT NULL` som standard; `NULL` bara när "saknas" betyder något.
+      ören för pengar, `0/1` för booleans.
+- [ ] Bilder och filer som sökväg/URL, inte `BLOB`.
+- [ ] Enhet i namnet när den inte är självklar (`duration_sec`, `price_ore`).
+- [ ] `NOT NULL` (*Required*) som standard; tomt bara när "saknas" betyder något.
 - [ ] Rimliga `DEFAULT`-värden.
 
 **Skydd**
-- [ ] `UNIQUE` på naturliga nycklar (e-post, lägenhetsnummer).
-- [ ] `CHECK` för giltiga värden och intervall.
-- [ ] `REFERENCES` på alla främmande nycklar, med genomtänkt `ON DELETE`.
-- [ ] `PRAGMA foreign_keys = ON` i SQLite.
+- [ ] `UNIQUE` på naturliga nycklar (användarnamn, e-post) och på
+      kopplingstabellers par (`likes(post, user)`).
+- [ ] `CHECK` (eller API-regel/hook) för giltiga värden och intervall.
+- [ ] `REFERENCES` (*Relation*) på alla främmande nycklar, med genomtänkt
+      `ON DELETE` (*Cascade delete*).
+- [ ] Vet du vilka regler som ligger i databasen och vilka som ligger i
+      PocketBase/appen?
 
 **Prestanda och drift**
 - [ ] Index på främmande nycklar och kolumner som ofta filtreras/sorteras.
@@ -572,13 +715,17 @@ Lösningen är alltid en egen tabell (1:N) eller en kopplingstabell (N:M).
 
 - Designprocessen: **entiteter → attribut → relationer & kardinalitet →
   normalisering → villkor, typer, index**.
-- **1:N** = FK på många-sidan. **N:M** = kopplingstabell. **1:1** = FK med `UNIQUE`.
+- **1:N** = FK på många-sidan. **N:M** = kopplingstabell (även mot samma tabell,
+  som `follows`). **1:1** = FK med `UNIQUE`.
 - **1NF**: ett värde per cell. **2NF**: beroende av hela nyckeln. **3NF**: inga
   beroenden mellan icke-nyckelkolumner.
-- Denormalisera bara medvetet och när du har ett skäl.
+- Denormalisera bara medvetet och när du har ett skäl – som `likes_count` – och
+  håll kopian synkad i samma transaktion.
 - Surrogatnyckel som PK, `UNIQUE` på naturliga nycklar.
-- Datum i UTC och ISO 8601, pengar som heltal i öre, booleans som 0/1.
+- Datum i UTC och ISO 8601, bilder som sökvägar, pengar som heltal i ören,
+  booleans som 0/1.
 - Lagra inte härledda värden och aldrig listor i en kolumn.
 
 Nu är du redo för [övningarna](ovningar.md)! Efter det fortsätter vi med
-[modul 02 – PocketBase](../02-pocketbase/), där samma modell blir collections.
+[modul 02 – PocketBase](../02-pocketbase/), där du går djupare i collections,
+regler och API:t för samma modell.

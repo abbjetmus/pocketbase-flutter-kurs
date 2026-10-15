@@ -12,8 +12,8 @@ tillbaka i kapitlen, och att läsa felmeddelanden noga är en del av övningen.
 Skapa gärna ett projekt för övningarna:
 
 ```bash
-flutter create forening_ovningar
-cd forening_ovningar
+flutter create kvittra_ovningar
+cd kvittra_ovningar
 ```
 
 Dart-övningarna (1.1–1.3) kan du köra i <https://dartpad.dev> eller som
@@ -23,19 +23,38 @@ Dart-övningarna (1.1–1.3) kan du köra i <https://dartpad.dev> eller som
 
 ## Nivå 1
 
-### Övning 1.1 – Lägenheter (Dart)
+### Övning 1.1 – Inlägg och användare (Dart)
 
-Skapa en klass `Apartment` med fälten `id` (String), `number` (String), `floor`
-(int) och `sizeSqm` (double). Alla fält ska vara `final`.
+Här är data i samma format som JSONPlaceholder:
 
-1. Lägg till en `factory Apartment.fromJson(Map<String, dynamic> json)`. JSON-nyckeln
-   för storleken är `size_sqm`, och den kan komma som heltal (`74`) eller decimaltal
-   (`74.5`).
-2. Lägg till en getter `label` som returnerar t.ex. `"Lgh 1102 (vån 1, 74.5 m²)"`.
-3. I `main`: skapa en lista med minst fyra lägenheter från JSON-maps och skriv ut:
-   - alla lägenheter på våning 2,
-   - den sammanlagda ytan (använd `fold`),
-   - den största lägenheten.
+```dart
+final usersJson = <Map<String, dynamic>>[
+  {'id': 1, 'name': 'Anna Lind', 'username': 'anna', 'email': 'anna@example.com'},
+  {'id': 2, 'name': 'Bo Ek', 'username': 'bo', 'email': 'bo@example.com'},
+  {'id': 3, 'name': 'Cecilia Holm', 'username': 'cissi', 'email': 'cecilia@example.com'},
+];
+
+final postsJson = <Map<String, dynamic>>[
+  {'userId': 1, 'id': 1, 'title': 'Första fikat på nya kontoret', 'body': 'Kanelbullar till alla som kommer före nio'},
+  {'userId': 2, 'id': 2, 'title': 'Cykla i regn', 'body': 'Tre veckor i rad nu och regnbyxorna är fortfarande underskattade'},
+  {'userId': 1, 'id': 3, 'title': 'Tips: Flutter DevTools', 'body': 'Widget Inspector visar constraints'},
+  {'userId': 3, 'id': 4, 'title': 'Söker löparsällskap', 'body': 'Fem kilometer runt sjön på lördag'},
+  {'userId': 1, 'id': 5, 'title': 'Hej Kvittra', 'body': 'Mitt första inlägg'},
+];
+```
+
+1. Skapa klasserna `User` (`id`, `name`, `username`, `email`) och `Post` (`id`,
+   `userId`, `title`, `body`). Alla fält ska vara `final`, och båda ska ha en
+   `factory ...fromJson(Map<String, dynamic> json)`.
+2. Lägg till en getter `handle` på `User` som returnerar t.ex. `"@anna"`, och en
+   getter `wordCount` på `Post` som räknar orden i `body`.
+3. I `main`: gör om JSON-listorna till objekt och skriv ut
+   - titlarna på alla inlägg av användare 1,
+   - hur många inlägg varje användare har skrivit, som en `Map<int, int>`
+     (t.ex. med `fold`),
+   - inlägget med flest ord,
+   - varje inlägg som `"Anna Lind (@anna): Första fikat på nya kontoret"`. Tips:
+     bygg en `Map<int, User>` först, så att du kan slå upp författaren via `userId`.
 
 ### Övning 1.2 – Null safety
 
@@ -43,61 +62,70 @@ Rätta följande kod så att den kompilerar **utan** att använda `!`:
 
 ```dart
 class User {
-  User({required this.name, this.apartmentNumber});
+  User({required this.name, this.website});
   final String name;
-  final String? apartmentNumber;
+  final String? website;
 }
 
-String doorSign(User user) {
-  return '${user.name} – lgh ${user.apartmentNumber.toUpperCase()}';
+String profileLink(User user) {
+  return '${user.name} – https://${user.website.toLowerCase()}';
 }
 
 void main() {
-  print(doorSign(User(name: 'Anna', apartmentNumber: '1102a')));
-  print(doorSign(User(name: 'Styrelsen')));
+  print(profileLink(User(name: 'Anna', website: 'Anna.Example.com')));
+  print(profileLink(User(name: 'Bo')));
 }
 ```
 
-Om lägenhetsnummer saknas ska det stå `"Styrelsen – ingen lägenhet"`.
+Om webbplats saknas ska det stå `"Bo – ingen webbplats"`.
 
-### Övning 1.3 – Roller och switch
+### Övning 1.3 – Flödesfilter, switch och records
 
-Skapa en enhanced enum `Role` med värdena `member`, `board` och `admin`, och en
-svensk etikett för varje. Skriv sedan en funktion med ett `switch`-*uttryck*:
+1. Skapa en enhanced enum `FeedFilter` med värdena `all`, `following` och `mine`,
+   och en svensk etikett för varje ("Alla", "Följer", "Mina").
+2. Skriv en funktion med ett `switch`-*uttryck* som ger texten som visas när
+   flödet är tomt:
 
-```dart
-int maxActiveBookings(Role role) => switch (role) { ... };
-```
+   ```dart
+   String emptyMessage(FeedFilter filter) => switch (filter) { ... };
+   ```
 
-som returnerar 2 för medlemmar, 5 för styrelsen och 99 för admin. Testa att ta bort
-ett av fallen. Vilket fel får du?
+   Till exempel "Inga inlägg ännu", "Du följer ingen än – hitta någon att följa!"
+   och "Du har inte skrivit något än". Testa att ta bort ett av fallen. Vilket fel
+   får du?
+3. Skriv en funktion `(int likes, int comments) summera(List<(int, int)> inlagg)`
+   som summerar gillningar och kommentarer för en lista av inlägg. Anropa den med
+   `[(12, 3), (4, 0), (7, 2)]` och destrukturera resultatet i `main`.
 
 ### Övning 1.4 – Layout från skiss
 
-Bygg följande skärm med `Scaffold`, `Card`, `Row`, `Column`, `Expanded`, `Icon` och
-`Text`. Använd `ColorScheme.fromSeed` med valfri färg.
+Bygg följande profilskärm med `Scaffold`, `Card`, `Row`, `Column`, `Expanded`,
+`CircleAvatar`, `Icon` och `Text`. Använd `ColorScheme.fromSeed` med valfri färg.
 
 ```
 ┌────────────────────────────────────────┐
-│ Brf Solgläntan                     ⚙   │ ← AppBar med actions
+│ @anna                              ⚙   │ ← AppBar med actions
 ├────────────────────────────────────────┤
-│ Hej Anna!                              │ ← headlineSmall
-│ Lägenhet 1102                          │ ← bodyMedium, dämpad färg
+│                 (AL)                   │ ← CircleAvatar med initialer
+│              Anna Lind                 │ ← titleLarge
+│    Utvecklare i Malmö. Gillar fika.    │ ← bodyMedium, dämpad färg
 │                                        │
-│ ┌──────────────────┐┌────────────────┐ │
-│ │ 🧺               ││ 🎉             │ │ ← två kort bredvid varandra,
-│ │ Tvättstuga       ││ Festlokal      │ │   lika breda (Expanded)
-│ │ Nästa: tis 08:00 ││ Ingen bokning  │ │
-│ └──────────────────┘└────────────────┘ │
+│     12          128          87        │ ← tre lika breda kolumner
+│   Inlägg      Följare      Följer      │   (Expanded)
 │                                        │
-│ Senaste anslag                         │ ← titleMedium
+│ Inlägg                                 │ ← titleMedium
 │ ┌────────────────────────────────────┐ │
-│ │ 📢 Vattenavstängning tisdag     ›  │ │ ← ListTile i Card
-│ │    Vattnet stängs av 08–12 ...     │ │
+│ │ (AL) Anna Lind · @anna · 5 min     │ │ ← liten avatar + en rad text
+│ │ Första fikat på nya kontoret       │ │ ← titel
+│ │ Kanelbullar till alla som kommer   │ │ ← text, max två rader med …
+│ │ före nio! Ta med egen mugg, vi ... │ │
+│ │ ♡ 12   💬 3                        │ │ ← ikoner med siffror
 │ └────────────────────────────────────┘ │
 │ ┌────────────────────────────────────┐ │
-│ │ 📢 Vårstädning 12 april         ›  │ │
-│ │    Samling på gården kl 10 ...     │ │
+│ │ (AL) Anna Lind · @anna · 2 d       │ │
+│ │ Tips: Flutter DevTools             │ │
+│ │ Widget Inspector visar ...         │ │
+│ │ ♡ 4    💬 0                        │ │
 │ └────────────────────────────────────┘ │
 └────────────────────────────────────────┘
 ```
@@ -105,100 +133,125 @@ Bygg följande skärm med `Scaffold`, `Card`, `Row`, `Column`, `Expanded`, `Icon
 Krav:
 
 - Skärmen ska gå att scrolla om den inte får plats (testa i liggande läge).
-- Långa anslagstexter ska kortas med `…` (max en rad).
+- Långa inläggstexter ska kortas med `…` (max två rader).
+- Initialerna ska räknas ut med en funktion `initials('Anna Lind')`, inte skrivas
+  för hand.
 - Inga hårdkodade färger: använd `Theme.of(context)`.
 
 ---
 
 ## Nivå 2
 
-### Övning 2.1 – Från räknare till bokningsformulär
+### Övning 2.1 – Gilla-knapp med state
 
-Utgå från räknarappen som `flutter create` skapar.
+1. Bygg en `StatefulWidget` `LikeButton(initialCount:, initiallyLiked:)` som visar
+   ett hjärta och en siffra. Ett tryck växlar mellan gillad (fyllt rött hjärta,
+   siffran + 1) och inte gillad (tomt hjärta, siffran − 1). Siffran får aldrig bli
+   negativ.
+2. Visa tre inlägg i en lista med var sin `LikeButton`.
+3. Lägg till texten "Du gillar X inlägg" i `AppBar`. Märker du att det inte går så
+   länge varje knapp har sitt eget state? **Lyft upp state**: gör `LikeButton`
+   stateless (`liked`, `count`, `onPressed`) och låt skärmen äga en `List<Post>`
+   som uppdateras med `copyWith`.
+4. Fundera: vad hade hänt med de *stateful* knapparna från steg 1 om ett nytt
+   inlägg lades in överst i listan och du inte använde keys?
 
-1. Byt ut räknaren mot en `HoursPicker`: knappar för − och +, minst 1 och max 4 timmar.
-   −-knappen ska vara inaktiverad vid 1 och +-knappen vid 4.
-2. Lägg till ett `Form` med:
-   - ett `TextFormField` för **namn** (obligatoriskt, minst 2 tecken),
-   - ett `TextFormField` för **lägenhetsnummer** (obligatoriskt, exakt 4 siffror,
-     använd `RegExp(r'^\d{4}$')`),
-   - en `DropdownButtonFormField` för **resurs** (Tvättstuga 1, Tvättstuga 2,
-     Festlokalen; obligatorisk),
-   - en datumväljare (`showDatePicker`, från idag och högst 14 dagar fram).
-3. När användaren trycker på "Boka" och allt är giltigt: visa en `SnackBar` med en
-   sammanfattning, t.ex. `"Anna (1102) bokade Tvättstuga 1 den 2026-03-14 i 2 h"`.
-4. Om datum saknas: visa ett rött felmeddelande under datumknappen (inte en SnackBar).
+### Övning 2.2 – Nytt inlägg med validering
+
+Bygg ett formulär för nya inlägg och en enkel flödesskärm som tar emot resultatet.
+
+1. Formuläret ska ha:
+   - ett `TextFormField` för **titel** (obligatorisk, 3–80 tecken),
+   - ett `TextFormField` för **text** (obligatorisk, max 280 tecken) med en
+     räknare som visar "X tecken kvar" och blir röd när färre än 20 återstår,
+   - en `DropdownButtonFormField` för **vem som får se inlägget** (Alla, Mina
+     följare, Bara jag). Inget ska vara förvalt, och man måste välja,
+   - en `SwitchListTile` "Publicera senare". När den är på visas en datumknapp
+     (`showDatePicker`, från idag och högst 7 dagar fram).
+2. Om "Publicera senare" är på men inget datum är valt: visa ett rött
+   felmeddelande under datumknappen (inte en `SnackBar`).
+3. När allt är giltigt: stäng formuläret med `Navigator.pop` och skicka tillbaka
+   ett `PostDraft`.
+4. Flödesskärmen öppnar formuläret från en `FloatingActionButton`, lägger in det
+   nya inlägget **överst** och visar en `SnackBar`: `"Publicerat: <titel>"` eller
+   `"Schemalagt till 2026-03-14"`.
 
 Kom ihåg att `dispose`:a dina controllers!
 
-### Övning 2.2 – Lista med navigation till detalj
+### Övning 2.3 – Flöde → inlägg → profil
 
-1. Skapa en lista med minst fem `Resource`-objekt (id, namn, beskrivning, maxHours,
-   active) och visa dem i en `ListView.builder` med `ResourceCard` från kapitel 02.
-2. När man trycker på ett kort ska en **detaljskärm** öppnas med `Navigator.push`.
-   Den visar namn, beskrivning och max-timmar, och har en knapp "Boka".
-3. "Boka" öppnar en dialog med en `HoursPicker` (eller `Slider`). När användaren
-   bekräftar ska detaljskärmen **stängas och returnera** antalet timmar till listan.
-4. Listan visar en `SnackBar`: `"Du bokade Festlokalen i 3 h"`.
-5. Inaktiva resurser ska synas i listan men inte gå att öppna.
+Bygg navigationen i Kvittra med `go_router` och lokal, hårdkodad data (några
+användare, inlägg och kommentarer).
 
-### Övning 2.3 – Sök och filtrera
-
-Lägg till ett sökfält överst i listan från 2.2 som filtrerar resurserna på namn
-medan man skriver, och ett `FilterChip` "Visa bara aktiva". Använd en
-`TextEditingController`. Fundera på: var ska state ligga, och vad måste `dispose`:as?
+1. Sökvägar: `/` (flödet), `/posts/:id` (ett inlägg) och `/users/:id` (en profil).
+2. Flödet listar inläggen med författarens namn. Tryck → `/posts/:id`.
+3. Inläggsskärmen visar författaren (tryck → `/users/:id`), titel och text, och en
+   knapp "Visa kommentarer (n)" som öppnar kommentarerna i en **bottom sheet**.
+4. Profilskärmen visar namn, `@användarnamn`, bio och användarens inlägg. Tryck på
+   ett inlägg → `/posts/:id`.
+5. Använd `context.push` så att man kan backa hela vägen till flödet.
+6. Ett id som inte finns eller inte är ett tal (`/posts/999`, `/users/abc`) ska ge
+   en "Hittades inte"-skärm, inte en krasch.
+7. Testa en djuplänk: sätt `initialLocation: '/posts/3'`. Finns det en tillbakapil?
+   Varför?
 
 ---
 
 ## Nivå 3
 
-### Övning 3.1 – Hämta anslag
+### Övning 3.1 – Flödet från JSONPlaceholder
 
-Bygg en anslagsskärm som hämtar riktiga data.
+Bygg Kvittras flöde med riktig data från <https://jsonplaceholder.typicode.com>.
 
-**Alternativ A – PocketBase (rekommenderas):** Starta PocketBase från modul 02 med
-collectionen `posts` (title, body, author, published, created) och några anslag.
-Gör listregeln öppen (tom) så att du slipper logga in.
+1. Modellklasserna `Post`, `Comment` och `User` (med valfria `Address` och
+   `Company`) med `fromJson` i `lib/models/`.
+2. En klass `JsonPlaceholderApi` i `lib/data/` med åtminstone `fetchPosts`,
+   `fetchUsers` och `fetchAllComments` (`GET /comments`). Statuskoder utanför
+   200-serien och nätverksfel ska ge ett eget undantag med en begriplig text.
+3. En funktion `loadFeed` som hämtar inlägg, användare och kommentarer
+   **parallellt** och kopplar ihop dem på klienten till en lista av
+   `FeedItem(post, author, commentCount)`. `commentCount` räknar du fram genom att
+   gruppera de 500 kommentarerna efter `postId`.
+4. En `FeedScreen` som visar **laddar**, **fel** (med "Försök igen") och **data**
+   (med särskild text när listan är tom). Använd en `sealed class LoadState`.
+   Varje inlägg visar författarens namn och `@användarnamn`, titel, två rader text
+   och antalet kommentarer.
+5. Dra för att uppdatera (`RefreshIndicator`).
 
-**Alternativ B – öppen JSON-källa:** Använd
-`https://jsonplaceholder.typicode.com/posts`, som returnerar en lista med objekt
-med `id` (int), `title` och `body`. Anpassa `fromJson`.
-
-Krav:
-
-1. En modellklass `Post` med `fromJson` i `lib/models/post.dart`.
-2. En `PostRepository` i `lib/repositories/` med metoden `Future<List<Post>> fetchPosts()`
-   som använder `http` (eller `pocketbase`-paketet). Felaktiga statuskoder ska ge ett
-   eget undantag.
-3. En `PostListScreen` i `lib/screens/` som visar **laddar**, **fel** (med
-   "Försök igen") och **data** (med särskild text när listan är tom). Använd antingen
-   `FutureBuilder` eller en `sealed class LoadState`.
-4. Dra för att uppdatera (`RefreshIndicator`).
-5. Tryck på ett anslag → detaljskärm med hela texten.
-
-### Övning 3.2 – Skapa anslag (PocketBase)
+### Övning 3.2 – Inlägg, profil och nytt inlägg
 
 Bygg vidare på 3.1:
 
-1. Lägg till en `FloatingActionButton` som öppnar ett formulär för nytt anslag
-   (titel obligatorisk, max 80 tecken; text obligatorisk).
-2. Spara med `POST` (eller `pb.collection('posts').create`). Visa en
-   `CircularProgressIndicator` i knappen medan anropet pågår, och inaktivera knappen
-   så att man inte kan skicka två gånger.
-3. Vid lyckat resultat: stäng formuläret, returnera det nya anslaget och lägg in
-   det **först** i listan utan att hämta om allt.
-4. Vid fel: visa felmeddelandet från PocketBase i en `SnackBar` och låt formuläret
-   vara kvar.
+1. Tryck på ett inlägg → `PostDetailScreen(postId:)` som hämtar inlägget och dess
+   kommentarer (`/posts/{id}` och `/comments?postId={id}`) parallellt, och sedan
+   författaren (`/users/{userId}`). Visa inlägget och kommentarerna under.
+2. Tryck på en författare → `ProfileScreen(userId:)` som hämtar användaren och
+   hens inlägg (`/users/{id}` och `/users/{id}/posts`). Visa namn, `@användarnamn`,
+   webbplats, stad, företag och antal inlägg, och inläggen under.
+3. En `FloatingActionButton` i flödet öppnar ett formulär för nytt inlägg (titel
+   obligatorisk, text obligatorisk). Spara med `POST /posts` (som användare 1).
+   Visa en `CircularProgressIndicator` i knappen medan anropet pågår, och
+   inaktivera knappen så att man inte kan skicka två gånger.
+4. Vid lyckat resultat: stäng formuläret, returnera det nya inlägget och lägg in
+   det **först** i flödet utan att hämta om allt. Visa en `SnackBar` med id:t.
+5. Vid fel: visa felmeddelandet i en `SnackBar` och låt formuläret vara kvar.
+6. Svara på frågorna: Vilket id får ditt nya inlägg? Vad händer med det när du drar
+   för att uppdatera? Vad händer om du skapar två inlägg och använder
+   `ValueKey(post.id)` i listan?
 
 ### Övning 3.3 – Tester
 
 Skriv:
 
-1. enhetstester för `Post.fromJson` (komplett JSON och JSON med fält som saknas),
-2. ett enhetstest för `PostRepository.fetchPosts` med `MockClient` som kontrollerar
-   att en 500-status ger ditt eget undantag,
-3. ett widgettest för formuläret i 3.2 som kontrollerar att felmeddelandet visas när
-   titeln är tom.
+1. enhetstester för `User.fromJson` (med och utan `address`/`company`),
+2. enhetstester för `JsonPlaceholderApi` med `MockClient`: att `fetchPosts` anropar
+   `/posts`, att en 500-status ger ditt eget undantag och att `createPost` godtar
+   `201`,
+3. ett test för `loadFeed` med en `MockClient` som svarar olika beroende på
+   `request.url.path`, och som kontrollerar att `commentCount` blir rätt och att
+   inlägg utan känd författare hoppas över,
+4. ett widgettest för formuläret i 3.2 som kontrollerar att felmeddelandet visas
+   när titeln är tom, och att inget nätverksanrop görs då.
 
 ### Reflektion (inför modul 04)
 
@@ -206,8 +259,11 @@ Gå igenom din kod från nivå 2 och 3 och räkna:
 
 - hur många `StatefulWidget`-klasser du har (två klasser vardera),
 - hur många `dispose`-metoder du har skrivit, och om du har glömt någon,
-- hur många gånger du skrev `if (!mounted) return;`,
-- hur många gånger du skrev `setState(() {})` bara för att "tvinga fram" en ombyggnad.
+- hur många gånger du skrev `if (!mounted) return;` eller `context.mounted`,
+- hur många gånger du skrev `setState(() {})` eller `setState(() => _state = const Loading())`
+  bara för att "tvinga fram" en ombyggnad,
+- hur många gånger du upprepade mönstret "`LoadState`-fält + `initState` som anropar
+  `_load` + `try`/`catch` + `mounted`".
 
 Spara siffrorna. I [modul 04](../04-flutter-compositions/README.md) skriver du om
 en av skärmarna med `flutter_compositions` och jämför.

@@ -6,30 +6,28 @@ själv först! Det finns ofta flera korrekta sätt att skriva samma fråga.
 
 ## Förberedelser
 
-1. Skapa (eller återställ) exempeldatabasen:
-
-   ```bash
-   sqlite3 forening.db < seed.sql
-   sqlite3 forening.db
-   ```
-
-2. Slå på det här i början av varje session:
-
-   ```text
-   .headers on
-   .mode box
-   PRAGMA foreign_keys = ON;
-   ```
-
-3. **Vi låtsas att dagens datum är måndag 12 oktober 2026.** Skriv därför
-   `'2026-10-12 00:00:00'` i stället för `datetime('now')` när en uppgift säger
-   "i dag" eller "kommande". Då får alla samma svar.
-
-💡 **Tips:** Har du förstört datan? Kör `.read seed.sql` inifrån `sqlite3`
-(eller kommandot i steg 1) så är allt som nytt igen.
+1. Du har installerat PocketBase och byggt Kvittra med exempeldatan, inklusive
+   steg 2d där inläggen fick sina datum (se [modulens README](README.md)).
+   Kontrollera antalet: **6 users, 10 posts, 13 comments, 19 likes, 10 follows**.
+2. **`SELECT`-övningar löser du som View collections:** *New collection* → typ
+   **View** → skriv frågan i *Select query* → *Create*. Döp dem efter övningen,
+   t.ex. `ovning_2_3`. Kom ihåg:
+   - frågan måste ha en kolumn `id` som är unik per rad – använd t.ex. `p.id`
+     eller `u.id`, eller `(ROW_NUMBER() OVER ()) AS id` när inget naturligt id
+     finns,
+   - din `ORDER BY` bestämmer ordningen i listan.
+3. **Övningar som ändrar data** gör du i Dashboard eller i **Settings → SQL
+   console**. I SQL console: avsluta alltid `BEGIN` med `COMMIT` eller
+   `ROLLBACK` i *samma* körning (se varningen i README).
+4. **Vi låtsas att dagens datum är måndag 12 oktober 2026.** "Senaste veckan"
+   betyder därför `created >= '2026-10-05'`. Skriv inte `datetime('now')` – då
+   får du ett annat svar än alla andra.
+5. Använd **användarnamn och titlar** i dina frågor, inte id:n – dina id:n är
+   slumpade och ser annorlunda ut än någon annans.
 
 💡 **Tips:** Svaret står ofta i uppgiften som "(förväntat: …)". Använd det för att
-kontrollera dig själv.
+kontrollera dig själv. Får du ett annat svar – kontrollera först att datan är
+inmatad exakt som i README.
 
 ---
 
@@ -37,111 +35,150 @@ kontrollera dig själv.
 
 ### Nivå 1 – SELECT, WHERE, ORDER BY
 
-**1.1** Visa alla resurser som är aktiva. *(förväntat: 3 rader)*
+**1.1** Visa användarnamn och webbplats för alla användare som **har** en
+webbplats. *(förväntat: 2 rader)*
 
-**1.2** Visa nummer och våning för alla lägenheter på våning 2 eller högre,
-sorterade på lägenhetsnummer. *(förväntat: 4 rader)*
+**1.2** Visa användarnamnen på alla som **inte** har skrivit någon bio.
+*(förväntat: evaek och johan)* Varför fungerar inte `bio IS NULL` i PocketBase?
 
-**1.3** Hur många medlemmar finns det i föreningen? *(förväntat: 10)*
+**1.3** Hur många inlägg finns det totalt? Gör en view som returnerar en enda rad.
+*(förväntat: 10)*
 
-**1.4** Visa id, medlem (id) och anteckning för alla bokningar som **har** en
-anteckning. *(förväntat: 4 rader)*
+**1.4** Visa titel och datum för alla inlägg skrivna av `anna`, nyaste först.
+*(förväntat: 2 rader, "Morgondimma" först)* Du behöver en `JOIN` mot `users`
+eller en underfråga för att hitta Annas id.
 
-**1.5** Visa titel och datum för alla **publicerade** anslag, nyaste först.
-*(förväntat: 5 rader, "Cykelrensning" först)*
+**1.5** Visa alla inlägg som handlar om kaffe, dvs. där ordet "kaffe" finns i
+titeln **eller** i texten. Använd `LIKE`. *(förväntat: 2 rader)*
 
-**1.6** Vilken är föreningens största lägenhet? Visa nummer och storlek. Lös det
-med `ORDER BY` och `LIMIT`.
+**1.6** Flödet visar 4 inlägg per sida, nyaste först. Vilka inlägg syns på
+**sida 2**? Använd `LIMIT` och `OFFSET`.
+*(förväntat: "Kaffe efter löprundan" först, "Brädspelskväll på fredag" sist)*
 
-**1.7** Visa namn och e-post för alla medlemmar vars e-postadress innehåller
-bokstäverna `an` (i följd). Använd `LIKE`. *(förväntat: 3 rader)*
+**1.7** Visa titlarna på alla inlägg från **oktober 2026**, äldst först.
+*(förväntat: 4 rader)* Varför är `created BETWEEN '2026-10-01' AND '2026-10-31'`
+en farlig lösning?
 
-**1.8** Visa namnen på alla medlemmar som **inte** har någon lägenhet kopplad.
+**1.8** Visa texten i alla kommentarer på inlägget "Halvmaran avklarad", i den
+ordning de skrevs. Lös det med en underfråga i `WHERE`. *(förväntat: 3 rader)*
 
-**1.9 – Ändra data.** Gör följande i tur och ordning, och kontrollera efter varje
-steg med en `SELECT`:
+**1.9 – Ändra data.** Gör följande i tur och ordning och kontrollera efter varje
+steg:
 
-1. Lägg till dig själv som medlem i lägenhet `1102` (id 4). Hitta på en e-post.
-2. Ändra din roll till `'board'`.
-3. Försök ändra din roll till `'kung'`. Vad händer, och varför?
-4. Ta bort dig själv igen.
+1. Skapa dig själv som användare i Dashboard (`users` → *New record*). Hitta på
+   ett användarnamn och använd en e-post som slutar på `@example.com`.
+2. Skriv ett inlägg i ditt namn (`posts` → *New record*).
+3. Ändra din bio med en `UPDATE` i SQL console. Kontrollera i Dashboard.
+4. Försök ändra ditt användarnamn till `anna` i Dashboard. Vad händer, och varför?
+5. Ta bort dig själv i Dashboard. Vad hände med ditt inlägg?
+6. Kontrollera att du är tillbaka på 6 users och 10 posts.
 
-**1.10** Försök lägga in en bokning som slutar innan den börjar. Vilket fel får
-du? Försök sedan lägga in en bokning för `user = 42`. Vilket fel får du nu?
+**1.10 – Regler.** Testa vad som skyddar Kvittra, och förklara *var* regeln
+finns (i databasen eller i PocketBase):
+
+1. Skapa en `follows`-record där `dahl` följer `cissi` (det gör han redan).
+2. Skapa ett inlägg utan titel.
+3. Skapa en `follows`-record där `johan` följer `johan`. Går det? Vad skulle
+   behövas för att stoppa det?
+4. Lägg in en kommentar på ett inlägg som inte finns, med SQL console:
+   `INSERT INTO comments (post, author, body, created) VALUES ('finnsinte12345', (SELECT id FROM users WHERE username = 'anna'), 'Hallå?', '2026-10-12 12:00:00.000Z');`
+   Varför går det? Ta bort kommentaren igen, och ta även bort johans
+   självföljning från punkt 3.
 
 ### Nivå 2 – Aggregat, GROUP BY, JOIN
 
-**2.1** Hur många medlemmar finns det per roll? Sortera med vanligaste rollen
-först. *(förväntat: member 7, board 2, admin 1)*
+**2.1** Hur många kommentarer har varje användare skrivit? Användare som inte
+kommenterat något ska också visas, med `0`. Sortera med flest först.
+*(förväntat: 6 rader, anna 5 överst, johan 0 sist)*
 
-**2.2** Visa varje lägenhetsnummer och hur många medlemmar som bor där. Lägenheter
-utan medlemmar ska också visas, med `0`. *(förväntat: 8 rader)*
+**2.2** Visa varje inlägg och hur många gillningar det har, mest gillat först.
+Inlägg utan gillningar ska visas med `0`.
+*(förväntat: 10 rader, "Halvmaran avklarad" 4 överst, "Hej Kvittra!" 0 sist)*
 
-**2.3** Visa veckans schema: alla bokningar som startar mellan måndag 12 oktober
-och söndag 18 oktober (inklusive), med starttid, sluttid, **resursens namn** och
-**medlemmens namn**, sorterade på starttid. *(förväntat: 11 rader)*
+**2.3 – Annas flöde.** Visa alla inlägg från personer som `anna` följer, med
+författarens användarnamn, titel och datum, nyaste först. *(förväntat: 5 rader)*
 
-**2.4** Visa alla publicerade anslag med titel, författarens namn och
-författarens lägenhetsnummer.
+**2.4 – Vem gillar mina inlägg?** Visa vilka som har gillat **Annas** inlägg och
+hur många av hennes inlägg var och en har gillat.
+*(förväntat: bertil 2, cissi 2, dahl 1)*
 
-**2.5** Hur många timmar har varje resurs bokats totalt? Visa resursens namn och
-antal timmar, mest bokad först. *(Tips: `unixepoch()`, se kapitel 4.6.)*
-*(förväntat: Festlokalen 24, Tvättstuga 1 21, Tvättstuga 2 15)*
+**2.5 – Mest aktiva kommentatorer.** Visa användare som har skrivit **minst 2**
+kommentarer, flest först. Använd `HAVING`. *(förväntat: 4 rader)*
 
-**2.6** Vilka resurser har aldrig bokats? Lös det på två sätt: med `LEFT JOIN`
-och med `NOT EXISTS`.
+**2.6** Vilka inlägg har ingen kommentar alls? Lös det på två sätt: med
+`LEFT JOIN` och med `NOT EXISTS`. *(förväntat: 2 rader)*
 
-**2.7** Vilka medlemmar har bokat festlokalen? Visa varje namn bara en gång.
-*(förväntat: 3 namn)*
+**2.7** Vilka användare har **minst 3 följare**? *(förväntat: anna 4, cissi 3)*
 
-**2.8** Visa per våning antal lägenheter och total yta, men bara för våningar där
-den totala ytan är större än 120 kvm. *(förväntat: våning 2 och 3)*
+**2.8 – Veckans topplista.** Visa de 3 mest gillade inläggen från den senaste
+veckan (skapade från och med 5 oktober 2026), med antal gillningar.
+*(förväntat: "Halvmaran avklarad" 4, "Brädspelskväll igen?" 3, "Morgondimma" 2)*
+Varför är "Kanelbullens dag" inte med?
 
-**2.9** Vilka medlemmar har bokat **både** Tvättstuga 1 och Tvättstuga 2?
-*(Tips: `GROUP BY` + `HAVING COUNT(DISTINCT ...)`.)*
+**2.9** Har någon gillat sitt **eget** inlägg? Visa användarnamn och titel.
+*(förväntat: 1 rad)*
 
-**2.10** Vilka är de tre medlemmar som har bokat flest timmar totalt?
+**2.10** Hur många gillningar har varje användare **fått** totalt (på alla sina
+inlägg)? Alla användare ska vara med.
+*(förväntat: cissi 7 överst; evaek och johan 0)*
 
 ### Nivå 3 – Underfrågor, självjoin, vyer, transaktioner
 
-**3.1 – Dubbelbokningar.** Skriv en fråga som hittar alla par av bokningar på
-**samma resurs** vars tider **överlappar**. Varje par ska bara visas en gång.
-Seed-datan innehåller inga överlapp, så testa genom att lägga in två bokningar som
-krockar, kör frågan, och ta bort dem igen. *(Tips: joina `bookings` med sig själv.)*
+**3.1 – Ömsesidiga följare.** Visa alla par av användare som följer **varandra**.
+Varje par ska bara visas en gång (inte både anna–bertil och bertil–anna).
+*(Tips: joina `follows` med sig själv.)* *(förväntat: 3 par)*
 
-**3.2 – Lediga pass.** Tvättstuga 1 har passen 07–10, 10–13, 13–16, 16–19 och
-19–22. Skriv en fråga som visar vilka pass som är **lediga** måndag 12 oktober.
-*(Tips: skapa passen med `WITH slots(slot_start, slot_end) AS (VALUES (...), ...)`
-och använd `NOT EXISTS` med överlappsvillkoret.)* *(förväntat: 3 lediga pass)*
+**3.2 – Förslag på vilka du kan följa.** Hitta personer som de Anna följer i sin
+tur följer – men som Anna inte redan följer (och inte Anna själv). Visa hur många
+av Annas kontakter som följer var och en, flest först.
+*(förväntat: dahl, via 2 av Annas kontakter)*
 
-**3.3 – Regelbrott.** Hitta alla bokningar som är längre än resursens
-`max_hours`. *(förväntat i seed: 0 rader – testa med en egen felaktig bokning)*
+**3.3** Vilka inlägg har **fler gillningar än genomsnittet**? Genomsnittet är
+antal gillningar delat med antal inlägg (även de som inte har några gillningar).
+*(förväntat: genomsnittet är 1,9 och 6 inlägg ligger över)*
 
-**3.4 – Nästa bokning.** Visa varje medlems **nästa** kommande bokning
-(starttid från och med i dag). Medlemmar utan kommande bokning ska inte vara med.
+**3.4 – Senaste inlägget.** Visa varje användares **senaste** inlägg (titel och
+datum). Användare utan inlägg ska inte vara med. *(Tips: korrelerad underfråga
+med `MAX`.)* *(förväntat: 5 rader)*
 
-**3.5 – Statistikvy.** Skapa en vy `member_stats` med kolumnerna `id`, `name`,
-`apartment_number`, `bookings_count` och `booked_hours`. Alla medlemmar ska vara
-med, även de utan bokningar och utan lägenhet (då med `0` timmar).
-Använd vyn för att lista medlemmarna sorterade på bokade timmar.
+**3.5 – Statistikvy.** Skapa en View collection `user_stats` med kolumnerna
+`username`, `posts_count`, `comments_count`, `followers_count`,
+`following_count` och `likes_received`. Alla användare ska vara med.
 
-**3.6 – Aktivitet per lägenhet.** Hur många bokningar har gjorts per lägenhet
-(alla medlemmar i lägenheten räknas ihop)? Visa alla lägenheter, även de utan
-bokningar. *(förväntat: 1101 överst med 6)*
+Skriv först en version med `LEFT JOIN` mot både `posts` och `follows` och
+`COUNT`. Varför blir Annas siffror fel (8 och 8 i stället för 2 och 4)? Skriv
+sedan en korrekt version. *(förväntat för cissi: 3, 3, 3, 2, 7)*
 
-**3.7 – Säker bokning.** Skriv en transaktion där Fredrik (id 6) bokar
-festlokalen lördag 31 oktober 12:00–20:00. Gör först en kontroll att tiden är
-ledig, och sedan insättningen – i *samma* transaktion. Vilken sorts `BEGIN` ska
-du använda i SQLite och varför?
+**3.6 – Envägsföljare.** Vilka följer Anna, utan att Anna följer dem tillbaka?
+*(förväntat: evaek och johan)*
 
-**3.8 – Fast passindelning.** Skapa ett villkor som gör det **omöjligt** att
-lägga in två bokningar på samma resurs med samma starttid. Testa att det
-fungerar. Varför räcker inte detta som skydd för festlokalen, där man kan boka
-fria tider?
+**3.7 – Gilla med räknare (SQL console).** Nu provar vi den denormaliserade
+räknaren från kapitel 3 och 4.
 
-**3.9 – Kaskader.** Förutsäg *innan* du kör: vad händer med bokningar och anslag
-om du tar bort Anna (id 1)? Och om du tar bort lägenhet 3 (1101)? Kör sedan
-inuti en transaktion, kontrollera, och avsluta med `ROLLBACK`.
+1. Lägg till ett fält `likes_count` av typen **Number** (Min 0) på `posts` i
+   Dashboard.
+2. Fyll i räknaren för alla inlägg med **en** `UPDATE` och en korrelerad
+   underfråga.
+3. Skriv en View collection `likes_check` som visar alla inlägg där
+   `likes_count` **inte** stämmer med det faktiska antalet gillningar.
+   *(förväntat: 0 rader)*
+4. Låt `johan` gilla "Morgondimma": en `INSERT` i `likes` och en `UPDATE` av
+   räknaren, inom `BEGIN ... COMMIT`. Kontrollera `likes_check` igen.
+5. Kör samma två satser en gång till, men **utan** `BEGIN`/`COMMIT`. Vilket fel
+   får du? Har räknaren ändrats? Varför ska du inte ha `BEGIN` med här?
+6. Städa: ta bort johans gillning och minska räknaren – i samma körning. Ta
+   sedan bort fältet `likes_count` i Dashboard.
+
+**3.8 – Idempotent gilla.** Skriv en `INSERT` som låter `johan` gilla
+"Hej Kvittra!" och som **inte** ger fel om gillningen redan finns. Lägg till
+`SELECT changes() AS andrade;` sist i samma körning. Kör den två gånger. Vad
+visar `andrade` första och andra gången? Ta bort gillningen efteråt.
+
+**3.9 – Kaskader.** Förutsäg *innan* du kör: om `bertil` tas bort i Dashboard,
+hur många rader försvinner från `posts`, `comments`, `likes` och `follows`?
+Skriv sedan en View collection som räknar det (en rad, fyra kolumner) – utan att
+ta bort något. Vad hade hänt om du i stället hade kört
+`DELETE FROM users WHERE username = 'bertil';` i SQL console?
 
 ---
 
@@ -149,22 +186,23 @@ inuti en transaktion, kontrollera, och avsluta med `ROLLBACK`.
 
 Svara med egna ord. Det finns inte alltid ett enda rätt svar – motivera!
 
-**B.1** Föreningen tar ut en avgift på 200 kr för festlokalen. När en medlem bokar
-ska två saker hända: en rad läggs in i `bookings` och en rad i en tabell `charges`
-(avgifter). Appen gör två separata API-anrop, och det andra misslyckas på grund av
-dålig mobiltäckning. Vilken ACID-egenskap har appen *inte* fått hjälp av? Hur
-borde det lösas?
+**B.1** När Anna publicerar ett inlägg ska två saker hända: inlägget sparas och
+alla hennes följare får en rad i en tabell `notifications`. Appen gör två
+separata API-anrop, och det andra misslyckas på grund av dålig mobiltäckning.
+Vilken ACID-egenskap har appen *inte* fått hjälp av? Hur borde det lösas?
 
-**B.2** Bertil och Eva bokar samma tvättpass exakt samtidigt (se kapitel 3.3).
-Rita en tidslinje som visar hur det kan bli en dubbelbokning. Föreslå två olika
-lösningar och beskriv för- och nackdelar med var och en.
+**B.2** Johan trycker två gånger snabbt på "Gilla". Appen kontrollerar först med
+en `SELECT` om han redan gillat, och gör sedan en `INSERT`. Rita en tidslinje som
+visar hur det kan bli två gillningar – i en databas *utan* unikt index. Föreslå två
+olika lösningar och beskriv för- och nackdelar med var och en.
 
-**B.3** Föreningens app visar "Lediga platser i bastun: 4". Två appar läser värdet
-4 samtidigt och skriver tillbaka 3. Vad heter problemet? Skriv en SQL-sats som
-gör minskningen säkert. Hur kan man dessutom förhindra att värdet blir negativt?
+**B.3** Kvittra sparar `likes_count` på varje inlägg. Två appar läser värdet 4
+samtidigt och skriver tillbaka 5. Vad heter problemet? Skriv en SQL-sats som
+ökar räknaren säkert. Hur kan man dessutom förhindra att värdet blir negativt
+när gillningar tas bort? Och – behövs räknaren alls?
 
-**B.4** Strömmen går på servern direkt efter att PocketBase svarat "Bokning
-skapad" till appen. När servern startar igen – finns bokningen? Vilken
+**B.4** Strömmen går på servern direkt efter att PocketBase svarat "Inlägget är
+publicerat" till appen. När servern startar igen – finns inlägget? Vilken
 ACID-egenskap handlar det om, och vilken mekanism i SQLite gör det möjligt?
 
 **B.5** En utvecklare tar backup genom att kopiera `pb_data/data.db` varje natt
@@ -175,14 +213,14 @@ non-repeatable read, phantom read, lost update):
 
 | # | Scenario |
 |---|----------|
-| a | En rapport räknar bokningar i oktober två gånger i samma transaktion och får olika antal, eftersom någon bokade emellan. |
-| b | Två styrelseledamöter redigerar samma anslag samtidigt. Den som sparar sist skriver över den andras ändringar. |
-| c | En transaktion läser att bastun är stängd, men den som stängde den gör `ROLLBACK`. |
-| d | En transaktion läser festlokalens `max_hours` två gånger och får 12 och sedan 6. |
+| a | Flödet visar rubriken "3 kommentarer", men listan under visar 4, eftersom någon kommenterade mellan de två frågorna. |
+| b | Anna redigerar sitt inlägg på mobilen och på datorn samtidigt. Den som sparar sist skriver över den andras ändringar. |
+| c | En notistjänst läser ett nytt inlägg och skickar push-notiser, men författaren gör `ROLLBACK` – inlägget publicerades aldrig. |
+| d | En transaktion läser Cissis användarnamn två gånger och får `cissi` och sedan `cissi_springer`. |
 
 ---
 
-## Del C – Designuppgift
+## Del C – Designuppgifter
 
 Välj **en** av uppgifterna (eller gör båda!). Redovisa:
 
@@ -197,36 +235,45 @@ Välj **en** av uppgifterna (eller gör båda!). Redovisa:
 
 Bygg vidare på de befintliga tabellerna – skapa inte en ny `users`-tabell!
 
-### C.1 – Styrelsemöten med protokoll och närvaro
+💡 **Tips:** Vill du testa din design på riktigt? Bygg tabellerna som collections i
+PocketBase (relationer, *Required*, unika index) och skriv frågorna som View
+collections. Regler som inte går att uttrycka i Dashboard skriver du som kommentar
+– du lär dig API-regler och hooks i modul 02.
 
-> *"Styrelsen har möten ungefär en gång i månaden. Varje möte har ett datum, en
-> plats och en typ (ordinarie styrelsemöte, extra möte eller föreningsstämma).
-> Vid varje möte förs ett protokoll med numrerade paragrafer (§1, §2, …); varje
-> paragraf har en rubrik och en text och kan ha ett beslut. Vi vill kunna se vilka
-> medlemmar som var kallade och vilka som faktiskt närvarade, och vem som var
-> ordförande respektive sekreterare på mötet. Ett protokoll ska kunna justeras av
-> två justerare, och vi vill veta när det justerades."*
+### C.1 – Direktmeddelanden
+
+> *"Användare ska kunna skicka privata meddelanden till varandra. En
+> **konversation** kan vara mellan två personer eller en grupp (då har den ett
+> namn). Varje meddelande har en avsändare, en text och en tidpunkt, och man ska
+> kunna redigera eller ta bort sina egna meddelanden. Vi vill visa hur många
+> **olästa** meddelanden man har i varje konversation, och i
+> gruppkonversationer vill vi kunna visa 'Läst av anna, cissi' under ett
+> meddelande. Man ska kunna lämna en konversation."*
 
 Tänk särskilt på:
 
 - Vad är N:M här, och behöver kopplingen egna attribut?
-- Hur säkerställer du att samma paragrafnummer inte finns två gånger på samma möte?
-- Ska ordförande/sekreterare vara kolumner på mötet eller en roll i närvarotabellen?
-- Hur skriver du en fråga för "närvaroprocent per styrelseledamot under 2026"?
+- Hur vet du att avsändaren av ett meddelande faktiskt är med i konversationen?
+- Läskvitton: en rad per (meddelande, läsare) – eller en tidpunkt "läst fram
+  till" per deltagare? För- och nackdelar?
+- Hur skriver du frågan "antal olästa meddelanden per konversation för anna"?
 
-### C.2 – Kö till parkeringsplatser
+### C.2 – Album och foton
 
-> *"Föreningen har 12 parkeringsplatser, några med elbilsladdare. Varje plats har
-> ett nummer och en månadsavgift. En plats hyrs ut till en lägenhet i taget, och
-> vi vill spara historik över vem som hyrt vilken plats och när (från–till). Den
-> som vill ha plats ställer sig i en kö; kön gäller per lägenhet och ordningen
-> bestäms av datumet man ställde sig i kön. Man kan önska laddplats. När man får
-> en plats eller ångrar sig lämnar man kön."*
+> *"Användare ska kunna skapa **album** med en titel och en beskrivning och ladda
+> upp **foton** till dem (inspirerat av JSONPlaceholders `/albums` och
+> `/photos`). Ett foto har en titel, en bild och en liten miniatyrbild. Fotona i
+> ett album ska ha en bestämd ordning som ägaren kan ändra, och ett av fotona kan
+> väljas som albumets **omslagsbild**. Man ska kunna **tagga** användare som syns
+> på ett foto. Ett album kan vara synligt för alla, bara för följare eller bara
+> för ägaren."*
 
 Tänk särskilt på:
 
-- Hyr *lägenheten* eller *medlemmen* platsen? Vad händer när någon flyttar?
-- Hur ser du till att en plats inte är uthyrd till två lägenheter samtidigt?
-- Ska köplatsen ("nummer 3 i kön") sparas, eller räknas fram? Varför?
-- Hur lagrar du månadsavgiften?
-- Skriv frågan "visa kön i ordning, med lägenhetsnummer och placering".
+- Var och hur lagrar du själva bilderna?
+- Hur ser du till att två foton i samma album inte har samma plats i ordningen?
+- Omslagsbilden: en kolumn i `albums` som pekar på `photos` – samtidigt som
+  `photos` pekar på `albums`. Vilket problem uppstår, och i vilken ordning måste
+  du lägga in data?
+- Hur lagrar du synligheten?
+- Skriv frågan "visa varje album med ägare, antal foton och omslagsbildens titel".

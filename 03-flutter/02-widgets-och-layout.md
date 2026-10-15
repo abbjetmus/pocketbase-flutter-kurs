@@ -13,20 +13,20 @@ Widgets placeras i varandra och bildar ett **widgetträd**:
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const ForeningApp());
+  runApp(const KvittraApp());
 }
 
-class ForeningApp extends StatelessWidget {
-  const ForeningApp({super.key});
+class KvittraApp extends StatelessWidget {
+  const KvittraApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Föreningen',
+      title: 'Kvittra',
       home: Scaffold(
-        appBar: AppBar(title: const Text('Föreningen')),
+        appBar: AppBar(title: const Text('Kvittra')),
         body: const Center(
-          child: Text('Välkommen hem!'),
+          child: Text('Välkommen till Kvittra!'),
         ),
       ),
     );
@@ -37,13 +37,13 @@ class ForeningApp extends StatelessWidget {
 Trädet ser ut så här:
 
 ```
-ForeningApp
+KvittraApp
 └── MaterialApp
     └── Scaffold
         ├── AppBar
-        │   └── Text("Föreningen")
+        │   └── Text("Kvittra")
         └── Center
-            └── Text("Välkommen hem!")
+            └── Text("Välkommen till Kvittra!")
 ```
 
 - `runApp` tar den översta widgeten och fäster den på skärmen.
@@ -82,7 +82,7 @@ spelar `const` roll: en `const`-widget är *samma objekt* varje gång och kan ho
 ```dart
 Scaffold(
   appBar: AppBar(
-    title: const Text('Bokningar'),
+    title: const Text('Flöde'),
     actions: [
       IconButton(
         icon: const Icon(Icons.refresh),
@@ -90,10 +90,10 @@ Scaffold(
       ),
     ],
   ),
-  body: const Center(child: Text('Inga bokningar ännu')),
+  body: const Center(child: Text('Inga inlägg ännu')),
   floatingActionButton: FloatingActionButton(
     onPressed: () {},
-    child: const Icon(Icons.add),
+    child: const Icon(Icons.edit),
   ),
 )
 ```
@@ -104,13 +104,13 @@ Scaffold(
 
 ```dart
 const Text(
-  'Tvättstuga 1',
+  'Första fikat på nya kontoret',
   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
   maxLines: 1,
-  overflow: TextOverflow.ellipsis, // "Tvättstu…" om texten inte får plats
+  overflow: TextOverflow.ellipsis, // "Första fikat på…" om texten inte får plats
 )
 
-const Icon(Icons.local_laundry_service, size: 32, color: Colors.teal)
+const Icon(Icons.favorite, size: 32, color: Colors.red)
 
 Image.network('https://picsum.photos/400/200', fit: BoxFit.cover)
 Image.asset('assets/logo.png') // kräver att filen listas under flutter: assets: i pubspec.yaml
@@ -119,7 +119,7 @@ Image.asset('assets/logo.png') // kräver att filen listas under flutter: assets
 Bättre än att hårdkoda textstil är att hämta den från temat:
 
 ```dart
-Text('Festlokalen', style: Theme.of(context).textTheme.titleLarge)
+Text('Anna Lind', style: Theme.of(context).textTheme.titleLarge)
 ```
 
 ### Knappar
@@ -128,14 +128,14 @@ Material 3 har flera knapptyper. Alla tar `onPressed`. Om `onPressed` är `null`
 blir knappen inaktiverad (grå).
 
 ```dart
-FilledButton(onPressed: () {}, child: const Text('Boka'))       // huvudåtgärd
+FilledButton(onPressed: () {}, child: const Text('Följ'))          // huvudåtgärd
 OutlinedButton(onPressed: () {}, child: const Text('Avbryt'))
-TextButton(onPressed: () {}, child: const Text('Läs mer'))
-IconButton(onPressed: () {}, icon: const Icon(Icons.delete))
+TextButton(onPressed: () {}, child: const Text('Visa kommentarer'))
+IconButton(onPressed: () {}, icon: const Icon(Icons.favorite_border))
 FilledButton.icon(
   onPressed: null, // inaktiverad
-  icon: const Icon(Icons.event),
-  label: const Text('Fullbokat'),
+  icon: const Icon(Icons.send),
+  label: const Text('Publicera'),
 )
 ```
 
@@ -145,7 +145,7 @@ FilledButton.icon(
 // Padding – luft runt ett barn
 const Padding(
   padding: EdgeInsets.all(16),
-  child: Text('Anslag'),
+  child: Text('Inlägg'),
 )
 
 // SizedBox – fast storlek, eller bara mellanrum
@@ -154,15 +154,14 @@ const SizedBox(width: 100, height: 40, child: Text('Fast'))
 
 // Container – "allt-i-ett": storlek, marginaler, bakgrund, ram, rundade hörn
 Container(
-  width: 120,
-  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
   margin: const EdgeInsets.only(bottom: 8),
   decoration: BoxDecoration(
-    color: Colors.teal.shade50,
+    color: Colors.indigo.shade50,
     borderRadius: BorderRadius.circular(12),
-    border: Border.all(color: Colors.teal),
+    border: Border.all(color: Colors.indigo),
   ),
-  child: const Text('Ledig'),
+  child: const Text('#flutter'),
 )
 ```
 
@@ -177,9 +176,9 @@ viktigaste layout-widgetarna.
 ```dart
 Row(
   children: const [
-    Icon(Icons.local_laundry_service),
+    Icon(Icons.person),
     SizedBox(width: 8),
-    Text('Tvättstuga 1'),
+    Text('@anna'),
   ],
 )
 ```
@@ -199,8 +198,8 @@ Column(
   mainAxisAlignment: MainAxisAlignment.center,    // vertikalt i en Column
   crossAxisAlignment: CrossAxisAlignment.start,   // horisontellt i en Column
   children: const [
-    Text('Festlokalen'),
-    Text('Plan 1, hus A'),
+    Text('Anna Lind'),
+    Text('@anna'),
   ],
 )
 ```
@@ -228,18 +227,18 @@ ett barn **all återstående plats**:
 ```dart
 Row(
   children: [
-    const Icon(Icons.celebration),
+    const CircleAvatar(child: Text('BE')),
     const SizedBox(width: 8),
     const Expanded(
-      child: Text('Festlokalen – plan 1, hus A, med kök och 40 sittplatser'),
+      child: Text('Bo Ek – fotograf, cyklist och självutnämnd kanelbullekännare'),
     ),
-    TextButton(onPressed: () {}, child: const Text('Boka')),
+    TextButton(onPressed: () {}, child: const Text('Följ')),
   ],
 )
 ```
 
-Texten får nu exakt den plats som blir över mellan ikonen och knappen, och radbryts
-i stället för att flöda över.
+Texten får nu exakt den plats som blir över mellan avataren och knappen, och
+radbryts i stället för att flöda över.
 
 - `Expanded(flex: 2, ...)` och `Expanded(flex: 1, ...)` delar platsen 2:1.
 - `Flexible` får *ta upp till* den plats som finns, men måste inte fylla den.
@@ -248,9 +247,9 @@ i stället för att flöda över.
 ```dart
 Row(
   children: const [
-    Text('Anslag'),
-    Spacer(),          // trycker datumet till höger kant
-    Text('14 mars'),
+    Text('@anna'),
+    Spacer(),          // trycker tiden till höger kant
+    Text('2 tim'),
   ],
 )
 ```
@@ -258,18 +257,30 @@ Row(
 ## Stack
 
 `Stack` lägger barn **ovanpå varandra**. Med `Positioned` placerar du dem exakt.
-Det är bra för till exempel en etikett ovanpå en bild.
+Det är perfekt för en profilsida där avataren "sticker ut" nedanför omslagsbilden:
 
 ```dart
-Stack(
-  children: [
-    Image.network('https://picsum.photos/400/200', height: 160, fit: BoxFit.cover),
-    Positioned(
-      top: 8,
-      right: 8,
-      child: Chip(label: const Text('Ledig nu')),
-    ),
-  ],
+SizedBox(
+  height: 180,
+  child: Stack(
+    children: [
+      // Omslagsbilden fyller allt utom de nedersta 40 pixlarna
+      Positioned.fill(
+        bottom: 40,
+        child: Image.network('https://picsum.photos/800/300', fit: BoxFit.cover),
+      ),
+      // Avataren hamnar nere till vänster, halvvägs över bildkanten
+      const Positioned(
+        left: 16,
+        bottom: 0,
+        child: CircleAvatar(
+          radius: 40,
+          backgroundColor: Colors.white,
+          child: CircleAvatar(radius: 36, child: Text('AL')),
+        ),
+      ),
+    ],
+  ),
 )
 ```
 
@@ -283,22 +294,23 @@ En `Column` kan inte scrolla. Har du fler saker än vad som får plats behöver 
 ListView(
   padding: const EdgeInsets.all(16),
   children: const [
-    Text('Anslag 1'),
-    Text('Anslag 2'),
+    Text('Inlägg 1'),
+    Text('Inlägg 2'),
   ],
 )
 ```
 
-För långa eller dynamiska listor använder du `ListView.builder`. Den bygger bara de
-rader som syns på skärmen, så den fungerar lika bra med 10 som med 10 000 poster:
+För långa eller dynamiska listor, som ett flöde, använder du `ListView.builder`.
+Den bygger bara de rader som syns på skärmen, så den fungerar lika bra med 10 som
+med 10 000 inlägg:
 
 ```dart
-final posts = List.generate(100, (i) => 'Anslag nummer ${i + 1}');
+final titlar = List.generate(100, (i) => 'Inlägg nummer ${i + 1}');
 
 ListView.builder(
-  itemCount: posts.length,
+  itemCount: titlar.length,
   itemBuilder: (context, index) {
-    return ListTile(title: Text(posts[index]));
+    return ListTile(title: Text(titlar[index]));
   },
 )
 ```
@@ -314,9 +326,9 @@ höger. `Card` är en upphöjd yta med rundade hörn.
 ```dart
 Card(
   child: ListTile(
-    leading: const Icon(Icons.local_laundry_service),
-    title: const Text('Tvättstuga 1'),
-    subtitle: const Text('Källaren, hus B · max 3 h'),
+    leading: const CircleAvatar(child: Text('AL')),
+    title: const Text('Anna Lind'),
+    subtitle: const Text('@anna · 12 inlägg'),
     trailing: const Icon(Icons.chevron_right),
     onTap: () {},
   ),
@@ -353,14 +365,14 @@ Konsekvenser som förvånar nybörjare:
 ```dart
 // FEL: lång text i en Row – Text får obegränsad bredd och blir för bred
 Row(children: [
-  Icon(Icons.campaign),
-  Text('Viktigt: vattnet stängs av på tisdag mellan 08 och 12 i hela huset'),
+  Icon(Icons.chat_bubble_outline),
+  Text('Cecilia Holm kommenterade ditt inlägg "Första fikat på nya kontoret"'),
 ])
 
 // RÄTT: låt texten ta den plats som finns och radbryta
 Row(children: [
-  Icon(Icons.campaign),
-  Expanded(child: Text('Viktigt: vattnet stängs av på tisdag ...')),
+  Icon(Icons.chat_bubble_outline),
+  Expanded(child: Text('Cecilia Holm kommenterade ditt inlägg ...')),
 ])
 ```
 
@@ -372,19 +384,20 @@ Lösningen är då en `ListView` eller `SingleChildScrollView`.
 ```dart
 // FEL: ListView i en Column – Column ger obegränsad höjd, ListView vill bli oändligt hög
 Column(children: [
-  Text('Anslag'),
+  Text('Senaste inläggen'),
   ListView(children: [...]),
 ])
 
 // RÄTT: ge ListView den återstående höjden
 Column(children: [
-  Text('Anslag'),
+  Text('Senaste inläggen'),
   Expanded(child: ListView(children: [...])),
 ])
 ```
 
 **3. "BoxConstraints forces an infinite width."** Det kan till exempel vara en
-`TextField` direkt i en `Row`. Lösningen är densamma: wrappa den i `Expanded`.
+`TextField` direkt i en `Row` (som kommentarsfältet bredvid en skicka-knapp).
+Lösningen är densamma: wrappa den i `Expanded`.
 
 ⚠️ **Varning:** Felmeddelandena i Flutter är långa men bra. Läs de första raderna
 i konsolen. De säger oftast exakt vilken widget som är problemet och föreslår en
@@ -401,18 +414,18 @@ I Material 3 räcker det att välja **en färg**. Flutter räknar ut en hel pale
 
 ```dart
 MaterialApp(
-  title: 'Föreningen',
+  title: 'Kvittra',
   theme: ThemeData(
-    colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
+    colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3F51B5)),
   ),
   darkTheme: ThemeData(
     colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xFF2E7D32),
+      seedColor: const Color(0xFF3F51B5),
       brightness: Brightness.dark,
     ),
   ),
   themeMode: ThemeMode.system, // följ telefonens inställning
-  home: const ResourceListScreen(),
+  home: const FeedScreen(),
 )
 ```
 
@@ -425,92 +438,187 @@ final text = Theme.of(context).textTheme;
 
 Container(
   color: colors.primaryContainer,
-  child: Text('Ledig', style: text.labelLarge?.copyWith(color: colors.onPrimaryContainer)),
+  child: Text('Ny', style: text.labelLarge?.copyWith(color: colors.onPrimaryContainer)),
 )
 ```
 
 Varje färg har en "on"-färg (`primary`/`onPrimary`, `surface`/`onSurface` …) som är
 den färg text ska ha *ovanpå* den. Då blir kontrasten alltid rätt.
 
-## Exempel: ResourceCard
+## Exempel: PostCard
 
-Nu bygger vi en återanvändbar widget för en resurs. Vi använder `Resource`-klassen
-från kapitel 01 (förenklad här).
+Nu bygger vi den viktigaste widgeten i Kvittra: kortet som visar ett inlägg i
+flödet. Det ska se ut ungefär så här:
+
+```
+┌──────────────────────────────────────┐
+│ (AL)  Anna Lind                      │ ← avatar med initialer, namn
+│       @anna · 5 min                  │ ← användarnamn och tid
+│                                      │
+│ Första fikat på nya kontoret         │ ← titel
+│ Kanelbullar till alla som kommer     │ ← text, max tre rader
+│ före nio! ...                        │
+│                                      │
+│ ♥ 12    💬 3                          │ ← gilla- och kommentarsknappar
+└──────────────────────────────────────┘
+```
+
+Först modellerna och två hjälpfunktioner. Kortet behöver mer än vad `Post` i
+kapitel 01 har: författarens namn i stället för bara ett `userId`, och antal
+kommentarer. Därför gör vi en **visningsmodell**, `FeedPost`, som innehåller
+precis det som ett kort i flödet visar. I kapitel 05 ser du hur den riktiga datan
+från JSONPlaceholder hämtas och kopplas ihop med författaren.
 
 ```dart
-import 'package:flutter/material.dart';
+// lib/models/feed_post.dart
+class Author {
+  const Author({required this.name, required this.username});
 
-class Resource {
-  const Resource({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.maxHours,
-    this.active = true,
-  });
-
-  final String id;
   final String name;
-  final String description;
-  final int maxHours;
-  final bool active;
+  final String username;
 }
 
-class ResourceCard extends StatelessWidget {
-  const ResourceCard({super.key, required this.resource, this.onBook});
+class FeedPost {
+  const FeedPost({
+    required this.id,
+    required this.author,
+    required this.title,
+    required this.body,
+    this.created,
+    this.likeCount = 0,
+    this.commentCount = 0,
+    this.liked = false,
+  });
 
-  final Resource resource;
-  final VoidCallback? onBook; // vad som händer när man trycker på "Boka"
+  final int id;
+  final Author author;
+  final String title;
+  final String body;
+  final DateTime? created; // valfri: JSONPlaceholder har inga tidsstämplar
+  final int likeCount;
+  final int commentCount;
+  final bool liked;
+}
 
-  IconData get _icon => resource.name.toLowerCase().contains('tvätt')
-      ? Icons.local_laundry_service
-      : Icons.celebration;
+// lib/utils/format.dart
+/// "Anna Lind" → "AL", "anna" → "A"
+String initials(String name) {
+  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) return '?';
+  final first = parts.first[0];
+  final last = parts.length > 1 ? parts.last[0] : '';
+  return (first + last).toUpperCase();
+}
+
+/// Relativ tid som i sociala appar: "nu", "5 min", "3 tim", "2 d".
+String timeAgo(DateTime time, {DateTime? now}) {
+  final diff = (now ?? DateTime.now()).difference(time);
+  return switch (diff) {
+    Duration(inMinutes: < 1) => 'nu',
+    Duration(inHours: < 1, :final inMinutes) => '$inMinutes min',
+    Duration(inDays: < 1, :final inHours) => '$inHours tim',
+    Duration(:final inDays) => '$inDays d',
+  };
+}
+```
+
+`timeAgo` använder **object patterns** från kapitel 01: `Duration(inMinutes: < 1)`
+matchar en `Duration` vars getter `inMinutes` är mindre än 1, och `:final inHours`
+plockar ut getterns värde till en variabel.
+
+Sedan själva kortet:
+
+```dart
+// lib/widgets/post_card.dart
+import 'package:flutter/material.dart';
+
+class PostCard extends StatelessWidget {
+  const PostCard({
+    super.key,
+    required this.post,
+    this.onLike,
+    this.onComment,
+    this.onAuthorTap,
+  });
+
+  final FeedPost post;
+  final VoidCallback? onLike;      // vad som händer när man trycker på hjärtat
+  final VoidCallback? onComment;   // ... på pratbubblan
+  final VoidCallback? onAuthorTap; // ... på namnet eller avataren
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final created = post.created; // lokal kopia, så att null-kontrollen fungerar
+    final handle = '@${post.author.username}';
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              backgroundColor: colors.primaryContainer,
-              foregroundColor: colors.onPrimaryContainer,
-              child: Icon(_icon),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // Rad 1: avatar + namn/@användarnamn · tid
+            InkWell(
+              onTap: onAuthorTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Row(
                 children: [
-                  Text(resource.name, style: text.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(
-                    resource.description,
-                    style: text.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  CircleAvatar(
+                    backgroundColor: colors.primaryContainer,
+                    foregroundColor: colors.onPrimaryContainer,
+                    child: Text(initials(post.author.name)),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.schedule, size: 16, color: colors.onSurfaceVariant),
-                      const SizedBox(width: 4),
-                      Text('Max ${resource.maxHours} h', style: text.labelMedium),
-                      const Spacer(),
-                      FilledButton.tonal(
-                        // Inaktiv knapp om resursen är avstängd
-                        onPressed: resource.active ? onBook : null,
-                        child: Text(resource.active ? 'Boka' : 'Avstängd'),
-                      ),
-                    ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post.author.name,
+                          style: text.titleSmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          created == null ? handle : '$handle · ${timeAgo(created)}',
+                          style: text.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 12),
+            // Rad 2: titel och text
+            Text(post.title, style: text.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              post.body,
+              style: text.bodyMedium,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+            // Rad 3: knappar
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: onLike,
+                  icon: Icon(
+                    post.liked ? Icons.favorite : Icons.favorite_border,
+                    // Ett rött hjärta oavsett tema – ett medvetet undantag
+                    color: post.liked ? Colors.red : null,
+                  ),
+                  label: Text('${post.likeCount}'),
+                ),
+                TextButton.icon(
+                  onPressed: onComment,
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: Text('${post.commentCount}'),
+                ),
+              ],
             ),
           ],
         ),
@@ -522,93 +630,197 @@ class ResourceCard extends StatelessWidget {
 
 Lägg märke till:
 
-- Widgeten tar emot **data** (`resource`) och en **callback** (`onBook`) via
-  konstruktorn. Den vet inte själv vad "boka" innebär. Det bestämmer den som
-  använder den. Det gör kortet återanvändbart.
-- Alla fält är `final`. En widget ändras aldrig, den byggs om med nya värden.
-- `Expanded` runt kolumnen förhindrar overflow om beskrivningen är lång.
+- Widgeten tar emot **data** (`post`) och **callbacks** (`onLike`, `onComment`,
+  `onAuthorTap`) via konstruktorn. Den vet inte själv vad "gilla" innebär. Det
+  bestämmer den som använder den. Det gör kortet återanvändbart: samma `PostCard`
+  kan visas i flödet, på en profil och i sökresultat.
+- Alla fält är `final`. En widget ändras aldrig, den byggs om med nya värden. När
+  någon gillar inlägget skapas ett nytt `FeedPost` (med `copyWith`, som i kapitel 01)
+  och kortet byggs om.
+- `Expanded` runt namn-kolumnen förhindrar overflow om namnet är långt.
+- `InkWell` gör raden tryckbar och ger den typiska Material-"krusningen".
 
-## Exempel: Skärm med bokningslista
+## Exempel: ProfileHeader
+
+Överst på en profilsida visas vem användaren är och hur många som följer hen:
+
+```
+            (AL)
+         Anna Lind
+           @anna
+  Utvecklare i Malmö. Gillar fika.
+
+    12         128         87
+  Inlägg     Följare     Följer
+
+  [            Följ             ]
+```
+
+```dart
+// lib/widgets/profile_header.dart
+import 'package:flutter/material.dart';
+
+class ProfileHeader extends StatelessWidget {
+  const ProfileHeader({
+    super.key,
+    required this.name,
+    required this.username,
+    this.bio,
+    required this.postCount,
+    required this.followers,
+    required this.following,
+    this.isFollowing = false,
+    this.onFollow,
+  });
+
+  final String name;
+  final String username;
+  final String? bio;
+  final int postCount;
+  final int followers;
+  final int following;
+  final bool isFollowing;
+  final VoidCallback? onFollow;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final colors = Theme.of(context).colorScheme;
+    final bio = this.bio; // lokal kopia, så att Dart kan veta att den inte är null
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 40,
+            child: Text(initials(name), style: text.headlineSmall),
+          ),
+          const SizedBox(height: 12),
+          Text(name, style: text.titleLarge),
+          Text('@$username', style: text.bodyMedium?.copyWith(color: colors.onSurfaceVariant)),
+          if (bio != null) ...[
+            const SizedBox(height: 8),
+            Text(bio, textAlign: TextAlign.center),
+          ],
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _Stat(value: postCount, label: 'Inlägg')),
+              Expanded(child: _Stat(value: followers, label: 'Följare')),
+              Expanded(child: _Stat(value: following, label: 'Följer')),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity, // knappen fyller hela bredden
+            child: isFollowing
+                ? OutlinedButton(onPressed: onFollow, child: const Text('Följer'))
+                : FilledButton(onPressed: onFollow, child: const Text('Följ')),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// En liten privat widget för "siffra ovanför etikett"
+class _Stat extends StatelessWidget {
+  const _Stat({required this.value, required this.label});
+
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Column(
+      children: [
+        Text('$value', style: text.titleLarge),
+        Text(label, style: text.bodySmall),
+      ],
+    );
+  }
+}
+```
+
+- `Expanded` på de tre siffrorna gör att de delar bredden lika.
+- `if (bio != null) ...[ ... ]` är collection-if med spread: om användaren har en
+  bio läggs *två* widgets till (mellanrum och text), annars ingen.
+- `_Stat` är privat (understreck) och används bara i den här filen. Att bryta ut
+  små widgets gör `build` mycket lättare att läsa.
+
+## Exempel: Flödet
+
+Nu sätter vi ihop allt till en skärm med en lista av `PostCard`:
 
 ```dart
 import 'package:flutter/material.dart';
 
-class Booking {
-  const Booking({
-    required this.resourceName,
-    required this.start,
-    required this.end,
-    this.note,
-  });
+// FeedPost, Author, initials, timeAgo och PostCard från exemplen ovan
 
-  final String resourceName;
-  final DateTime start;
-  final DateTime end;
-  final String? note;
-}
+class FeedScreen extends StatelessWidget {
+  const FeedScreen({super.key, required this.posts});
 
-String _tid(DateTime d) =>
-    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-
-String _datum(DateTime d) => '${d.day}/${d.month}';
-
-class BookingListScreen extends StatelessWidget {
-  const BookingListScreen({super.key, required this.bookings});
-
-  final List<Booking> bookings;
+  final List<FeedPost> posts;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Mina bokningar')),
-      body: bookings.isEmpty
-          ? const Center(child: Text('Du har inga bokningar'))
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: bookings.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 8),
+      appBar: AppBar(title: const Text('Kvittra')),
+      body: posts.isEmpty
+          ? const Center(child: Text('Inga inlägg ännu'))
+          : ListView.builder(
+              padding: const EdgeInsets.all(8),
+              itemCount: posts.length,
               itemBuilder: (context, index) {
-                final b = bookings[index];
-                return Card(
-                  child: ListTile(
-                    leading: CircleAvatar(child: Text(_datum(b.start))),
-                    title: Text(b.resourceName),
-                    subtitle: Text(
-                      '${_tid(b.start)}–${_tid(b.end)}'
-                      '${b.note != null ? ' · ${b.note}' : ''}',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                  ),
+                final post = posts[index];
+                return PostCard(
+                  post: post,
+                  onLike: () => debugPrint('Gilla ${post.id}'),
+                  onComment: () => debugPrint('Kommentera ${post.id}'),
+                  onAuthorTap: () => debugPrint('Visa @${post.author.username}'),
                 );
               },
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {},
-        icon: const Icon(Icons.add),
-        label: const Text('Ny bokning'),
+        icon: const Icon(Icons.edit),
+        label: const Text('Nytt inlägg'),
       ),
     );
   }
 }
 
 void main() {
+  const anna = Author(name: 'Anna Lind', username: 'anna');
+  const bo = Author(name: 'Bo Ek', username: 'bo');
+  final now = DateTime.now();
+
   runApp(
     MaterialApp(
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3F51B5)),
       ),
-      home: BookingListScreen(
-        bookings: [
-          Booking(
-            resourceName: 'Tvättstuga 1',
-            start: DateTime(2026, 3, 14, 8),
-            end: DateTime(2026, 3, 14, 11),
+      home: FeedScreen(
+        posts: [
+          FeedPost(
+            id: 1,
+            author: anna,
+            title: 'Första fikat på nya kontoret',
+            body: 'Kanelbullar till alla som kommer före nio! Ta med egen mugg.',
+            created: now.subtract(const Duration(minutes: 5)),
+            likeCount: 12,
+            commentCount: 3,
+            liked: true,
           ),
-          Booking(
-            resourceName: 'Festlokalen',
-            start: DateTime(2026, 3, 20, 17),
-            end: DateTime(2026, 3, 20, 23),
-            note: '40-årsfest',
+          FeedPost(
+            id: 2,
+            author: bo,
+            title: 'Cykla till jobbet i regn',
+            body: 'Tre veckor i rad nu. Regnbyxor är underskattade.',
+            created: now.subtract(const Duration(hours: 3)),
+            likeCount: 4,
           ),
         ],
       ),
@@ -619,23 +831,26 @@ void main() {
 
 🧪 **Prova själv:**
 
-1. Ersätt `ListView.separated` med en `Column` och lägg till 20 bokningar. Vilket
-   fel får du? Byt tillbaka.
+1. Ersätt `ListView.builder` med en `Column` och lägg till 20 inlägg (använd
+   `List.generate`). Vilket fel får du? Byt tillbaka.
 2. Byt `seedColor` till din favoritfärg och kör med mörkt läge på telefonen/datorn.
-3. Gör en `ResourceListScreen` som visar en lista av `ResourceCard`. Skicka in en
-   `onBook` som skriver ut resursens namn med `print`.
+3. Gör en `ProfileScreen` som visar en `ProfileHeader` överst och användarens
+   inlägg som `PostCard` under. Tips: använd **en** `ListView.builder` med
+   `itemCount: posts.length + 1`, där index 0 är headern och resten är inlägg. Då
+   scrollar headern med listan.
 
 ## Sammanfattning
 
 - Ett gränssnitt är ett träd av oföränderliga widgets som beskrivs i `build`.
 - `Row`/`Column` + `Expanded`/`SizedBox`/`Padding` räcker för de flesta layouter.
-- Använd `ListView.builder` för listor som kan bli långa.
+- Använd `ListView.builder` för listor som kan bli långa, som ett flöde.
 - *Constraints go down, sizes go up, parent sets position.* De flesta layoutfel
   löses med `Expanded` eller en scrollbar widget.
 - Hämta färger och textstilar från `Theme.of(context)` och använd
   `ColorScheme.fromSeed`.
+- Bra widgets tar emot data och callbacks via konstruktorn, som `PostCard`.
 
 Hittills har alla widgets varit `StatelessWidget`, som bara visar data som de får
-in. I nästa kapitel gör vi saker *interaktiva*.
+in. I nästa kapitel gör vi saker *interaktiva*: hjärtat ska gå att trycka på.
 
 **Nästa kapitel:** [03 – State och livscykel](03-state-och-livscykel.md)

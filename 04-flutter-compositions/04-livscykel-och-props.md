@@ -70,11 +70,11 @@ Widget Function(BuildContext) setup() {
 `setup()` får inte vara `async`, men `onMounted` får det:
 
 ```dart
-final resources = ref(<Resource>[]);
+final posts = ref(<Post>[]);
 final loading = ref(true);
 
 onMounted(() async {
-  resources.value = await service.fetchActiveResources();
+  posts.value = await service.fetchFeed();
   loading.value = false;
 });
 ```
@@ -137,15 +137,15 @@ callbacks, bara från `setup()` eller från composables som anropas från `setup
 värdet från första gången, och sedan aldrig mer:
 
 ```dart
-class ResourceTitle extends CompositionWidget {
-  const ResourceTitle({super.key, required this.name});
-  final String name;
+class UserHandle extends CompositionWidget {
+  const UserHandle({super.key, required this.username});
+  final String username;
 
   @override
   Widget Function(BuildContext) setup() {
-    // ❌ Läser name EN gång. Om föräldern skickar ett nytt namn syns det inte.
-    final title = computed(() => 'Resurs: $name');
-    return (context) => Text(title.value);
+    // ❌ Läser username EN gång. Om föräldern skickar ett nytt namn syns det inte.
+    final handle = computed(() => '@$username');
+    return (context) => Text(handle.value);
   }
 }
 ```
@@ -159,15 +159,15 @@ widget-instansen. När föräldern byggs om med nya värden uppdateras den, och 
 läst `props.value.…` uppdateras med.
 
 ```dart
-class ResourceTitle extends CompositionWidget {
-  const ResourceTitle({super.key, required this.name});
-  final String name;
+class UserHandle extends CompositionWidget {
+  const UserHandle({super.key, required this.username});
+  final String username;
 
   @override
   Widget Function(BuildContext) setup() {
-    final props = widget();   // ComputedRef<ResourceTitle>
-    final title = computed(() => 'Resurs: ${props.value.name}'); // ✅
-    return (context) => Text(title.value);
+    final props = widget();   // ComputedRef<UserHandle>
+    final handle = computed(() => '@${props.value.username}'); // ✅
+    return (context) => Text(handle.value);
   }
 }
 ```
@@ -178,67 +178,68 @@ I Vue deklarerar du props med `defineProps` och events med `defineEmits`. I Flut
 props vanliga `final`-fält i widget-klassen, och "events" är callback-fält.
 
 ```vue
-<!-- BookingTile.vue -->
+<!-- CommentTile.vue -->
 <script setup lang="ts">
 import { computed } from 'vue'
 
 const props = defineProps<{
-  resourceName: string
-  start: Date
-  end: Date
+  authorName: string
+  body: string
+  likes: number
 }>()
-const emit = defineEmits<{ (e: 'cancel'): void }>()
+const emit = defineEmits<{ (e: 'delete'): void }>()
 
-const hours = computed(() =>
-  (props.end.getTime() - props.start.getTime()) / 3_600_000)
+const likesLabel = computed(() =>
+  props.likes === 1 ? '1 gillning' : `${props.likes} gillningar`)
 </script>
 
 <template>
   <div>
-    <strong>{{ resourceName }}</strong> ({{ hours }} h)
-    <button @click="emit('cancel')">Avboka</button>
+    <strong>{{ authorName }}</strong>: {{ body }} ({{ likesLabel }})
+    <button @click="emit('delete')">Radera</button>
   </div>
 </template>
 ```
 
 ```dart
-class BookingTile extends CompositionWidget {
-  const BookingTile({
+class CommentTile extends CompositionWidget {
+  const CommentTile({
     super.key,
-    required this.resourceName,
-    required this.start,
-    required this.end,
-    required this.onCancel,         // ≈ emit('cancel')
+    required this.authorName,
+    required this.body,
+    required this.likes,
+    required this.onDelete,         // ≈ emit('delete')
   });
 
-  final String resourceName;
-  final DateTime start;
-  final DateTime end;
-  final VoidCallback onCancel;
+  final String authorName;
+  final String body;
+  final int likes;
+  final VoidCallback onDelete;
 
   @override
   Widget Function(BuildContext) setup() {
     final props = widget();
-    final hours = computed(
-      () => props.value.end.difference(props.value.start).inHours,
+    final likesLabel = computed(
+      () => props.value.likes == 1 ? '1 gillning' : '${props.value.likes} gillningar',
     );
 
     return (context) {
-      final BookingTile(:resourceName, :onCancel) = props.value;
+      final CommentTile(:authorName, :body, :onDelete) = props.value;
       return ListTile(
-        title: Text('$resourceName (${hours.value} h)'),
-        trailing: TextButton(onPressed: onCancel, child: const Text('Avboka')),
+        title: Text(body),
+        subtitle: Text('$authorName · ${likesLabel.value}'),
+        trailing: TextButton(onPressed: onDelete, child: const Text('Radera')),
       );
     };
   }
 }
 
 // Användning:
-BookingTile(
-  resourceName: 'Tvättstuga 1',
-  start: DateTime(2025, 3, 1, 8),
-  end: DateTime(2025, 3, 1, 10),
-  onCancel: () => bookings.remove(id),
+CommentTile(
+  authorName: 'Bo Berg',
+  body: 'Snyggt inlägg!',
+  likes: 3,
+  onDelete: () => deleteComment(id),
 );
 ```
 
@@ -258,12 +259,12 @@ När du har många props kan du destrukturera dem överst i builder-funktionen m
 
 ```dart
 return (context) {
-  final BookingTile(:resourceName, :start, :end) = props.value;
-  return Text('$resourceName ${start.hour}–${end.hour}');
+  final CommentTile(:authorName, :body, :likes) = props.value;
+  return Text('$authorName: $body ($likes)');
 };
 ```
 
-- `:resourceName` är kortform för `resourceName: final resourceName`.
+- `:authorName` är kortform för `authorName: final authorName`.
 - Eftersom det sker **i builder-funktionen** via `props.value` är det reaktivt. När
   föräldern skickar nya värden körs builder-funktionen om.
 - Destrukturering av props är det **enda** som bör stå i builder-funktionen förutom
@@ -274,9 +275,9 @@ return (context) {
 ```dart
 final props = widget();
 
-watch(() => props.value.resourceId, (newId, oldId) {
-  debugPrint('Laddar bokningar för $newId (tidigare $oldId)');
-  // ladda om ...
+watch(() => props.value.postId, (newId, oldId) {
+  debugPrint('Laddar kommentarer för $newId (tidigare $oldId)');
+  // ladda om kommentarerna ...
 });
 ```
 
@@ -285,37 +286,37 @@ Det ersätter `didUpdateWidget`:
 ```dart
 // StatefulWidget-varianten
 @override
-void didUpdateWidget(ResourceBookings oldWidget) {
+void didUpdateWidget(PostComments oldWidget) {
   super.didUpdateWidget(oldWidget);
-  if (widget.resourceId != oldWidget.resourceId) {
-    _load();
+  if (widget.postId != oldWidget.postId) {
+    _loadComments();
   }
 }
 ```
 
 ### Props som startvärde för state
 
-Ibland ska en prop bara vara ett *startvärde*, t.ex. en initial anteckning i ett
+Ibland ska en prop bara vara ett *startvärde*, t.ex. den nuvarande profiltexten i ett
 redigeringsformulär. Då är det helt okej att läsa den en gång. Gör det tydligt med
 namnet:
 
 ```dart
-class NoteEditor extends CompositionWidget {
-  const NoteEditor({super.key, required this.initialNote});
-  final String initialNote;
+class BioEditor extends CompositionWidget {
+  const BioEditor({super.key, required this.initialBio});
+  final String initialBio;
 
   @override
   Widget Function(BuildContext) setup() {
     final props = widget();
-    final note = ref(props.value.initialNote); // medvetet: bara startvärdet
+    final bio = ref(props.value.initialBio); // medvetet: bara startvärdet
     // ...
-    return (context) => Text(note.value);
+    return (context) => Text(bio.value);
   }
 }
 ```
 
 > 💡 **Tips:** Vill du att state ska nollställas när en viss prop ändras? Ge widgeten en
-> ny `key` från föräldern, t.ex. `NoteEditor(key: ValueKey(bookingId), …)`. En ny key
+> ny `key` från föräldern, t.ex. `BioEditor(key: ValueKey(userId), …)`. En ny key
 > ger en ny widget-instans, och `setup()` körs då på nytt.
 
 ## Vanliga misstag
@@ -324,12 +325,12 @@ class NoteEditor extends CompositionWidget {
 
 ```dart
 // ❌
-final id = resourceId;                       // eller this.resourceId
-final label = computed(() => 'Resurs $id');
+final id = postId;                           // eller this.postId
+final label = computed(() => 'Inlägg $id');
 
 // ✅
 final props = widget();
-final label = computed(() => 'Resurs ${props.value.resourceId}');
+final label = computed(() => 'Inlägg ${props.value.postId}');
 ```
 
 Lint-regeln `flutter_compositions_ensure_reactive_props` varnar för det här.
@@ -363,7 +364,7 @@ Behöver du t.ex. temat använder du `useTheme()`. Behöver du context för impe
 (`showDialog`, `Navigator`) gör du det i en event-callback i builder-funktionen, eller
 med `useContext()` (kapitel 5).
 
-### 5. Glömma städning av egna resurser
+### 5. Glömma att städa timers och prenumerationer
 
 `Timer`, `StreamSubscription` och PocketBase-prenumerationer städas **inte** automatiskt.
 Registrera alltid ett `onUnmounted` för dem. Controllers från `use*`-composables städas

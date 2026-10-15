@@ -39,28 +39,28 @@ undantaget är destrukturering av props.
 ```dart
 // ❌ Logik i builder: körs om vid varje build och cachas inte
 return (context) {
-  final upcoming = bookings.value
-      .where((b) => b.end.isAfter(DateTime.now()))
+  final popular = posts.value
+      .where((p) => p.likeCount >= 10)
       .toList()
-    ..sort((a, b) => a.start.compareTo(b.start));
-  final title = upcoming.isEmpty ? 'Inga bokningar' : '${upcoming.length} bokningar';
+    ..sort((a, b) => b.likeCount.compareTo(a.likeCount));
+  final title = popular.isEmpty ? 'Inga populära inlägg' : '${popular.length} populära';
   return Column(children: [
     Text(title),
-    for (final b in upcoming) BookingTile(booking: b),
+    for (final p in popular) PostTile(post: p),
   ]);
 };
 
 // ✅ Logik i setup() som computed
-final upcoming = computed(() => bookings.value
-    .where((b) => b.end.isAfter(DateTime.now()))
+final popular = computed(() => posts.value
+    .where((p) => p.likeCount >= 10)
     .toList()
-  ..sort((a, b) => a.start.compareTo(b.start)));
+  ..sort((a, b) => b.likeCount.compareTo(a.likeCount)));
 final title = computed(() =>
-    upcoming.value.isEmpty ? 'Inga bokningar' : '${upcoming.value.length} bokningar');
+    popular.value.isEmpty ? 'Inga populära inlägg' : '${popular.value.length} populära');
 
 return (context) => Column(children: [
       Text(title.value),
-      for (final b in upcoming.value) BookingTile(booking: b),
+      for (final p in popular.value) PostTile(post: p),
     ]);
 ```
 
@@ -107,7 +107,7 @@ Behöver du stänga av en regel på en enstaka rad:
 
 ```dart
 // ignore: flutter_compositions_ensure_reactive_props
-final initial = initialNote;
+final initial = initialBio;
 ```
 
 Gör det sparsamt, och skriv en kommentar om varför.
@@ -120,18 +120,18 @@ För kursens projekt räcker en enkel uppdelning per *typ*:
 lib/
 ├── main.dart                 # rot-widget: provide + router
 ├── models/                   # immutabla klasser med fromRecord + copyWith
-│   ├── booking.dart
+│   ├── comment.dart
 │   ├── post.dart
-│   └── resource.dart
+│   └── user.dart
 ├── services/
-│   └── pocketbase_service.dart   # InjectionKeys, AuthService, BookingService
-├── composables/              # use_auth.dart, use_bookings.dart, use_booking_form.dart …
+│   └── pocketbase_service.dart   # InjectionKeys, AuthService, PostService
+├── composables/              # use_debounced.dart, use_like_toggle.dart, use_comment_composer.dart …
 ├── screens/                  # en CompositionWidget per skärm
 └── widgets/                  # små återanvändbara widgets
 ```
 
 I större appar grupperar man hellre per *feature* (se [kapitel 9](09-arkitektur-for-en-riktig-app.md),
-`lib/features/bookings/…`), men principen är densamma.
+`lib/features/feed/…`), men principen är densamma.
 
 - Filnamn med `snake_case`, och composables i filer som heter `use_xxx.dart`.
 - En composable per fil, med namn som beskriver avsikten (`useDebouncedSearch` är
@@ -182,37 +182,37 @@ testWidgets('useDebounced väntar 300 ms', (tester) async {
     return (context) => const SizedBox();
   }));
 
-  source.value = 'tvätt';
+  source.value = 'anna';
   await tester.pump(const Duration(milliseconds: 100));
   expect(debounced.value, '');
 
   await tester.pump(const Duration(milliseconds: 300));
-  expect(debounced.value, 'tvätt');
+  expect(debounced.value, 'anna');
 });
 ```
 
 ### 3. Widgets med fejkade tjänster via `provide`
 
 ```dart
-class FakeBookingService implements BookingService {
+class FakePostService implements PostService {
   @override
-  Future<List<Resource>> fetchActiveResources() async => const [
-        Resource(id: 'r1', name: 'Tvättstuga 1', description: '', maxHours: 3, active: true),
+  Future<List<Post>> fetchFeed() async => const [
+        Post(id: 'p1', author: 'anna', title: 'Hej Kvittra!', body: 'Första!'),
       ];
   // ... övriga metoder kastar UnimplementedError
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
 
-testWidgets('ResourcesScreen visar resurser', (tester) async {
+testWidgets('FeedScreen visar inlägg', (tester) async {
   await tester.pumpWidget(CompositionBuilder(setup: () {
-    provide<BookingService>(bookingServiceKey, FakeBookingService());
-    return (context) => const MaterialApp(home: Scaffold(body: ResourcesScreen()));
+    provide<PostService>(postServiceKey, FakePostService());
+    return (context) => const MaterialApp(home: Scaffold(body: FeedScreen()));
   }));
 
   expect(find.byType(CircularProgressIndicator), findsOneWidget);
   await tester.pumpAndSettle();               // låt useAsyncData bli klar
-  expect(find.text('Tvättstuga 1'), findsOneWidget);
+  expect(find.text('Hej Kvittra!'), findsOneWidget);
 });
 ```
 
@@ -227,6 +227,12 @@ expect(find.text('Logga in'), findsOneWidget);
 > 💡 **Tips:** Anropa alltid `tester.pump()` efter en interaktion så att
 > builder-funktionen hinner köras om. Använd `pumpAndSettle()` när futures och
 > animationer ska bli klara.
+
+> ⚠️ **Varning:** Ändrar testet en ref *direkt* (t.ex. `store.debugSetUnread(3)` eller
+> `n.value = 12`) flera gånger i rad kan det i version 0.1.1 behövas en extra frame
+> innan builder-funktionen körts om. Ser testet oväntat gammalt UI efter en enda
+> `pump()`, använd `await tester.pumpAndSettle()` (eller två `pump()`). I appen märks
+> det inte, eftersom Flutter ritar nya frames hela tiden.
 
 ## Migrera från StatefulWidget: checklista
 
@@ -249,16 +255,17 @@ expect(find.text('Logga in'), findsOneWidget);
 
 ## Fullständigt exempel: före och efter
 
-En skärm som söker bland anslag. Den har ett sökfält med debounce, en lista som laddas
-från PocketBase, en "till toppen"-knapp och en prop `onlyPublished` som kan ändras.
+En skärm som söker bland inlägg. Den har ett sökfält med debounce, en lista som laddas
+från PocketBase, en "till toppen"-knapp och en prop `authorId` som kan ändras (sätts
+den visas bara den användarens inlägg, t.ex. på en profilsida).
 
 ### Före: StatefulWidget (≈110 rader)
 
 ```dart
 class PostSearchScreen extends StatefulWidget {
-  const PostSearchScreen({super.key, required this.pb, this.onlyPublished = true});
+  const PostSearchScreen({super.key, required this.pb, this.authorId});
   final PocketBase pb;
-  final bool onlyPublished;
+  final String? authorId;
 
   @override
   State<PostSearchScreen> createState() => _PostSearchScreenState();
@@ -284,7 +291,7 @@ class _PostSearchScreenState extends State<PostSearchScreen> {
   @override
   void didUpdateWidget(PostSearchScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.onlyPublished != widget.onlyPublished) _load();
+    if (oldWidget.authorId != widget.authorId) _load();
   }
 
   void _onSearchChanged() {
@@ -304,9 +311,12 @@ class _PostSearchScreenState extends State<PostSearchScreen> {
     });
     try {
       final q = _searchController.text.trim();
-      final filter = widget.onlyPublished
-          ? widget.pb.filter('published = true && title ~ {:q}', {'q': q})
-          : widget.pb.filter('title ~ {:q}', {'q': q});
+      final filter = widget.authorId == null
+          ? widget.pb.filter('title ~ {:q} || body ~ {:q}', {'q': q})
+          : widget.pb.filter(
+              '(title ~ {:q} || body ~ {:q}) && author = {:a}',
+              {'q': q, 'a': widget.authorId},
+            );
       final posts = await widget.pb
           .collection('posts')
           .getFullList(filter: filter, sort: '-created');
@@ -339,7 +349,7 @@ class _PostSearchScreenState extends State<PostSearchScreen> {
       appBar: AppBar(
         title: TextField(
           controller: _searchController,
-          decoration: const InputDecoration(hintText: 'Sök anslag…'),
+          decoration: const InputDecoration(hintText: 'Sök inlägg…'),
         ),
       ),
       body: _loading
@@ -369,8 +379,8 @@ class _PostSearchScreenState extends State<PostSearchScreen> {
 
 ```dart
 class PostSearchScreen extends CompositionWidget {
-  const PostSearchScreen({super.key, this.onlyPublished = true});
-  final bool onlyPublished;
+  const PostSearchScreen({super.key, this.authorId});
+  final String? authorId;
 
   @override
   Widget Function(BuildContext) setup() {
@@ -382,17 +392,20 @@ class PostSearchScreen extends CompositionWidget {
     final debouncedSearch = useDebounced(search); // composable från kapitel 5
     final scrollController = useScrollController();
 
-    final (status, _) = useAsyncData<List<RecordModel>, (String, bool)>(
+    final (status, _) = useAsyncData<List<RecordModel>, (String, String?)>(
       (args) {
-        final (q, onlyPublished) = args;
-        final filter = onlyPublished
-            ? pb.filter('published = true && title ~ {:q}', {'q': q.trim()})
-            : pb.filter('title ~ {:q}', {'q': q.trim()});
+        final (q, authorId) = args;
+        final filter = authorId == null
+            ? pb.filter('title ~ {:q} || body ~ {:q}', {'q': q.trim()})
+            : pb.filter(
+                '(title ~ {:q} || body ~ {:q}) && author = {:a}',
+                {'q': q.trim(), 'a': authorId},
+              );
         return pb
             .collection('posts')
             .getFullList(filter: filter, sort: '-created');
       },
-      watch: () => (debouncedSearch.value, props.value.onlyPublished),
+      watch: () => (debouncedSearch.value, props.value.authorId),
     );
 
     final showToTop = computed(() =>
@@ -406,7 +419,7 @@ class PostSearchScreen extends CompositionWidget {
           appBar: AppBar(
             title: TextField(
               controller: searchController,
-              decoration: const InputDecoration(hintText: 'Sök anslag…'),
+              decoration: const InputDecoration(hintText: 'Sök inlägg…'),
             ),
           ),
           body: switch (status.value) {
@@ -440,7 +453,7 @@ class PostSearchScreen extends CompositionWidget {
 | `State`-klass, `createState` | – |
 | 7 fält + `setState` på 4 ställen | 0 `setState`, state i refs/computed |
 | `addListener` × 2, `dispose()` × 3, `Timer`-städning | `useTextEditingController`, `useScrollController`, `useDebounced` |
-| `didUpdateWidget` | `watch:` i `useAsyncData` läser `props.value.onlyPublished` |
+| `didUpdateWidget` | `watch:` i `useAsyncData` läser `props.value.authorId` |
 | `if (!mounted) return;` × 2 | – |
 | Manuell `_loading`/`_error`-hantering | `AsyncValue` + `switch` |
 | `Theme.of(context)` i `build` | `useTheme()` + `computed` |

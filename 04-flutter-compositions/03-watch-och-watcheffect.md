@@ -27,12 +27,12 @@ har ett gammalt värde fram till att watchern har körts, och mer kod att underh
 ## `watch()`: explicit källa, nytt och gammalt värde
 
 ```dart
-final selectedResourceId = ref<String?>(null);
+final selectedPostId = ref<String?>(null);
 
 watch(
-  () => selectedResourceId.value,        // källa: VAD ska bevakas
+  () => selectedPostId.value,            // källa: VAD ska bevakas
   (newId, oldId) {                       // callback: VAD ska göras
-    debugPrint('Resurs bytt från $oldId till $newId');
+    debugPrint('Inlägg bytt från $oldId till $newId');
   },
 );
 ```
@@ -59,9 +59,9 @@ Returnera en *record* från source:
 
 ```dart
 watch(
-  () => (date.value, startTime.value),
+  () => (filter.value, search.value),
   (nytt, gammalt) {
-    debugPrint('Tid ändrad: ${gammalt?.$1} ${gammalt?.$2} → ${nytt.$1} ${nytt.$2}');
+    debugPrint('Flödet ändrat: ${gammalt?.$1} "${gammalt?.$2}" → ${nytt.$1} "${nytt.$2}"');
   },
 );
 ```
@@ -74,30 +74,30 @@ Records jämförs med `==` på sina fält, så callbacken körs när något av f
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 
-const resourceId = ref<string | null>(null)
+const postId = ref<string | null>(null)
 
-watch(resourceId, (newId, oldId) => {
+watch(postId, (newId, oldId) => {
   console.log(`Bytt från ${oldId} till ${newId}`)
 }, { immediate: true })
 
-watch([date, startTime], ([d, t], [oldD, oldT]) => { /* ... */ })
+watch([filter, search], ([f, q], [oldF, oldQ]) => { /* ... */ })
 </script>
 ```
 
 ```dart
-final resourceId = ref<String?>(null);
+final postId = ref<String?>(null);
 
-watch(() => resourceId.value, (newId, oldId) {
+watch(() => postId.value, (newId, oldId) {
   debugPrint('Bytt från $oldId till $newId');
 }, immediate: true);
 
-watch(() => (date.value, startTime.value), (nytt, gammalt) { /* ... */ });
+watch(() => (filter.value, search.value), (nytt, gammalt) { /* ... */ });
 ```
 
 Skillnader att lägga märke till:
 
-- I Vue kan källan vara själva refen (`watch(resourceId, …)`). I Dart är källan
-  **alltid en funktion** (`() => resourceId.value`).
+- I Vue kan källan vara själva refen (`watch(postId, …)`). I Dart är källan
+  **alltid en funktion** (`() => postId.value`).
 - Vue har `{ deep: true }`. Det finns inte här, eftersom reaktiviteten är grund (se
   kapitel 2). Ersätter du objekt i stället för att mutera dem behövs det inte heller.
 
@@ -105,7 +105,7 @@ Skillnader att lägga märke till:
 
 ```dart
 watchEffect(() {
-  debugPrint('Valt: ${selectedResourceId.value}, datum: ${date.value}');
+  debugPrint('Valt inlägg: ${selectedPostId.value}, filter: ${filter.value}');
 });
 ```
 
@@ -116,7 +116,7 @@ körs sedan om när någon av dem ändras. Du får inget gammalt värde.
 <!-- Vue -->
 <script setup>
 watchEffect(() => {
-  console.log(`Valt: ${selectedResourceId.value}`)
+  console.log(`Valt inlägg: ${selectedPostId.value}`)
 })
 </script>
 ```
@@ -124,18 +124,18 @@ watchEffect(() => {
 ```dart
 // Dart
 watchEffect(() {
-  debugPrint('Valt: ${selectedResourceId.value}');
+  debugPrint('Valt inlägg: ${selectedPostId.value}');
 });
 ```
 
 ### Exempel: spara utkast lokalt
 
 ```dart
-final note = ref('');
+final draft = ref('');
 
 watchEffect(() {
-  // Körs vid start och varje gång note ändras
-  draftStorage.save('booking_note', note.value);
+  // Körs vid start och varje gång draft ändras
+  draftStorage.save('post_draft', draft.value);
 });
 ```
 
@@ -150,7 +150,7 @@ watchEffect(() {
 | Enkel sidoeffekt som ska köras direkt och vid varje ändring | `watchEffect` |
 | Många beroenden som du inte vill lista själv | `watchEffect` |
 
-## Exempel från föreningsappen
+## Exempel från Kvittra
 
 ### Rensa serverfel när användaren ändrar formuläret
 
@@ -158,7 +158,7 @@ watchEffect(() {
 final serverError = ref<String?>(null);
 
 watch(
-  () => (date.value, startTime.value, hours.value),
+  () => (title.value, body.value),
   (_, _) => serverError.value = null,
 );
 ```
@@ -166,16 +166,16 @@ watch(
 Här är det rimligt att en watcher skriver till en annan ref. Felet kommer från servern,
 inte från formulärets fält, så det går inte att uttrycka som `computed`.
 
-### Visa en snackbar när en bokning sparats
+### Visa en snackbar när ett inlägg publicerats
 
 ```dart
-final lastSaved = ref<DateTime?>(null);
+final lastPublished = ref<DateTime?>(null);
 final context = useContext(); // rå BuildContext för imperativa anrop, kapitel 5
 
-watch(() => lastSaved.value, (saved, _) {
-  if (saved == null) return;
+watch(() => lastPublished.value, (published, _) {
+  if (published == null) return;
   ScaffoldMessenger.of(context.value!).showSnackBar(
-    const SnackBar(content: Text('Bokningen är sparad')),
+    const SnackBar(content: Text('Inlägget är publicerat')),
   );
 });
 ```
@@ -183,10 +183,10 @@ watch(() => lastSaved.value, (saved, _) {
 ### Ladda om när ett filter ändras
 
 ```dart
-final onlyActive = ref(true);
+final onlyFollowing = ref(false);
 
-watch(() => onlyActive.value, (active, _) {
-  reload(active: active);
+watch(() => onlyFollowing.value, (only, _) {
+  reloadFeed(onlyFollowing: only);
 });
 ```
 
@@ -227,7 +227,7 @@ Timer? debounce;
 watch(() => searchText.value, (text, _) {
   debounce?.cancel();                          // städa förra körningen
   debounce = Timer(const Duration(milliseconds: 300), () {
-    search(text);
+    searchUsers(text);
   });
 });
 
@@ -276,9 +276,9 @@ annan källa.
 ```dart
 // ⚠️ Bara refs som läses FÖRE första await spåras
 watchEffect(() async {
-  final id = userId.value;           // spåras
-  final data = await api.fetch(id);
-  result.value = data;
+  final id = postId.value;           // spåras
+  final data = await api.fetchComments(id);
+  comments.value = data;
   debugPrint('${filter.value}');     // spåras INTE, läses efter await
 });
 ```
@@ -296,19 +296,20 @@ assertion-fel. Anropa dem alltså inte i en knapp-callback eller i `onMounted`.
 
 ```dart
 // ❌ Kopierar en prop till en ref med watch
-final name = ref('');
-watch(() => props.value.name, (n, _) => name.value = n, immediate: true);
+final username = ref('');
+watch(() => props.value.username, (u, _) => username.value = u, immediate: true);
 
 // ✅ computed direkt från props
-final name = computed(() => props.value.name);
+final username = computed(() => props.value.username);
 ```
 
 ## 🧪 Prova själv
 
-1. Skapa en `CompositionWidget` med `final count = ref(0)` och två knappar (+1, −1).
+1. Skapa en `CompositionWidget` med `final likes = ref(0)` och två knappar (gilla, sluta
+   gilla).
 2. Lägg till en `watch` som skriver ut `"ökade"` eller `"minskade"` beroende på om
    `newValue > oldValue`.
-3. Lägg till en `watchEffect` som skriver ut `count` varje gång. Lägg märke till att den
+3. Lägg till en `watchEffect` som skriver ut `likes` varje gång. Lägg märke till att den
    också körs direkt vid start, men inte `watch`.
 4. Lägg till `immediate: true` på din `watch`. Vad blir `oldValue` första gången?
 

@@ -4,9 +4,17 @@ I den här modulen lär du dig grunderna i **Dart** och **Flutter**: hur du bygg
 gränssnitt av widgets, hur du hanterar tillstånd (state), navigerar mellan skärmar,
 hämtar data från nätet och testar din kod.
 
-Vi bygger vidare på **föreningsappen** från kursens README. Resurser (tvättstuga,
-festlokal), bokningar och anslag som du har sett som SQL-tabeller (modul 01) och
-PocketBase-collections (modul 02) blir här Dart-klasser och widgets.
+Vi bygger vidare på **Kvittra**, den enkla sociala appen från kursens README.
+Användare, inlägg, kommentarer, gillningar och följare som du har sett som
+SQL-tabeller (modul 01) och PocketBase-collections (modul 02) blir här Dart-klasser
+och widgets. Ett flöde med inläggskort, en profilsida, en gilla-knapp och ett
+formulär för nya inlägg är exemplen som återkommer i alla kapitel.
+
+För att du ska kunna hämta riktig data från nätet **utan att först sätta upp en
+egen server** använder vi den publika test-API:n
+[JSONPlaceholder](https://jsonplaceholder.typicode.com). Den har just de delar
+Kvittra behöver (`/posts`, `/comments`, `/users`) och svarar med vanlig JSON. I
+slutet av kapitel 05 ser du hur samma sak görs mot vår egen PocketBase.
 
 > I nästa modul, [04 – Flutter Compositions](../04-flutter-compositions/README.md),
 > byter vi ut en del av det "vanliga" Flutter-sättet att hantera state mot ett
@@ -28,7 +36,8 @@ Efter modulen ska du kunna:
   `dispose`:as,
 - navigera mellan skärmar med `Navigator` och `go_router`,
 - bygga ett formulär med validering, rullgardinsmeny och datum-/tidsväljare,
-- hämta data med `http` och `pocketbase`-paketet och visa laddning/fel/data,
+- hämta JSON med `http`-paketet (från JSONPlaceholder) och med `pocketbase`-paketet,
+  och visa laddning/fel/data,
 - skriva enkla enhetstester och widgettester.
 
 ## Innehåll
@@ -36,11 +45,11 @@ Efter modulen ska du kunna:
 | Kapitel | Innehåll |
 |---------|----------|
 | [01 – Dart-grunder](01-dart-grunder.md) | Variabler, null safety, samlingar, funktioner, klasser, enums, records, patterns, sealed classes, async |
-| [02 – Widgets och layout](02-widgets-och-layout.md) | Widgetträdet, Material 3, Row/Column/Stack, listor, constraints, tema |
+| [02 – Widgets och layout](02-widgets-och-layout.md) | Widgetträdet, Material 3, Row/Column/Stack, listor, constraints, tema, `PostCard` och `ProfileHeader` |
 | [03 – State och livscykel](03-state-och-livscykel.md) | Stateless vs Stateful, `setState`, livscykeln, controllers, lyfta state |
-| [04 – Navigation och formulär](04-navigation-och-formular.md) | `Navigator`, `go_router`, dialoger, formulär, validering, datumväljare |
-| [05 – Async och nätverk](05-async-och-natverk.md) | `FutureBuilder`, `StreamBuilder`, `http`, JSON, PocketBase, projektstruktur |
-| [06 – Testning](06-testning.md) | Enhetstester och widgettester |
+| [04 – Navigation och formulär](04-navigation-och-formular.md) | `Navigator`, `go_router`, dialoger, bottom sheets, formulär, validering, datumväljare |
+| [05 – Async och nätverk](05-async-och-natverk.md) | `FutureBuilder`, `StreamBuilder`, `http`, JSON från JSONPlaceholder, PocketBase, projektstruktur |
+| [06 – Testning](06-testning.md) | Enhetstester, `MockClient` och widgettester |
 | [Övningar](ovningar.md) | Övningar i nivå 1–3 |
 | [Lösningar](losningar.md) | Lösningsförslag (titta först när du har försökt själv!) |
 
@@ -51,6 +60,7 @@ Efter modulen ska du kunna:
 Följ den officiella guiden för ditt operativsystem:
 <https://docs.flutter.dev/get-started/install>. Välj den **stabila kanalen**
 (stable). Flutter innehåller Dart, så du behöver inte installera Dart separat.
+Materialet är skrivet för Flutter 3.35 eller senare.
 
 Kontrollera att allt är på plats:
 
@@ -108,8 +118,8 @@ flutter devices
 ## Skapa ditt första projekt
 
 ```bash
-flutter create forening_app
-cd forening_app
+flutter create kvittra
+cd kvittra
 flutter run
 ```
 
@@ -117,12 +127,13 @@ flutter run
 bygger och startar den på den enhet som är vald (eller frågar dig vilken).
 
 💡 **Tips:** Projektnamn i Dart skrivs med `snake_case` (små bokstäver och
-understreck). `forening_app` fungerar, `FöreningApp` gör det inte.
+understreck). `kvittra` eller `kvittra_app` fungerar, `KvittraApp` och `kvittra-app`
+gör det inte. Undvik också å, ä och ö i projektnamnet.
 
 ### Projektstruktur
 
 ```
-forening_app/
+kvittra/
 ├── android/          ← native Android-projekt (rör sällan)
 ├── ios/              ← native iOS-projekt (rör sällan)
 ├── web/, macos/, ... ← andra plattformar
@@ -136,36 +147,37 @@ forening_app/
 ```
 
 Nästan allt arbete sker i `lib/`. När appen växer delar vi upp den i mappar
-(`models/`, `services/`, `screens/`, `widgets/`). Det visar vi i kapitel 05.
+(`models/`, `data/`, `screens/`, `widgets/`). Det visar vi i kapitel 05.
 
 ### pubspec.yaml
 
 `pubspec.yaml` motsvarar `package.json` i JavaScript-världen:
 
 ```yaml
-name: forening_app
-description: "Föreningsappen"
+name: kvittra
+description: "Kvittra – en enkel social app"
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.5.0
+  sdk: ^3.9.0
 
 dependencies:
   flutter:
     sdk: flutter
-  http: ^1.2.0          # ← paket du lägger till
+  http: ^1.5.0          # ← paket du lägger till
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
 ```
 
-Lägg till paket med kommandot `flutter pub add`, som uppdaterar filen åt dig:
+Lägg till paket med kommandot `flutter pub add`, som uppdaterar filen åt dig och
+väljer den senaste versionen som passar ditt Flutter:
 
 ```bash
 flutter pub add http
@@ -187,13 +199,13 @@ En av Flutters största styrkor är att du ser ändringar nästan direkt.
 | När behövs det? | Ändrat i `build()`, färger, text | Ändrat i `main()`, `initState`, globala variabler, enums | Ändrat i native-kod eller lagt till paket med native-delar |
 
 **Hot reload** laddar in den nya koden i den körande appen och bygger om
-widgetträdet, men behåller tillståndet. Om du har räknat upp en räknare till 5 och
-ändrar knappens färg står räknaren fortfarande på 5.
+widgetträdet, men behåller tillståndet. Om du har gillat tre inlägg och ändrar
+hjärtats färg är inläggen fortfarande gillade.
 
 **Hot restart** startar om Dart-koden från `main()`. Allt state försvinner.
 
 🧪 **Prova själv:** Kör räknarappen från `flutter create`. Tryck på `+` några
-gånger. Byt `Colors.deepPurple` mot `Colors.green` i `main.dart` och spara. Färgen
+gånger. Byt `Colors.deepPurple` mot `Colors.indigo` i `main.dart` och spara. Färgen
 byts men räknaren behåller sitt värde. Tryck sedan `R` i terminalen och se att
 räknaren börjar om på 0.
 

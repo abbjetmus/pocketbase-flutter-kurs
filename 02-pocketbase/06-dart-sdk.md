@@ -27,14 +27,14 @@ I `pubspec.yaml` ser det ut ungefär så här:
 
 ```yaml
 dependencies:
-  pocketbase: ^0.23.0   # eller senare
+  pocketbase: ^0.25.2   # när materialet skrevs; 0.23 eller senare krävs
 ```
 
 ⚠️ **Varning:** PocketBase-servern v0.23+ kräver Dart-paketet **0.23 eller
-senare**. Äldre exempel på nätet använder `pb.authStore.model`,
-`getStringValue` på fel sätt eller `UserModel` – de är för gamla versioner.
-Observera också att `^0.23.0` i Dart betyder "0.23.x" (för 0.x-versioner låser
-`^` minor-versionen). `flutter pub add` väljer den senaste versionen åt dig.
+senare**. Äldre exempel på nätet använder `pb.authStore.model` eller
+`UserModel` – de är för gamla versioner. Observera också att `^0.25.2` i Dart
+betyder "0.25.x" (för 0.x-versioner låser `^` minor-versionen). `flutter pub
+add` väljer den senaste versionen åt dig.
 
 ## Skapa klienten
 
@@ -57,7 +57,8 @@ inloggningen och realtidsanslutningen.
 
 | curl (kapitel 5) | Dart-SDK |
 |------------------|----------|
-| `POST .../users/auth-with-password` | `pb.collection('users').authWithPassword(email, pw)` |
+| `POST .../users/records` (registrering) | `pb.collection('users').create(body: {...})` |
+| `POST .../users/auth-with-password` | `pb.collection('users').authWithPassword(identity, pw)` |
 | `GET .../records?page=1&perPage=20` | `pb.collection('x').getList(page: 1, perPage: 20)` |
 | `GET .../records` (alla sidor) | `pb.collection('x').getFullList()` |
 | `GET .../records/{id}` | `pb.collection('x').getOne(id)` |
@@ -67,15 +68,27 @@ inloggningen och realtidsanslutningen.
 | Header `Authorization: $TOKEN` | Sköts automatiskt via `pb.authStore` |
 | `GET /api/realtime` + `POST` | `pb.collection('x').subscribe('*', callback)` |
 
-## Inloggning
+## Registrering och inloggning
 
 ```dart
-Future<void> login(String email, String password) async {
-  final auth = await pb.collection('users').authWithPassword(email, password);
+Future<void> register(String email, String username, String password) async {
+  await pb.collection('users').create(body: {
+    'email': email,
+    'username': username,
+    'password': password,
+    'passwordConfirm': password,
+  });
+  // Registrering loggar inte in – gör det direkt efteråt
+  await pb.collection('users').authWithPassword(email, password);
+}
 
-  print(auth.token);                          // token (sparas automatiskt)
-  print(auth.record.id);                      // Annas id
-  print(auth.record.getStringValue('name'));  // "Anna"
+Future<void> login(String identity, String password) async {
+  // identity kan vara e-post eller användarnamn (om username är identitetsfält)
+  final auth = await pb.collection('users').authWithPassword(identity, password);
+
+  print(auth.token);                              // token (sparas automatiskt)
+  print(auth.record.id);                          // Annas id
+  print(auth.record.getStringValue('username'));  // "anna"
 }
 ```
 
@@ -98,7 +111,7 @@ bool get isLoggedIn => pb.authStore.isValid;
 
 String? get myId => pb.authStore.record?.id;
 
-String get myRole => pb.authStore.record?.getStringValue('role') ?? 'member';
+String get myUsername => pb.authStore.record?.getStringValue('username') ?? '';
 
 void logout() => pb.authStore.clear();
 ```
@@ -118,8 +131,8 @@ Future<void> refreshIfNeeded() async {
 }
 ```
 
-`authRefresh` ger också en uppdaterad `record` – t.ex. om styrelsen ändrat din
-roll.
+`authRefresh` ger också en uppdaterad `record` – t.ex. om användaren ändrat sin
+profil från en annan enhet.
 
 ### Kom ihåg inloggningen mellan app-starter
 
@@ -149,49 +162,55 @@ densamma.
 
 ## Läsa data
 
-### getList – en sida
+### getList – en sida (flödet)
 
 ```dart
-final result = await pb.collection('bookings').getList(
+final myId = pb.authStore.record!.id;
+
+final result = await pb.collection('posts').getList(
   page: 1,
   perPage: 20,
-  filter: 'start >= @now',
-  sort: 'start',
-  expand: 'resource,user',
+  sort: '-created',
+  expand: 'author',
+  filter: pb.filter(
+    'author.follows_via_following.follower ?= {:me}',
+    {'me': myId},
+  ),
 );
 
 print(result.page);        // 1
-print(result.totalItems);  // t.ex. 42
+print(result.totalItems);  // t.ex. 4
 for (final record in result.items) {
-  print(record.id);
+  print(record.getStringValue('title'));
 }
 ```
 
 `result` är en `ResultList<RecordModel>` med `page`, `perPage`, `totalItems`,
-`totalPages` och `items`.
+`totalPages` och `items`. Lägg till `skipTotal: true` för ett oändligt flöde
+(kapitel 5).
 
 ### getFullList – alla poster
 
 ```dart
-final resources = await pb.collection('resources').getFullList(
-  filter: 'active = true',
-  sort: 'name',
+final comments = await pb.collection('comments').getFullList(
+  filter: pb.filter('post = {:post}', {'post': postId}),
+  sort: 'created',
+  expand: 'author',
 );
 ```
 
 SDK:n hämtar sida efter sida (1000 åt gången som standard) tills allt är
-hämtat. Bra för små listor som resurser. **Använd inte** för bokningar eller
-anslag som växer hela tiden – där är `getList` med paginering rätt.
+hämtat. Bra för begränsade listor som kommentarerna till *ett* inlägg.
+**Använd inte** för alla inlägg eller alla gillningar – de växer hela tiden,
+och där är `getList` med paginering rätt.
 
 ### getOne och getFirstListItem
 
 ```dart
-final resource = await pb.collection('resources').getOne('yj5nd2n7f6ckups');
+final post = await pb.collection('posts').getOne(postId, expand: 'author');
 
 // Första posten som matchar ett filter (kastar 404 om ingen finns)
-final laundry = await pb.collection('resources').getFirstListItem(
-  'name = "Tvättstuga 1"',
-);
+final bo = await pb.collection('users').getFirstListItem('username = "bo"');
 ```
 
 ## Filter med parametrar – `pb.filter`
@@ -204,18 +223,15 @@ med strängsammanfogning:
 final filter = 'title ~ "$search"';
 ```
 
-Om `search` innehåller ett citattecken, t.ex. `Annas "fest"`, går filtret
-sönder. Värre: någon kan skriva `" || published = false || title ~ "` och
-ändra filtrets betydelse. Det är samma problem som **SQL-injektion** i modul 01.
+Om `search` innehåller ett citattecken, t.ex. `Annas "bästa" kaffe`, går
+filtret sönder. Värre: någon kan skriva `" || author != "` och ändra filtrets
+betydelse. Det är samma problem som **SQL-injektion** i modul 01.
 
 Använd i stället `pb.filter` med namngivna platshållare `{:namn}`:
 
 ```dart
 final result = await pb.collection('posts').getList(
-  filter: pb.filter(
-    'published = true && (title ~ {:q} || body ~ {:q})',
-    {'q': search},
-  ),
+  filter: pb.filter('title ~ {:q} || body ~ {:q}', {'q': search}),
   sort: '-created',
 );
 ```
@@ -224,69 +240,84 @@ final result = await pb.collection('posts').getList(
 `String`, `num`, `bool`, `null` och **`DateTime`**:
 
 ```dart
-// Annas bokningar från idag (lokal tid) och framåt
+// Inlägg från idag (lokal tid) och framåt
 final now = DateTime.now();
 final startOfToday = DateTime(now.year, now.month, now.day); // lokal midnatt
 
-final result = await pb.collection('bookings').getList(
-  filter: pb.filter(
-    'user = {:user} && start >= {:from}',
-    {'user': pb.authStore.record!.id, 'from': startOfToday},
-  ),
-  sort: 'start',
+final today = await pb.collection('posts').getList(
+  filter: pb.filter('created >= {:from}', {'from': startOfToday}),
+  sort: '-created',
 );
 ```
 
 `DateTime` konverteras automatiskt till UTC i PocketBase-format. Det löser
 UTC-problemet från kapitel 5: du räknar i lokal tid, SDK:n översätter.
 
-### Kolla om en tid är ledig
-
-```dart
-Future<bool> isSlotFree(String resourceId, DateTime start, DateTime end) async {
-  final result = await pb.collection('bookings').getList(
-    perPage: 1,
-    skipTotal: true,
-    filter: pb.filter(
-      'resource = {:r} && start < {:end} && end > {:start}',
-      {'r': resourceId, 'start': start, 'end': end},
-    ),
-  );
-  return result.items.isEmpty;
-}
-```
-
-⚠️ **Varning:** Den här kontrollen är bra för att ge användaren snabb
-återkoppling, men den **skyddar inte**. Om list-regeln bara visar egna
-bokningar ser Anna inte Bos bokningar, och två personer kan dessutom boka
-samtidigt. Det riktiga skyddet är en hook på servern (kapitel 7).
+⚠️ **Varning:** Du kan inte skriva `@request.auth.id` i ett filter från appen
+– PocketBase svarar `403 Only superusers can filter by @request.`. Skicka ditt
+eget id som parameter: `pb.filter('author = {:me}', {'me': myId})`.
 
 ## Skapa, ändra, ta bort
 
 ```dart
+final myId = pb.authStore.record!.id;
+
 // Skapa
-final booking = await pb.collection('bookings').create(body: {
-  'resource': resourceId,
-  'user': pb.authStore.record!.id,
-  'start': start.toUtc().toIso8601String(),
-  'end': end.toUtc().toIso8601String(),
-  'note': 'Två maskiner',
+final post = await pb.collection('posts').create(body: {
+  'author': myId,
+  'title': 'Fikadags',
+  'body': 'Kanelbullar i fikarummet!',
 });
 
 // Ändra
-await pb.collection('bookings').update(booking.id, body: {
-  'note': 'Bara en maskin',
+await pb.collection('posts').update(post.id, body: {
+  'body': 'Kanelbullar OCH kardemummabullar!',
 });
 
 // Ta bort
-await pb.collection('bookings').delete(booking.id);
+await pb.collection('posts').delete(post.id);
 ```
 
-Multi-relationer med `+`/`-` (kapitel 3):
+### Gilla och sluta gilla
+
+En gillning är en post i `likes`. "Toggla" betyder: finns min gillning – ta bort
+den, annars skapa den.
 
 ```dart
-await pb.collection('posts').update(postId, body: {'tags+': tagId});
-await pb.collection('posts').update(postId, body: {'tags-': tagId});
+/// Returnerar true om inlägget är gillat efteråt.
+Future<bool> toggleLike(String postId) async {
+  final me = pb.authStore.record!.id;
+
+  final existing = await pb.collection('likes').getList(
+    perPage: 1,
+    skipTotal: true,
+    filter: pb.filter('post = {:post} && user = {:me}', {'post': postId, 'me': me}),
+  );
+
+  if (existing.items.isNotEmpty) {
+    await pb.collection('likes').delete(existing.items.first.id);
+    return false;
+  }
+  await pb.collection('likes').create(body: {'post': postId, 'user': me});
+  return true;
+}
+```
+
+### Följa och sluta följa
+
+```dart
+Future<void> follow(String userId) => pb.collection('follows').create(body: {
+      'follower': pb.authStore.record!.id,
+      'following': userId,
+    });
+
+Future<void> unfollow(String userId) async {
+  final row = await pb.collection('follows').getFirstListItem(
+    pb.filter('follower = {:me} && following = {:user}',
+        {'me': pb.authStore.record!.id, 'user': userId}),
+  );
+  await pb.collection('follows').delete(row.id);
+}
 ```
 
 ### Filer
@@ -295,14 +326,14 @@ await pb.collection('posts').update(postId, body: {'tags-': tagId});
 import 'package:http/http.dart' as http;
 
 await pb.collection('posts').create(
-  body: {'title': 'Städdag', 'author': myId, 'published': true},
+  body: {'author': myId, 'title': 'Dagens bröd'},
   files: [
-    await http.MultipartFile.fromPath('image', '/sökväg/till/bild.jpg'),
+    await http.MultipartFile.fromPath('image', '/sökväg/till/brod.jpg'),
   ],
 );
 
 // URL till en uppladdad fil (med miniatyr)
-final url = pb.files.getURL(post, post.getStringValue('image'), thumb: '200x200');
+final url = pb.files.getURL(post, post.getStringValue('image'), thumb: '400x0');
 ```
 
 ## Läsa fält ur en RecordModel
@@ -312,23 +343,21 @@ Varje post är en `RecordModel` med `id`, `collectionId`, `collectionName` och
 
 | Metod | Exempel |
 |-------|---------|
-| `get<T>(fält, [standard])` | `record.get<int>('max_hours', 0)` |
-| `getStringValue(fält)` | `record.getStringValue('name')` |
-| `getIntValue(fält)` | `record.getIntValue('floor')` |
-| `getDoubleValue(fält)` | `record.getDoubleValue('size_sqm')` |
-| `getBoolValue(fält)` | `record.getBoolValue('active')` |
+| `get<T>(fält, [standard])` | `record.get<String>('title', '')` |
+| `getStringValue(fält)` | `record.getStringValue('username')` |
+| `getIntValue(fält)` | `record.getIntValue('likes_count')` (i en view) |
+| `getDoubleValue(fält)` | `record.getDoubleValue('score')` |
+| `getBoolValue(fält)` | `record.getBoolValue('emailVisibility')` |
 | `getListValue<T>(fält)` | `record.getListValue<String>('tags')` |
 
 Metoderna klarar punkt-notation, även in i `expand`:
 
 ```dart
-final resourceName = booking.get<String>('expand.resource.name', '?');
+final authorName = post.get<String>('expand.author.name', '?');
 
-final resource = booking.get<RecordModel?>('expand.resource');
+final author = post.get<RecordModel?>('expand.author');
 
-final tags = post.get<List<RecordModel>>('expand.tags', []);
-
-final aptNumber = booking.get<String>('expand.user.expand.apartment.number', '');
+final comments = post.get<List<RecordModel>>('expand.comments_via_post', []);
 ```
 
 💡 **Tips:** `get` returnerar ett säkert standardvärde (`""`, `0`, `false`,
@@ -337,134 +366,189 @@ också dölja stavfel. Läs därför fälten på **ett** ställe – i en modell
 
 ## Modellklasser – från RecordModel till Dart
 
-Att skriva `record.getStringValue('name')` överallt i appen blir rörigt och
-felbenäget. Gör i stället en Dart-klass per collection, med en
+Att skriva `record.getStringValue('username')` överallt i appen blir rörigt
+och felbenäget. Gör i stället en Dart-klass per collection, med en
 `fromRecord`-konstruktor. Då pratar resten av appen bara med typade objekt.
 
 ```dart
-class Resource {
-  const Resource({
+class AppUser {
+  const AppUser({
     required this.id,
+    required this.username,
     required this.name,
-    required this.description,
-    required this.maxHours,
-    required this.active,
+    required this.bio,
+    required this.website,
+    required this.avatar,
   });
 
   final String id;
+  final String username;
   final String name;
-  final String description;
-  final int maxHours;
-  final bool active;
+  final String bio;
+  final String website;
+  final String avatar; // filnamn, "" om ingen bild
 
-  factory Resource.fromRecord(RecordModel r) => Resource(
+  factory AppUser.fromRecord(RecordModel r) => AppUser(
         id: r.id,
+        username: r.getStringValue('username'),
         name: r.getStringValue('name'),
-        description: r.getStringValue('description'),
-        maxHours: r.getIntValue('max_hours'),
-        active: r.getBoolValue('active'),
+        bio: r.getStringValue('bio'),
+        website: r.getStringValue('website'),
+        avatar: r.getStringValue('avatar'),
       );
+
+  /// Namnet om det finns, annars @användarnamn.
+  String get displayName => name.isNotEmpty ? name : '@$username';
 }
 ```
 
+(Klassen heter `AppUser` i stället för `User` för att inte krocka med andra
+paket som också har en `User`.)
+
 ```dart
-class Booking {
-  const Booking({
+class Post {
+  const Post({
     required this.id,
-    required this.resourceId,
-    required this.userId,
-    required this.start,
-    required this.end,
-    required this.note,
-    this.resource,
-    this.userName,
+    required this.authorId,
+    required this.title,
+    required this.body,
+    required this.image,
+    required this.created,
+    this.author,
   });
 
   final String id;
-  final String resourceId;
-  final String userId;
-  final DateTime start; // lokal tid
-  final DateTime end;
-  final String note;
-  final Resource? resource; // finns om vi hämtade med expand=resource
-  final String? userName;   // finns om vi hämtade med expand=user
+  final String authorId;
+  final String title;
+  final String body;
+  final String image;
+  final DateTime created; // lokal tid
+  final AppUser? author;  // finns om vi hämtade med expand=author
 
-  factory Booking.fromRecord(RecordModel r) {
-    final resourceRecord = r.get<RecordModel?>('expand.resource');
-    final userRecord = r.get<RecordModel?>('expand.user');
-
-    return Booking(
+  factory Post.fromRecord(RecordModel r) {
+    final authorRecord = r.get<RecordModel?>('expand.author');
+    return Post(
       id: r.id,
-      resourceId: r.getStringValue('resource'),
-      userId: r.getStringValue('user'),
-      start: DateTime.parse(r.getStringValue('start')).toLocal(),
-      end: DateTime.parse(r.getStringValue('end')).toLocal(),
-      note: r.getStringValue('note'),
-      resource: resourceRecord == null ? null : Resource.fromRecord(resourceRecord),
-      userName: userRecord?.getStringValue('name'),
+      authorId: r.getStringValue('author'),
+      title: r.getStringValue('title'),
+      body: r.getStringValue('body'),
+      image: r.getStringValue('image'),
+      created: DateTime.parse(r.getStringValue('created')).toLocal(),
+      author: authorRecord == null ? null : AppUser.fromRecord(authorRecord),
     );
   }
 
-  Duration get duration => end.difference(start);
-
   Map<String, dynamic> toBody() => {
-        'resource': resourceId,
-        'user': userId,
-        'start': start.toUtc().toIso8601String(),
-        'end': end.toUtc().toIso8601String(),
-        'note': note,
+        'author': authorId,
+        'title': title,
+        'body': body,
       };
 }
 ```
 
-`DateTime.parse` klarar PocketBase-formatet `2026-10-12 08:00:00.000Z`.
+```dart
+class Comment {
+  const Comment({
+    required this.id,
+    required this.postId,
+    required this.authorId,
+    required this.body,
+    required this.created,
+    this.author,
+  });
+
+  final String id;
+  final String postId;
+  final String authorId;
+  final String body;
+  final DateTime created;
+  final AppUser? author;
+
+  factory Comment.fromRecord(RecordModel r) {
+    final authorRecord = r.get<RecordModel?>('expand.author');
+    return Comment(
+      id: r.id,
+      postId: r.getStringValue('post'),
+      authorId: r.getStringValue('author'),
+      body: r.getStringValue('body'),
+      created: DateTime.parse(r.getStringValue('created')).toLocal(),
+      author: authorRecord == null ? null : AppUser.fromRecord(authorRecord),
+    );
+  }
+}
+```
+
+`DateTime.parse` klarar PocketBase-formatet `2026-10-15 08:17:41.396Z`.
 `.toLocal()` gör om från UTC till telefonens tidszon.
 
 ### En liten repository-klass
 
-Samla alla anrop för en collection på ett ställe:
+Samla alla anrop på ett ställe:
 
 ```dart
-class BookingRepository {
-  BookingRepository(this.pb);
+class KvittraRepository {
+  KvittraRepository(this.pb);
   final PocketBase pb;
 
-  RecordService get _col => pb.collection('bookings');
+  String get _me => pb.authStore.record!.id;
 
-  Future<List<Booking>> upcomingForResource(String resourceId) async {
-    final result = await _col.getList(
-      perPage: 50,
-      sort: 'start',
-      expand: 'resource,user',
-      filter: pb.filter(
-        'resource = {:r} && end >= {:now}',
-        {'r': resourceId, 'now': DateTime.now()},
-      ),
+  /// Flödet: inlägg från dem jag följer, nyast först.
+  Future<List<Post>> feed({int page = 1}) async {
+    final result = await pb.collection('posts').getList(
+          page: page,
+          perPage: 20,
+          skipTotal: true,
+          sort: '-created',
+          expand: 'author',
+          filter: pb.filter(
+            'author.follows_via_following.follower ?= {:me}',
+            {'me': _me},
+          ),
+        );
+    return result.items.map(Post.fromRecord).toList();
+  }
+
+  Future<List<Comment>> comments(String postId) async {
+    final records = await pb.collection('comments').getFullList(
+          sort: 'created',
+          expand: 'author',
+          filter: pb.filter('post = {:post}', {'post': postId}),
+        );
+    return records.map(Comment.fromRecord).toList();
+  }
+
+  Future<Comment> addComment(String postId, String body) async {
+    final record = await pb.collection('comments').create(
+      body: {'post': postId, 'author': _me, 'body': body},
+      expand: 'author',
     );
-    return result.items.map(Booking.fromRecord).toList();
+    return Comment.fromRecord(record);
   }
 
-  Future<Booking> create(Booking b) async {
-    final record = await _col.create(body: b.toBody(), expand: 'resource,user');
-    return Booking.fromRecord(record);
-  }
-
-  Future<void> delete(String id) => _col.delete(id);
+  // + toggleLike, follow och unfollow från avsnitten ovan
 }
 ```
 
 I modul 04 kopplar vi en sådan klass till widgets med `flutter_compositions`.
 
-## Realtid
+## Realtid – nya kommentarer direkt
+
+När ett inlägg visas vill vi att nya kommentarer dyker upp direkt. Med
+`filter` får appen bara händelser för *det* inlägget:
 
 ```dart
-final unsubscribe = await pb.collection('bookings').subscribe('*', (e) {
-  print(e.action);      // 'create', 'update' eller 'delete'
-  print(e.record?.id);  // posten som ändrades
+final unsubscribe = await pb.collection('comments').subscribe(
+  '*',
+  (e) {
+    print(e.action);      // 'create', 'update' eller 'delete'
+    print(e.record?.id);  // posten som ändrades
 
-  final booking = Booking.fromRecord(e.record!);
-  // uppdatera listan i appen...
-}, filter: pb.filter('resource = {:r}', {'r': resourceId}), expand: 'user');
+    final comment = Comment.fromRecord(e.record!);
+    // uppdatera listan i appen...
+  },
+  filter: pb.filter('post = {:post}', {'post': postId}),
+  expand: 'author',
+);
 
 // Senare, när skärmen stängs:
 await unsubscribe();
@@ -473,24 +557,25 @@ await unsubscribe();
 | Variant | Lyssnar på |
 |---------|------------|
 | `subscribe('*', cb)` | Alla poster i collectionen (som list-regeln släpper igenom) |
+| `subscribe('*', cb, filter: ...)` | Bara de poster som också matchar filtret |
 | `subscribe(recordId, cb)` | En enskild post (view-regeln) |
 | `unsubscribe()` | Sluta lyssna på allt i collectionen |
 
 Ett vanligt mönster för en lista som ska vara "levande":
 
 ```dart
-void applyEvent(List<Booking> list, RecordSubscriptionEvent e) {
-  final b = Booking.fromRecord(e.record!);
+void applyEvent(List<Comment> list, RecordSubscriptionEvent e) {
+  final c = Comment.fromRecord(e.record!);
   switch (e.action) {
     case 'create':
-      list.add(b);
+      list.add(c);
     case 'update':
-      final i = list.indexWhere((x) => x.id == b.id);
-      if (i != -1) list[i] = b;
+      final i = list.indexWhere((x) => x.id == c.id);
+      if (i != -1) list[i] = c;
     case 'delete':
-      list.removeWhere((x) => x.id == b.id);
+      list.removeWhere((x) => x.id == c.id);
   }
-  list.sort((a, b) => a.start.compareTo(b.start));
+  list.sort((a, b) => a.created.compareTo(b.created));
 }
 ```
 
@@ -511,9 +596,12 @@ Alla fel från SDK:n kastas som `ClientException`:
 | `originalError` | Underliggande fel (t.ex. nätverksfel) |
 
 ```dart
-Future<String?> tryCreateBooking(Booking b) async {
+Future<String?> tryLike(String postId) async {
   try {
-    await pb.collection('bookings').create(body: b.toBody());
+    await pb.collection('likes').create(body: {
+      'post': postId,
+      'user': pb.authStore.record!.id,
+    });
     return null; // inget fel
   } on ClientException catch (e) {
     if (e.statusCode == 0) {
@@ -523,28 +611,32 @@ Future<String?> tryCreateBooking(Booking b) async {
       return 'Du behöver logga in igen.';
     }
 
-    // Fel per fält, t.ex. {"start": {"code": "validation_required", ...}}
+    // Fel per fält, t.ex. det unika indexet på (post, user):
+    // {"post": {"code": "validation_not_unique", ...}, "user": {...}}
     final data = e.response['data'];
+    if (data is Map && data['post']?['code'] == 'validation_not_unique') {
+      return 'Du har redan gillat inlägget.';
+    }
     if (data is Map && data.isNotEmpty) {
       final first = data.values.first as Map;
       return first['message'] as String?;
     }
 
-    // Felmeddelande från en hook, t.ex. "Tiden är redan bokad."
+    // Felmeddelande från en hook, t.ex. "Du kan inte gilla ditt eget inlägg."
     return e.response['message'] as String? ?? 'Något gick fel.';
   }
 }
 ```
 
-💡 **Tips:** Meddelandet från en hook (`throw new BadRequestError("Tiden är
-redan bokad.")` i kapitel 7) kommer fram i `e.response['message']`. Skriv
-därför felmeddelanden i hooks på svenska och så att de kan visas direkt för
-användaren.
+💡 **Tips:** Meddelandet från en hook (`throw new BadRequestError("Du kan inte
+gilla ditt eget inlägg.")` i kapitel 7) kommer fram i `e.response['message']`.
+Skriv därför felmeddelanden i hooks på svenska och så att de kan visas direkt
+för användaren.
 
 ## Ett komplett Dart-program
 
-Spara som `bin/demo.dart` i ett Dart-projekt med `pocketbase` som beroende och
-kör med `dart run`:
+Spara som `bin/kvittra_cli.dart` i ett Dart-projekt med `pocketbase` som
+beroende och kör med `dart run`:
 
 ```dart
 import 'package:pocketbase/pocketbase.dart';
@@ -553,59 +645,70 @@ Future<void> main() async {
   final pb = PocketBase('http://127.0.0.1:8090');
 
   await pb.collection('users').authWithPassword('anna@example.com', 'hemligt123');
-  print('Inloggad som ${pb.authStore.record!.getStringValue('name')}');
+  final me = pb.authStore.record!;
+  print('Inloggad som @${me.getStringValue('username')}');
 
-  final resources = await pb.collection('resources').getFullList(
-    filter: 'active = true',
-    sort: 'name',
+  // Flödet
+  final feed = await pb.collection('posts').getList(
+    perPage: 20,
+    sort: '-created',
+    expand: 'author',
+    filter: pb.filter('author.follows_via_following.follower ?= {:me}', {'me': me.id}),
   );
-  for (final r in resources) {
-    print('- ${r.getStringValue('name')} (max ${r.getIntValue('max_hours')} h)');
+  for (final post in feed.items) {
+    print('- ${post.getStringValue('title')} '
+        '(av ${post.get<String>('expand.author.name', '?')})');
   }
 
-  final laundry = resources.first;
-  final start = DateTime.now().add(const Duration(days: 1));
-  final end = start.add(const Duration(hours: 2));
-
+  // Gilla det första inlägget – andra gången ger det unika indexet 400
+  final first = feed.items.first;
   try {
-    final booking = await pb.collection('bookings').create(
-      body: {
-        'resource': laundry.id,
-        'user': pb.authStore.record!.id,
-        'start': start.toUtc().toIso8601String(),
-        'end': end.toUtc().toIso8601String(),
-      },
-      expand: 'resource',
-    );
-    print('Bokade ${booking.get<String>('expand.resource.name')}');
+    await pb.collection('likes').create(body: {'post': first.id, 'user': me.id});
+    print('Gillade "${first.getStringValue('title')}"');
   } on ClientException catch (e) {
-    print('Kunde inte boka: ${e.response['message']}');
+    final data = e.response['data'];
+    if (e.statusCode == 400 && data is Map && data['post']?['code'] == 'validation_not_unique') {
+      print('Du har redan gillat "${first.getStringValue('title')}".');
+    } else {
+      print('Kunde inte gilla: ${e.response['message']}');
+    }
   }
 
-  final mine = await pb.collection('bookings').getList(
-    filter: pb.filter('user = {:me}', {'me': pb.authStore.record!.id}),
-    sort: 'start',
-    expand: 'resource',
+  final liked = await pb.collection('posts').getList(
+    filter: pb.filter('likes_via_post.user ?= {:me}', {'me': me.id}),
   );
-  print('Du har ${mine.totalItems} bokningar.');
+  print('Du har gillat ${liked.totalItems} inlägg.');
 }
 ```
 
-🧪 **Prova själv:** Kör programmet två gånger. Andra gången borde
-dubbelbokningsskyddet från kapitel 7 slå till (om du har lagt in hooken).
-Kör det sedan med Bos inloggning – ser Bo Annas bokningar?
+Med testdatan från lösningarna skriver programmet ut ungefär:
+
+```
+Inloggad som @anna
+- Kaffe eller te? (av Cecilia Ek)
+- Surdegsbröd (av Cecilia Ek)
+- Tips på löparrundor (av Bo Berg)
+- Bästa kaffet i stan? (av Bo Berg)
+Gillade "Kaffe eller te?"
+Du har gillat 3 inlägg.
+```
+
+🧪 **Prova själv:** Kör programmet två gånger. Andra gången borde det unika
+indexet slå till: "Du har redan gillat …". Kör det sedan med Davids
+inloggning – vad blir skillnaden i flödet, och varför?
 
 ## Sammanfattning
 
 - En `PocketBase`-instans för hela appen. Android-emulatorn når datorn via
   `10.0.2.2`.
-- `authWithPassword` loggar in. `pb.authStore` håller token och `record`.
-  `AsyncAuthStore` sparar inloggningen.
+- `create` på `users` registrerar, `authWithPassword` loggar in.
+  `pb.authStore` håller token och `record`. `AsyncAuthStore` sparar
+  inloggningen.
 - `getList` (paginerat), `getFullList` (allt), `getOne`, `create`, `update`,
-  `delete`.
+  `delete`. Gilla/följa = skapa/ta bort poster i `likes`/`follows`.
 - Använd **alltid** `pb.filter('x = {:v}', {...})` för värden från användaren.
 - Läs fält med `get<T>()`, även `expand.x.y`. Kapsla in det i `fromRecord`.
-- `subscribe('*', cb)` för realtid – och glöm inte `unsubscribe`.
+- `subscribe('*', cb, filter: ...)` för realtid – och glöm inte `unsubscribe`.
 - Fånga `ClientException` och visa `response['data']` eller
   `response['message']`.
 

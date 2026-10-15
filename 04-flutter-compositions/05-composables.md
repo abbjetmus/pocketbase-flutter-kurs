@@ -9,7 +9,7 @@ returnerar det som anroparen behöver. Det är Flutter Compositions sätt att
 Kapitlet har två delar:
 
 1. **Inbyggda composables**: controllers, context, tema, mediaquery.
-2. **Egna composables**: hur du skriver `useDebounced`, `useBookingForm` med flera.
+2. **Egna composables**: hur du skriver `useDebounced`, `useCommentComposer` med flera.
 
 ---
 
@@ -53,30 +53,40 @@ Den returnerar en *record* med tre delar:
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 
-const note = ref('')
-const remaining = computed(() => 200 - note.value.length)
+const comment = ref('')
+const remaining = computed(() => 280 - comment.value.length)
+const canSend = computed(() =>
+  comment.value.trim().length > 0 && remaining.value >= 0)
 </script>
 
 <template>
-  <textarea v-model="note" />
+  <textarea v-model="comment" />
   <p>{{ remaining }} tecken kvar</p>
-  <button @click="note = ''">Rensa</button>
+  <button :disabled="!canSend" @click="comment = ''">Skicka</button>
 </template>
 ```
 
 ```dart
 @override
 Widget Function(BuildContext) setup() {
-  final (noteController, note, _) = useTextEditingController();
-  final remaining = computed(() => 200 - note.value.length);
+  final (commentController, comment, _) = useTextEditingController();
+  final remaining = computed(() => 280 - comment.value.length);
+  final canSend = computed(
+    () => comment.value.trim().isNotEmpty && remaining.value >= 0,
+  );
+
+  void send() {
+    debugPrint('Skickar: ${comment.value.trim()}');
+    comment.value = '';   // tvåvägsbindning: tömmer fältet
+  }
 
   return (context) => Column(
         children: [
-          TextField(controller: noteController, maxLines: 3),
+          TextField(controller: commentController, maxLines: 3),
           Text('${remaining.value} tecken kvar'),
-          TextButton(
-            onPressed: () => note.value = '',   // tvåvägsbindning: rensar fältet
-            child: const Text('Rensa'),
+          FilledButton(
+            onPressed: canSend.value ? send : null,
+            child: const Text('Skicka'),
           ),
         ],
       );
@@ -150,7 +160,7 @@ return (context) => Scaffold(
       body: ListView.builder(
         controller: scrollController.raw,   // ← .raw!
         itemCount: 100,
-        itemBuilder: (context, i) => ListTile(title: Text('Anslag $i')),
+        itemBuilder: (context, i) => ListTile(title: Text('Inlägg $i')),
       ),
       floatingActionButton: showToTop.value
           ? FloatingActionButton(
@@ -190,7 +200,7 @@ return (context) => Column(
         TextField(
           focusNode: focusNode.raw,
           decoration: InputDecoration(
-            labelText: hasFocus.value ? 'Skriv din anteckning…' : 'Anteckning',
+            labelText: hasFocus.value ? 'Skriv en kommentar…' : 'Kommentar',
           ),
         ),
         TextButton(
@@ -215,7 +225,7 @@ onMounted(() => controller.forward());
 
 return (context) => Opacity(
       opacity: progress.value,           // 0.0 → 1.0, builder körs om varje frame
-      child: const Text('Välkommen till föreningen!'),
+      child: const Text('Välkommen till Kvittra!'),
     );
 ```
 
@@ -355,7 +365,8 @@ liten klass tydligare, som du ser nedan.
 
 ### Exempel 1: `useDebounced`
 
-Vänta tills användaren slutat skriva innan något händer, t.ex. sökning bland anslag.
+Vänta tills användaren slutat skriva innan något händer, t.ex. när man söker efter
+andra användare att följa.
 
 ```dart
 import 'dart:async';
@@ -385,8 +396,8 @@ Användning:
 final (searchController, search, _) = useTextEditingController();
 final debouncedSearch = useDebounced(search);
 
-final (status, _) = useAsyncData<List<Post>, String>(
-  (q) => service.searchPosts(q),
+final (status, _) = useAsyncData<List<User>, String>(
+  (q) => service.searchUsers(q),        // t.ex. username ~ q || name ~ q
   watch: () => debouncedSearch.value,   // söker 300 ms efter sista tangenttrycket
 );
 ```
@@ -409,77 +420,93 @@ ReadonlyRef<DateTime> useNow({Duration interval = const Duration(seconds: 1)}) {
   return now;
 }
 
-// "Din tvättid börjar om 12 min"
-final now = useNow();
-final minutesLeft = computed(
-  () => booking.value.start.difference(now.value).inMinutes,
+// "Publicerat för 12 min sedan", uppdateras av sig själv
+final now = useNow(interval: const Duration(minutes: 1));
+final minutesAgo = computed(
+  () => now.value.difference(post.value.created).inMinutes,
 );
 ```
 
-### Exempel 3: `useBookingForm`
+### Exempel 3: `useCommentComposer`
 
-Ett bokningsformulär har mycket logik: datum, tid, längd, anteckning, validering och
-inskickning. Lägger vi den i en composable blir skärmen ren och logiken testbar.
+Kommentarsfältet under ett inlägg har mer logik än man tror: text, max 280 tecken, en
+räknare för tecken kvar, ett felmeddelande, "får man skicka?", skickar-status och
+tömning efter lyckad sändning. Lägger vi den i en composable blir skärmen ren och
+logiken återanvändbar (samma fält kan användas för svar, gruppinlägg …).
 
 ```dart
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
-class BookingFormState {
-  BookingFormState({
-    required this.date,
-    required this.startTime,
-    required this.hours,
-    required this.noteController,
-    required this.start,
-    required this.errors,
-    required this.isValid,
+class CommentComposer {
+  const CommentComposer({
+    required this.controller,
+    required this.remaining,
+    required this.counterLabel,
+    required this.error,
+    required this.canSend,
+    required this.sending,
+    required this.send,
   });
 
-  final Ref<DateTime?> date;
-  final Ref<TimeOfDay?> startTime;
-  final Ref<int> hours;
-  final TextEditingController noteController;
-  final ReadonlyRef<DateTime?> start;
-  final ReadonlyRef<List<String>> errors;
-  final ReadonlyRef<bool> isValid;
+  final TextEditingController controller;
+  final ReadonlyRef<int> remaining;
+  final ReadonlyRef<String> counterLabel;
+  final ReadonlyRef<String?> error;
+  final ReadonlyRef<bool> canSend;
+  final ReadonlyRef<bool> sending;
+  final Future<void> Function() send;
 }
 
-BookingFormState useBookingForm({required ReadonlyRef<int> maxHours}) {
-  final date = ref<DateTime?>(null);
-  final startTime = ref<TimeOfDay?>(null);
-  final hours = ref(1);
-  final (noteController, note, _) = useTextEditingController();
+/// Textfält + validering + skicka för en kommentar (max [maxLength] tecken).
+CommentComposer useCommentComposer({
+  required Future<bool> Function(String body) onSend,
+  int maxLength = 280,
+}) {
+  final (controller, text, _) = useTextEditingController();
+  final sending = ref(false);
 
-  final start = computed<DateTime?>(() {
-    final d = date.value;
-    final t = startTime.value;
-    if (d == null || t == null) return null;
-    return DateTime(d.year, d.month, d.day, t.hour, t.minute);
-  });
+  final trimmed = computed(() => text.value.trim());
+  final remaining = computed(() => maxLength - text.value.length);
+  final counterLabel = computed(() => '${remaining.value}');
+  final error = computed<String?>(
+    () => remaining.value < 0 ? '${-remaining.value} tecken för mycket' : null,
+  );
+  final canSend = computed(
+    () => trimmed.value.isNotEmpty && remaining.value >= 0 && !sending.value,
+  );
 
-  final errors = computed<List<String>>(() => [
-        if (date.value == null) 'Välj ett datum',
-        if (startTime.value == null) 'Välj en starttid',
-        if (start.value?.isBefore(DateTime.now()) ?? false)
-          'Starttiden har redan passerat',
-        if (hours.value > maxHours.value) 'Max ${maxHours.value} timmar',
-        if (note.value.length > 200) 'Anteckningen får vara max 200 tecken',
-      ]);
+  Future<void> send() async {
+    if (!canSend.value) return;
+    sending.value = true;
+    try {
+      final ok = await onSend(trimmed.value);
+      if (ok) text.value = ''; // tvåvägsbindning: tömmer fältet
+    } finally {
+      sending.value = false;
+    }
+  }
 
-  final isValid = computed(() => errors.value.isEmpty);
-
-  return BookingFormState(
-    date: date,
-    startTime: startTime,
-    hours: hours,
-    noteController: noteController,
-    start: start,
-    errors: errors,
-    isValid: isValid,
+  return CommentComposer(
+    controller: controller,
+    remaining: remaining,
+    counterLabel: counterLabel,
+    error: error,
+    canSend: canSend,
+    sending: sending,
+    send: send,
   );
 }
 ```
+
+Lägg märke till:
+
+- `onSend` är en **callback** som returnerar `Future<bool>`. Composablen vet inget om
+  PocketBase. Den som anropar bestämmer vart kommentaren skickas.
+- `remaining`, `error` och `canSend` är en kedja av `computed`. Bara det som beror på
+  texten räknas om när användaren skriver.
+- Efter lyckad sändning töms fältet med `text.value = ''`, tack vare
+  tvåvägsbindningen.
 
 I skärmen:
 
@@ -487,25 +514,33 @@ I skärmen:
 @override
 Widget Function(BuildContext) setup() {
   final props = widget();
-  final maxHours = computed(() => props.value.resource.maxHours);
-  final form = useBookingForm(maxHours: maxHours);
+  final composer = useCommentComposer(
+    onSend: (body) => commentsService.add(props.value.postId, body),
+  );
 
-  return (context) => Column(
+  return (context) => Row(
         children: [
-          // ... datum- och tidväljare som skriver till form.date / form.startTime
-          TextField(controller: form.noteController),
-          for (final e in form.errors.value) Text('• $e'),
-          FilledButton(
-            onPressed: form.isValid.value ? () {/* spara */} : null,
-            child: const Text('Boka'),
+          Expanded(
+            child: TextField(
+              controller: composer.controller,
+              decoration: InputDecoration(
+                hintText: 'Skriv en kommentar…',
+                errorText: composer.error.value,
+                suffixText: composer.counterLabel.value,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: composer.canSend.value ? composer.send : null,
+            icon: const Icon(Icons.send),
           ),
         ],
       );
 }
 ```
 
-En komplett version med lediga tider, inskickning till PocketBase och felhantering
-finns i [kapitel 9](09-arkitektur-for-en-riktig-app.md#bokningsformulär-med-lediga-tider).
+Samma composable används i kommentarerna i realtid i
+[kapitel 9](09-arkitektur-for-en-riktig-app.md#kommentarer-i-realtid).
 
 > 💡 **Tips:** Record eller klass? En composable som returnerar 2–3 saker kan använda en
 > record: `(Ref<bool>, void Function())`. Returnerar den fler, eller ska den skickas
