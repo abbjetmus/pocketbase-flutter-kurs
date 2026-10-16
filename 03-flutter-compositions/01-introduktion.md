@@ -1,9 +1,9 @@
-# 1. Introduktion till Flutter Compositions
+# 1. Introduktion
 
-## Vilket problem löser vi?
+## Varför något nytt?
 
-Titta på en helt vanlig gilla-knapp skriven som `StatefulWidget`, alltså det du lärde
-dig i [modul 02](../02-flutter/03-state-och-livscykel.md):
+I [modul 02](../02-flutter/04-state-och-interaktion.md) skrev du en gilla-knapp
+som `StatefulWidget`. Den såg ut ungefär så här:
 
 ```dart
 class LikeButton extends StatefulWidget {
@@ -14,7 +14,6 @@ class LikeButton extends StatefulWidget {
 }
 
 class _LikeButtonState extends State<LikeButton> {
-  static const _othersLikes = 41; // gillningar från andra
   bool _liked = false;
 
   void _toggle() {
@@ -25,40 +24,30 @@ class _LikeButtonState extends State<LikeButton> {
 
   @override
   Widget build(BuildContext context) {
-    final likeCount = _othersLikes + (_liked ? 1 : 0);
+    final count = 41 + (_liked ? 1 : 0);
     return Row(
       children: [
         IconButton(
           onPressed: _toggle,
           icon: Icon(_liked ? Icons.favorite : Icons.favorite_border),
         ),
-        Text('$likeCount gillningar'),
+        Text('$count gillningar'),
       ],
     );
   }
 }
 ```
 
-Det går bra så länge widgeten är liten. I riktiga skärmar, som flödet eller
-kommentarsfältet i Kvittra, växer det snabbt:
+Det fungerar, men det finns några jobbiga saker:
 
-- **Två klasser** för varje widget med state (`LikeButton` + `_LikeButtonState`).
-- **`setState()` måste komma ihåg att anropas.** Glömmer du det uppdateras inte UI:t.
-- **Härledda värden** (t.ex. "antal gillningar" eller "får kommentaren skickas?")
-  räknas om i `build()` varje gång, eller så lagras de i ett eget fält som du måste
-  hålla i synk manuellt.
-- **Controllers** (`TextEditingController`, `ScrollController`, `AnimationController`)
-  ska skapas i `initState` och städas i `dispose`. Glömmer du det läcker minne.
-- **Nya props** från föräldern upptäcks bara om du skriver `didUpdateWidget`.
-- **Async** kräver `if (mounted)` efter varje `await`.
-- **Logik går inte att återanvända** mellan widgets utan mixins eller arv.
+| Problem | Varför är det jobbigt? |
+|---------|------------------------|
+| Två klasser för varje widget | `LikeButton` och `_LikeButtonState`. Mycket kod för lite |
+| Du måste komma ihåg `setState` | Glömmer du det ändras inte skärmen |
+| Controllers måste städas | `TextEditingController` ska `dispose`:as, annars läcker minne |
+| Logik går inte att återanvända | Samma kod måste skrivas om i varje widget |
 
-Vue-utvecklare har haft samma problem. Vue 2:s "Options API" spred ut logiken över
-`data`, `computed`, `watch` och `methods`. Vue 3 löste det med **Composition API**:
-logik som hör ihop skrivs ihop i en `setup`-funktion och kan brytas ut i återanvändbara
-*composables*. `flutter_compositions` gör samma sak för Flutter.
-
-## Samma gilla-knapp med Flutter Compositions
+## Samma knapp med Flutter Compositions
 
 ```dart
 import 'package:flutter/material.dart';
@@ -69,308 +58,177 @@ class LikeButton extends CompositionWidget {
 
   @override
   Widget Function(BuildContext) setup() {
-    // 1. Reaktivt state
+    // 1. State
     final liked = ref(false);
 
-    // 2. Härledda värden, räknas om automatiskt när liked ändras
-    final likeCount = computed(() => 41 + (liked.value ? 1 : 0));
-    final label = computed(() => '${likeCount.value} gillningar');
+    // 2. Ett värde som räknas fram av sig själv
+    final count = computed(() => 41 + (liked.value ? 1 : 0));
 
-    // 3. Vanlig funktion, ingen setState
+    // 3. En vanlig funktion. Ingen setState!
     void toggle() => liked.value = !liked.value;
 
-    // 4. Builder-funktionen = "template"
+    // 4. Builder-funktionen ritar UI:t
     return (context) => Row(
           children: [
             IconButton(
               onPressed: toggle,
               icon: Icon(liked.value ? Icons.favorite : Icons.favorite_border),
             ),
-            Text(label.value),
+            Text('${count.value} gillningar'),
           ],
         );
   }
 }
 ```
 
-Det här har försvunnit: `State`-klassen, `setState` och den manuella omräkningen.
-Det här har tillkommit: `ref`, `computed` och en `setup()`-metod som **returnerar en
-funktion**.
+Det här är nytt:
 
-## Den mentala modellen
+| Ord | Betyder |
+|-----|---------|
+| `CompositionWidget` | Ersätter `StatefulWidget`. Bara **en** klass |
+| `setup()` | En metod där du skapar ditt state |
+| `ref(false)` | En "låda" med ett värde. Du läser och ändrar det med `.value` |
+| `computed(...)` | Ett värde som räknas fram av andra värden |
+| `(context) => ...` | **Builder-funktionen**. Den ritar UI:t, som `build()` |
 
-Det här är det viktigaste i hela modulen. Läs det två gånger.
+## Så fungerar det
+
+Det här är det viktigaste i hela modulen:
 
 ```
-            ┌──────────────────────────────────────────┐
-  Widgeten  │ setup()  körs EN gång                    │
-  monteras ─►  • skapar ref, computed, watch           │
-            │  • registrerar onMounted/onUnmounted     │
-            │  • returnerar builder-funktionen ───┐    │
-            └─────────────────────────────────────┼────┘
-                                                  ▼
-            ┌──────────────────────────────────────────┐
-            │ builder (context) => Widget              │◄─┐
-            │  • läser liked.value, label.value …      │  │ körs om automatiskt
-            │  • systemet minns VILKA refs som lästes  │  │ när någon av de
-            └──────────────────────────────────────────┘  │ lästa refs ändras
-                                                          │
-  liked.value = true ─────────────────────────────────────┘
+  Widgeten skapas
+        │
+        ▼
+  ┌─────────────────────────────┐
+  │ setup()   körs EN gång      │
+  │  • skapar ref och computed  │
+  │  • returnerar builder ──┐   │
+  └─────────────────────────┼───┘
+                            ▼
+  ┌─────────────────────────────┐
+  │ builder  (context) => ...   │◄──┐
+  │  • läser liked.value        │   │ körs igen av sig själv
+  └─────────────────────────────┘   │
+                                    │
+  liked.value = true ───────────────┘
 ```
 
-1. **`setup()` körs en gång** när widgeten skapas, ungefär som `initState`. Allt du
-   deklarerar där (refs, computed, funktioner) lever lika länge som widgeten.
-2. **Builder-funktionen är en *effect*.** Den körs första gången för att bygga UI:t.
-   Medan den körs registrerar systemet varje `.value` som läses. Det kallas
-   *dependency tracking*.
-3. **När en av de lästa refs ändras** körs builder-funktionen om, och Flutter
-   uppdaterar skärmen. Du anropar aldrig `setState` själv.
+1. **`setup()` körs en gång** när widgeten skapas. Allt du skapar där lever lika
+   länge som widgeten.
+2. **Builder-funktionen** ritar UI:t. Medan den körs kommer systemet ihåg vilka
+   `.value` den läste.
+3. **När ett av de värdena ändras** körs builder-funktionen igen, och skärmen
+   uppdateras. Du skriver aldrig `setState`.
 
-### Signaler och alien_signals
+💡 Läser builder-funktionen inte ett värde, så körs den inte heller om när det
+värdet ändras. Det gör appen snabb.
 
-Under huven är varje `ref` en **signal** från biblioteket
-[`alien_signals`](https://pub.dev/packages/alien_signals). En signal är en låda med ett
-värde som håller reda på vem som läser den och meddelar dem när värdet ändras. Samma
-idé finns i Vue (`ref`), SolidJS (signals), Preact Signals och Angular Signals.
-
-Det kallas **finkornig reaktivitet** (fine-grained reactivity). Uppdateringen drivs av
-exakt vilka värden som lästes, inte av att "något i widgeten ändrades".
-
-> 💡 **Tips:** Läser builder-funktionen inte `liked.value` körs den inte om när `liked`
-> ändras. Det är därför du får prestanda "gratis": widgets som inte bryr sig om ett
-> värde påverkas inte.
-
-### Jämförelse med StatefulWidget
+## Jämför med StatefulWidget
 
 | | `StatefulWidget` | `CompositionWidget` |
 |---|---|---|
-| Var lever state? | Fält i en separat `State`-klass | Lokala variabler (refs) i `setup()` |
-| Hur triggas omritning? | Manuellt med `setState()` | Automatiskt när en läst ref ändras |
-| Härledda värden | Räknas i `build()` eller hålls i synk för hand | `computed()`, cachat |
-| Controllers | Skapas i `initState`, städas i `dispose` | `use*`-composables, städas automatiskt |
-| Nya props | `didUpdateWidget` | `widget()` är reaktivt |
-| Återanvändning | Mixins, arv | Composables (vanliga funktioner) |
+| Antal klasser | Två | En |
+| Var finns state? | Fält i `State`-klassen | `ref` i `setup()` |
+| Hur uppdateras skärmen? | Du anropar `setState()` | Av sig själv när en `ref` ändras |
+| Värden som räknas fram | Räknas i `build()` varje gång | `computed`, räknas bara när det behövs |
+| `initState` | `initState()` | Koden i `setup()` |
+| `build` | `build()` | Builder-funktionen |
+| `dispose` | `dispose()` | `onUnmounted()`, och controllers städas själva |
 
-## De tre widget-typerna
+## Kan du Vue?
 
-`flutter_compositions` ger dig tre widgets. Den första använder du 95 % av tiden.
+Då känner du igen nästan allt. Flutter Compositions bygger på Vue 3:s
+*Composition API*.
 
-### `CompositionWidget`
+| Vue 3 (`<script setup>`) | Flutter Compositions | Kapitel |
+|--------------------------|----------------------|---------|
+| `<script setup>` | `setup()` | 1 |
+| `<template>` | builder-funktionen `(context) => ...` | 1 |
+| `const n = ref(0)` | `final n = ref(0);` | 2 |
+| `{{ n }}` i template | `Text('${n.value}')`, **alltid** `.value` | 2 |
+| `computed(() => ...)` | `computed(() => ...)` | 2 |
+| `watch` / `watchEffect` | `watch` / `watchEffect` | 3 |
+| `onMounted` / `onUnmounted` | `onMounted` / `onUnmounted` | 3 |
+| `defineProps` | fält i klassen + `widget()` | 4 |
+| `v-model` | `useTextEditingController()` | 4 |
+| `provide` / `inject` | `provide` / `inject` med `InjectionKey` | 6 |
+| `v-if` / `v-for` | `if` / `for` i en lista med widgets | 2 |
 
-En återanvändbar widget-klass med props (fält) och en `setup()`-metod. Det är din
-ersättare för `StatefulWidget`.
+⚠️ **Den största skillnaden:** I Vue packar templaten upp `ref` åt dig. I Dart
+gör ingen det. Skriver du `Text('$count')` i stället för
+`Text('${count.value}')` står det något i stil med `Instance of 'ComputedRef<int>'`
+på skärmen.
+
+## Regler att komma ihåg
+
+Det här är de fem viktigaste reglerna. Vi förklarar dem mer i kapitlen som
+kommer.
+
+| # | Regel | Varför |
+|---|-------|--------|
+| 1 | `setup()` körs **en gång** och får **aldrig** vara `async` | Den måste returnera builder-funktionen direkt. Hämta data med `onMounted` eller `useAsyncData` (kapitel 3 och 7) |
+| 2 | Läs och skriv alltid med **`.value`**. Skapa `ref` i `setup()`, **aldrig** i builder-funktionen | Builder-funktionen körs många gånger. En `ref` där skulle börja om från början varje gång |
+| 3 | **Ersätt** listor, ändra dem inte | `posts.value.add(x)` märks inte. Skriv `posts.value = [...posts.value, x]` (kapitel 2) |
+| 4 | Anropa `ref`, `computed`, `watch`, `onMounted`, `use...` och `inject` **direkt i `setup()`** | Inte i en `if`, inte i en knapp och inte inuti `onMounted` |
+| 5 | Läs props med **`widget()`** och temat med **`useTheme()`** | Annars ser du bara det första värdet (kapitel 4) |
+
+## Övningar
+
+Skapa ett projekt enligt [README](README.md#installation) och kör det i Chrome.
+
+**1.1** Lägg in `LikeButton` från kapitlet i appen, mitt på skärmen. Tryck på
+hjärtat några gånger. Vad händer med siffran?
+
+**1.2** Skriv en `CompositionWidget` som heter `FollowButton`. Den ska ha en
+`ref` `following` (`false` från början) och en `ref` `followers` (`12` från
+början). När man trycker på knappen ska `following` växla, och `followers` öka
+eller minska med 1. Knappen ska visa texten "Följ" eller "Sluta följa". Använd
+en `computed` för texten.
+
+**1.3** Ändra builder-funktionen i `FollowButton` så att den har en
+block-kropp, och lägg till `debugPrint('builder körs')` först:
 
 ```dart
-class AuthorCard extends CompositionWidget {
-  const AuthorCard({super.key, required this.username});
+return (context) {
+  debugPrint('builder körs');
+  return Column(children: [ /* ... */ ]);
+};
+```
 
-  final String username;
+Hur ofta skrivs texten ut? Lägg sedan till en `ref` som builder-funktionen
+**inte** läser, och en knapp som ändrar den. Skrivs något ut när du trycker?
+
+**1.4** Koden nedan kompilerar, men den fungerar inte. Hitta de tre felen.
+Använd reglerna ovan.
+
+```dart
+class TagList extends CompositionWidget {
+  const TagList({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
-    final props = widget(); // reaktiv åtkomst till props, se kapitel 4
-    final handle = computed(() => '@${props.value.username}');
-    return (context) => Card(child: Text(handle.value));
+    final tags = ref(<String>['#kvittra']);
+
+    return (context) {
+      final clicks = ref(0);
+      return Column(
+        children: [
+          Text('Antal klick: $clicks'),
+          TextButton(
+            onPressed: () {
+              clicks.value++;
+              tags.value.add('#flutter');
+            },
+            child: const Text('Lägg till'),
+          ),
+          for (final t in tags.value) Text(t),
+        ],
+      );
+    };
   }
 }
 ```
 
-### `CompositionBuilder`
+Lösningar finns i [losningar.md](losningar.md#kapitel-1--introduktion).
 
-Samma sak men *inline*, utan egen klass. Bra för engångs-UI, dialoger och tester.
-
-```dart
-CompositionBuilder(
-  setup: () {
-    final open = ref(false);
-    return (context) => SwitchListTile(
-          title: const Text('Visa bara inlägg från dem jag följer'),
-          value: open.value,
-          onChanged: (v) => open.value = v,
-        );
-  },
-)
-```
-
-### `ComputedBuilder`
-
-Avgränsar en del av UI:t till en egen effect. Bara den delen byggs om när de refs den
-läser ändras. Den används för prestanda.
-
-```dart
-@override
-Widget Function(BuildContext) setup() {
-  final seconds = ref(0);   // ändras varje sekund
-  final title = ref('Mitt första inlägg');
-
-  // ... en timer ökar seconds ...
-
-  return (context) => Column(
-        children: [
-          Text(title.value),           // byggs om när title ändras
-          ComputedBuilder(             // byggs om ENDAST när seconds ändras
-            builder: (context) => Text('Publicerat för ${seconds.value} s sedan'),
-          ),
-          const ExpensiveChart(),      // const: byggs aldrig om
-        ],
-      );
-}
-```
-
-| Situation | Använd |
-|-----------|--------|
-| Återanvändbar komponent med props | `CompositionWidget` |
-| Engångs-UI, dialog, test-harness | `CompositionBuilder` |
-| Isolera en ofta uppdaterad del av en stor widget | `ComputedBuilder` |
-| Helt statiskt UI utan state | Vanlig `StatelessWidget` eller `const`-widget |
-
-## Vue-jämförelse: samma komponent i båda världarna
-
-Så här ser gilla-knappen ut i Vue 3 med `<script setup>`:
-
-```vue
-<script setup lang="ts">
-import { ref, computed } from 'vue'
-
-const liked = ref(false)
-const likeCount = computed(() => 41 + (liked.value ? 1 : 0))
-
-function toggle() {
-  liked.value = !liked.value
-}
-</script>
-
-<template>
-  <div>
-    <button @click="toggle">{{ liked ? '♥' : '♡' }}</button>
-    <span>{{ likeCount }} gillningar</span>
-  </div>
-</template>
-```
-
-Och i Flutter Compositions:
-
-```dart
-class LikeButton extends CompositionWidget {
-  const LikeButton({super.key});
-
-  @override
-  Widget Function(BuildContext) setup() {           // ≈ <script setup>
-    final liked = ref(false);                        // ≈ const liked = ref(false)
-    final likeCount =                                // ≈ computed(...)
-        computed(() => 41 + (liked.value ? 1 : 0));
-    void toggle() => liked.value = !liked.value;     // ≈ function toggle()
-
-    return (context) => Row(children: [              // ≈ <template>
-          TextButton(                                // ≈ <button @click=...>
-            onPressed: toggle,
-            child: Text(liked.value ? '♥' : '♡'),    // ≈ {{ liked ? … }}
-          ),
-          Text('${likeCount.value} gillningar'),     // ≈ {{ likeCount }}
-        ]);
-  }
-}
-```
-
-| Begrepp | Vue 3 | Flutter Compositions | Skillnad att tänka på |
-|---------|-------|----------------------|------------------------|
-| Setup-kod | `<script setup>` | `setup()`-metoden | Båda körs en gång per komponentinstans |
-| Template | `<template>` med HTML-liknande syntax | builder-funktion som returnerar widgets | Dart-kod, inte en mall |
-| Läsa en ref | `.value` i script, automatiskt i template | **alltid** `.value` | Ingen auto-unwrap i Dart |
-| Reaktivitetsmotor | Proxy-baserad, djup som standard | `alien_signals`, **grund** | Se kapitel 2 |
-| Villkor | `v-if` | `if` i listor eller `?:` | |
-| Loopar | `v-for` | `for (final x in lista)` i listor | |
-| Event | `@click="fn"` | `onPressed: fn` | |
-| Props | `defineProps` | fält + `widget()` | Se kapitel 4 |
-| DI-nycklar | `InjectionKey` (Symbol) | `InjectionKey<T>` | Se kapitel 7 |
-
-> ⚠️ **Varning:** Det vanligaste nybörjarfelet för Vue-utvecklare är att glömma
-> `.value` i builder-funktionen. `Text('$likeCount')` skriver ut något i stil med
-> `Instance of 'ComputedRef<int>'` i stället för siffran. I Dart finns ingen template som packar
-> upp refs åt dig.
-
-## Villkor och listor i builder-funktionen
-
-Builder-funktionen är vanlig Dart. Det som i Vue heter `v-if` och `v-for` skriver du med
-Darts *collection if* och *collection for*:
-
-```dart
-@override
-Widget Function(BuildContext) setup() {
-  final titles = ref(<String>['Hej Kvittra!', 'Min första app', 'Tips om Flutter']);
-  final showAll = ref(true);
-  final visible = computed(
-    () => showAll.value ? titles.value : titles.value.take(1).toList(),
-  );
-
-  return (context) => Column(
-        children: [
-          SwitchListTile(
-            title: const Text('Visa alla'),
-            value: showAll.value,
-            onChanged: (v) => showAll.value = v,
-          ),
-          for (final t in visible.value) ListTile(title: Text(t)), // v-for
-          if (visible.value.isEmpty) const Text('Inga inlägg'),    // v-if
-        ],
-      );
-}
-```
-
-Lägg märke till att *filtreringen* görs i en `computed` i `setup()`, inte i
-builder-funktionen. Det är en viktig vana som du lär dig mer om i
-[kapitel 9](09-best-practices-och-lints.md).
-
-## Signaturen `Widget Function(BuildContext) setup()`
-
-`setup()` har en ovanlig returtyp: den returnerar en **funktion** som tar en
-`BuildContext` och returnerar en `Widget`. Det är builder-funktionen.
-
-```dart
-@override
-Widget Function(BuildContext) setup() {
-  // ... setup-kod, körs en gång ...
-  return (context) => Text('hej');   // pilsyntax
-}
-
-// eller med block-kropp när du behöver destrukturera props (kapitel 4):
-@override
-Widget Function(BuildContext) setup() {
-  final props = widget();
-  return (context) {
-    final MyWidget(:title) = props.value;
-    return Text(title);
-  };
-}
-```
-
-> ⚠️ **Varning:** `setup()` får **inte** vara `async`. Den måste returnera
-> builder-funktionen direkt. Asynkront arbete gör du i `onMounted` eller med
-> `useFuture`/`useAsyncData` (kapitel 4 och 8).
-
-## 🧪 Prova själv
-
-1. Skapa en `CompositionWidget` `FollowButton` med en ref `following` (bool) och en
-   ref `followers` (int, startvärde 12). Knappen ska växla `following` och öka eller
-   minska `followers`.
-2. Lägg till en `computed` `buttonText` som blir `"Följ"` eller `"Sluta följa"`, och en
-   `computed` `followersLabel` som blir `"1 följare"` eller `"12 följare"`.
-3. Lägg till `print('builder körs')` överst i builder-funktionen (använd block-kropp).
-   Hur ofta skrivs det ut? Lägg sedan till en ref som inte läses i builder-funktionen
-   och ändra den från en knapp. Skrivs något ut?
-
-Svaret på fråga 3: builder-funktionen körs bara när en ref som den *läser* ändras.
-Det är finkornig reaktivitet i praktiken.
-
-## Sammanfattning
-
-- `CompositionWidget` ersätter `StatefulWidget`. `setup()` körs **en** gång och
-  returnerar en builder-funktion.
-- Builder-funktionen är en effect som körs om när de refs den läser ändras.
-- `ref` håller state, `computed` håller härledda värden, och båda läses med `.value`.
-- `CompositionBuilder` är för inline-UI och tester. `ComputedBuilder` används för att
-  isolera ofta uppdaterade delar.
-- Modellen är nästan identisk med Vue 3:s `<script setup>`. Skillnaden är att Dart
-  alltid kräver `.value` och att reaktiviteten är grund.
-
-Nästa kapitel: [Reaktivitet: ref och computed →](02-reaktivitet-ref-och-computed.md)
+Nästa kapitel: [ref och computed](02-ref-och-computed.md)

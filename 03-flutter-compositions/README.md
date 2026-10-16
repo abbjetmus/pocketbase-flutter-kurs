@@ -1,163 +1,104 @@
 # Modul 03 – Flutter Compositions
 
-> Vue-liknande reaktivitet i Flutter: `ref`, `computed`, `watch`, composables och
-> `provide`/`inject` – utan `StatefulWidget` och `setState`.
+I modul 02 skrev du widgets med `StatefulWidget` och `setState()`. Det fungerar,
+men koden blir lång. I den här modulen lär du dig paketet
+[`flutter_compositions`](https://yoyo930021.github.io/flutter_compositions). Det
+gör state i Flutter enklare, och det fungerar nästan som Vue.
 
-I modul 02 byggde du widgets med `StatefulWidget`, `setState()` och livscykel­metoder
-som `initState` och `dispose` (se [02 – State och livscykel](../02-flutter/03-state-och-livscykel.md)).
-Det fungerar, men koden blir snabbt pratig: en separat `State`-klass, manuella
-`dispose()`-anrop, `didUpdateWidget` för att upptäcka nya props och `mounted`-kontroller
-efter varje `await`.
+I slutet av modulen bygger du en egen **Kvittra-app** som pratar med din
+PocketBase från modul 01. Man kan logga in, läsa flödet, skriva inlägg,
+kommentera, gilla och följa andra.
 
-I den här modulen lär du dig paketet
-[`flutter_compositions`](https://yoyo930021.github.io/flutter_compositions), som tar
-idéerna från **Vue 3:s Composition API** och flyttar in dem i Flutter. Kan du Vue
-kommer du att känna igen nästan allt. Kan du inte Vue gör det inget, eftersom vi alltid
-jämför med `StatefulWidget` också.
+## Det här kan du efter modulen
 
-## Lärandemål
+- Förklara hur en `CompositionWidget` fungerar: `setup()` körs en gång, och
+  builder-funktionen körs om när något ändras
+- Använda `ref`, `computed`, `watch` och `watchEffect`
+- Använda `onMounted` och `onUnmounted`, till exempel för en timer
+- Ta emot props med `widget()` och skriva en egen composable
+- Logga in och hämta, skapa och ta bort data i PocketBase från Flutter
+- Dela PocketBase och den inloggade användaren med `provide` och `inject`
+- Visa laddning, fel och data med `useAsyncData` och `AsyncValue`
+- Bygga en hel liten app med flera sidor
 
-När du är klar med modulen ska du kunna:
+## Upplägg
 
-1. Förklara den mentala modellen: **`setup()` körs en gång**, och **builder-funktionen
-   körs om automatiskt** när reaktiva värden den läser ändras.
-2. Använda `ref`, `computed`, `watch` och `watchEffect` och välja rätt verktyg för
-   rätt uppgift.
-3. Förstå *grund* (shallow) reaktivitet och uppdatera listor och objekt på rätt sätt
-   (ersätt, mutera inte).
-4. Använda livscykel­hooks (`onMounted`, `onUnmounted`, `onBuild`) och reaktiva props
-   via `widget()`.
-5. Använda inbyggda composables (`useTextEditingController`, `useScrollController`,
-   `useTheme` …) och skriva egna (`useCommentComposer`, `useDebounced` …).
-6. Dela tjänster och state i widgetträdet med `provide`/`inject` och `InjectionKey`.
-7. Hämta data asynkront med `useFuture`/`useAsyncData`, rendera `AsyncValue` med
-   `switch` och prenumerera på PocketBase realtime med korrekt städning.
-8. Följa bästa praxis, använda lint-reglerna och skriva tester för composables och
-   widgets.
-9. Migrera en befintlig `StatefulWidget` till en `CompositionWidget`.
-10. Strukturera en större app: feature-mappar, stores, sidindelade listor (oändligt
-    flöde), åtgärdsmenyer, auth-guard och grupproller, och lägga till en ny feature på
-    egen hand.
+### Del 1 – Grunderna
 
-## Innehåll
+| Kapitel | Vad du gör |
+|---------|------------|
+| [01 – Introduktion](01-introduktion.md) | Ser varför vi byter från `setState` och skriver din första `CompositionWidget` |
+| [02 – ref och computed](02-ref-och-computed.md) | Lär dig reaktivt state och bygger ett flöde med filter och sök |
+| [03 – watch och livscykel](03-watch-och-livscykel.md) | Reagerar på ändringar och startar och stoppar en timer |
+| [04 – Props och composables](04-props-och-composables.md) | Bygger ett inläggskort, ett kommentarsfält och en egen composable |
 
-| # | Kapitel | Innehåll |
-|---|---------|----------|
-| 1 | [Introduktion](01-introduktion.md) | Varför? Mental modell, signaler, de tre widget-typerna, första räknaren, Vue-jämförelse |
-| 2 | [Reaktivitet: ref och computed](02-reaktivitet-ref-och-computed.md) | `ref`, `.value`, `computed`, grund reaktivitet, listor, immutabla modeller med `copyWith` |
-| 3 | [watch och watchEffect](03-watch-och-watcheffect.md) | Sidoeffekter, `watch` vs `watchEffect` vs `computed`, `immediate`, städning |
-| 4 | [Livscykel och props](04-livscykel-och-props.md) | `onMounted`/`onUnmounted`/`onBuild`, `widget()`, destrukturering, vanliga misstag |
-| 5 | [Composables](05-composables.md) | `use*` vs `manage*`, controllers, `useContextRef`/`useTheme`, egna composables |
-| 6 | [PocketBase från Flutter](06-pocketbase-fran-flutter.md) | Paketet `pocketbase`: logga in, hämta, filtrera, skapa, ta bort, realtid |
-| 7 | [Provide och inject](07-provide-inject.md) | `InjectionKey`, PocketBase-klient och auth i roten, scope, test-överskuggning |
-| 8 | [Asynkron data](08-async-data.md) | `useFuture`, `useAsyncData`, `AsyncValue`, `useStream`, PocketBase realtime |
-| 9 | [Best practices och lints](09-best-practices-och-lints.md) | Regler för `setup()`, ren builder, lints, projektstruktur, tester, migrering |
-| 10 | [Arkitektur för en riktig app](10-arkitektur-for-en-riktig-app.md) | Feature-mappar, stores, `Paginated<T>`, åtgärdsmenyer, auth-guard, grupper och roller |
-| – | [Övningar](ovningar.md) | Nivå 1–3 |
-| – | [Lösningar](losningar.md) | Lösningsförslag. Försök själv först! |
+### Del 2 – Prata med PocketBase
 
-Räkna med 2–3 dagar. Kapitel 1–4 är grunden. Kapitel 5–8 är det du använder mest i
-vardagen. Kapitel 10 knyter ihop allt till arkitekturen för en riktig version av
-kursens sociala app **Kvittra** (flöde, inlägg, kommentarer, gillningar, följare och
-grupper), som du kan bygga vidare på egen hand.
+| Kapitel | Vad du gör |
+|---------|------------|
+| [05 – Skriva data och realtid](05-skriva-data-och-realtid.md) | Filtrerar, skapar, ändrar och tar bort data, och lyssnar på ändringar |
+| [06 – Provide och inject](06-provide-inject.md) | Delar PocketBase och den inloggade användaren med hela appen |
+| [07 – Hämta data](07-hamta-data.md) | Visar flödet med `useAsyncData`, kommentarer i realtid och gilla-knappen |
 
-## Förkunskaper
+### Del 3 – Bygg appen
 
-- Modul 02: widgets, layout, `StatefulWidget`, `setState`, `go_router`, formulär.
-- Modul 01: PocketBase-collections och API-regler. Du behöver din egen
-  PocketBase med Kvittras collections (`users`, `posts`, `comments`, `likes` och
-  `follows`) som du byggde i modul 01. Grupperna (`groups` och `group_members`) som
-  kapitel 10 använder lägger du till i det kapitlet.
-- Vue 3 är **inte** ett krav, men hjälper. Vue-exemplen i modulen använder alltid
-  `<script setup>`.
+| Kapitel | Vad du gör |
+|---------|------------|
+| [08 – Bygg Kvittra-appen](08-bygg-kvittra-appen.md) | Bygger hela appen steg för steg |
+
+Varje kapitel slutar med övningar. Lösningsförslag finns i
+[losningar.md](losningar.md). Försök själv först!
+
+## Det här behöver du
+
+- **Modul 02:** widgets, layout, `StatefulWidget`, `setState`, `go_router` och
+  formulär, och att hämta data från PocketBase ([kapitel 6](../02-flutter/06-hamta-data-fran-pocketbase.md)).
+- **Modul 01:** din egen PocketBase med Kvittras collections (`users`, `posts`,
+  `comments`, `likes` och `follows`), testdatan och API-reglerna.
+- Flutter och VS Code från modul 02.
+- Vue behövs inte. Kan du lite Vue känner du igen mycket.
+
+Vi kör appen i **Chrome** på Windows. Det är enklast, och appen når din
+PocketBase på `http://127.0.0.1:8090` direkt.
 
 ## Installation
 
-Vi använder version **0.1.x** av paketet. All kod i modulen är skriven och kontrollerad
-mot version 0.1.1.
+### 1. Skapa ett projekt
 
-### 1. Lägg till beroenden
+Öppna en terminal i mappen där du vill ha projektet:
 
-Från roten av ditt Flutter-projekt:
-
-```bash
-flutter pub add flutter_compositions:^0.1.1
-flutter pub add --dev flutter_compositions_lints:^0.1.1 custom_lint:^0.8.0
+```powershell
+flutter create kvittra
+cd kvittra
 ```
 
-Din `pubspec.yaml` ska då innehålla ungefär:
+### 2. Lägg till paketen
 
-```yaml
-dependencies:
-  flutter:
-    sdk: flutter
-  flutter_compositions: ^0.1.1
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^6.0.0
-  custom_lint: ^0.8.0
-  flutter_compositions_lints: ^0.1.1
+```powershell
+flutter pub add flutter_compositions:^0.1.1 pocketbase go_router
 ```
 
-`flutter_compositions` drar automatiskt in signalbiblioteket
-[`alien_signals`](https://pub.dev/packages/alien_signals), som är motorn under huven.
+| Paket | Används till |
+|-------|--------------|
+| `flutter_compositions` | Reaktivt state, som i Vue. Vi använder version **0.1.x** |
+| `pocketbase` | Prata med din PocketBase (som i modul 02) |
+| `go_router` | Flera sidor i appen (som i modul 02) |
 
-### 2. Aktivera lint-reglerna
+⚠️ Skriv `:^0.1.1` efter `flutter_compositions`. Nyare versioner (0.2 och
+uppåt) fungerar lite annorlunda än det som står här.
 
-Lint-paketet i version 0.1.x är ett plugin till
-[`custom_lint`](https://pub.dev/packages/custom_lint). Lägg till detta i
-`analysis_options.yaml`:
+### 3. Testa att det fungerar
 
-```yaml
-include: package:flutter_lints/flutter.yaml
-
-analyzer:
-  plugins:
-    - custom_lint
-
-custom_lint:
-  enable_all_lint_rules: true
-```
-
-Kör sedan:
-
-```bash
-dart run custom_lint          # analysera en gång
-dart run custom_lint --watch  # analysera löpande medan du kodar
-```
-
-> 💡 **Tips:** I VS Code visas custom_lint-varningarna direkt i editorn när
-> pluginet är aktiverat. Starta om Dart Analysis Server
-> (`Ctrl/Cmd+Shift+P` → *Dart: Restart Analysis Server*) om de inte dyker upp.
-
-> ⚠️ **Varning:** Nyare versioner (0.2+) av `flutter_compositions_lints` har gått
-> över till Darts inbyggda analyzer-plugins och konfigureras i stället med
-> `plugins: flutter_compositions_lints: …` i `analysis_options.yaml`. Om du läser
-> den officiella dokumentationen kan du se båda varianterna. Med 0.1.x gäller
-> `custom_lint`-varianten ovan.
-
-### 3. Importera
-
-Allt du behöver finns i en enda import:
-
-```dart
-import 'package:flutter_compositions/flutter_compositions.dart';
-```
-
-### 4. Kontrollera att allt fungerar
-
-Ersätt innehållet i `lib/main.dart` med:
+Ersätt allt i `lib/main.dart` med:
 
 ```dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
-void main() => runApp(const MaterialApp(home: HelloCompositions()));
+void main() => runApp(const MaterialApp(home: HelloKvittra()));
 
-class HelloCompositions extends CompositionWidget {
-  const HelloCompositions({super.key});
+class HelloKvittra extends CompositionWidget {
+  const HelloKvittra({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
@@ -174,23 +115,25 @@ class HelloCompositions extends CompositionWidget {
 }
 ```
 
-Kör `flutter run`. Antalet gillningar ökar när du trycker, och du har inte skrivit något
-`setState`. Hur det går till förklaras i [kapitel 1](01-introduktion.md).
+Kör appen i Chrome:
 
-## Snabbreferens: Vue ↔ Flutter Compositions
+```powershell
+flutter run -d chrome
+```
 
-| Vue 3 (`<script setup>`) | Flutter Compositions | Kapitel |
-|--------------------------|----------------------|---------|
-| `const n = ref(0)` | `final n = ref(0);` | 2 |
-| `n.value++` (i script) / `{{ n }}` (i template) | `n.value++` / `Text('${n.value}')`, alltid `.value` | 2 |
-| `computed(() => …)` | `computed(() => …)` | 2 |
-| `watch(src, (nytt, gammalt) => …)` | `watch(() => src.value, (nytt, gammalt) { … })` | 3 |
-| `watchEffect(() => …)` | `watchEffect(() { … })` | 3 |
-| `onMounted` / `onUnmounted` | `onMounted` / `onUnmounted` | 4 |
-| `defineProps<{ name: string }>()` | fält i widget-klassen + `final props = widget();` | 4 |
-| `defineEmits` | callback-props, t.ex. `final ValueChanged<String> onChanged;` | 4 |
-| Composable `useMouse()` | Composable `useMouse()`, en vanlig funktion som anropas i `setup()` | 5 |
-| `v-model="text"` | `final (controller, text, _) = useTextEditingController();` | 5 |
-| `provide(key, value)` / `inject(key)` | `provide(key, value)` / `inject(key)` med `InjectionKey<T>` | 6 |
-| `<template>` | builder-funktionen `(context) => …` som `setup()` returnerar | 1 |
-| `v-if` / `v-for` | `if (…)` / `for (… in …)` i listor, eller ternär `?:` | 1 |
+Tryck på hjärtat. Siffran ökar, fast du inte har skrivit något `setState`. Hur
+det fungerar går vi igenom i [kapitel 1](01-introduktion.md).
+
+## Snabbreferens
+
+| Du vill … | Skriv |
+|-----------|-------|
+| Skapa state | `final n = ref(0);` |
+| Läsa och ändra state | `n.value` och `n.value++` |
+| Räkna fram ett värde | `final dubbel = computed(() => n.value * 2);` |
+| Göra något när ett värde ändras | `watch(() => n.value, (nytt, gammalt) { … });` |
+| Köra kod när widgeten visas och försvinner | `onMounted(() { … });` och `onUnmounted(() { … });` |
+| Läsa props | `final props = widget();` och `props.value.title` |
+| Textfält | `final (controller, text, _) = useTextEditingController();` |
+| Dela något med hela appen | `provide(key, värde);` och `inject(key);` |
+| Hämta data | `final (status, refresh) = useAsyncData(…);` |
