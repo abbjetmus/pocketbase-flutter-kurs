@@ -13,7 +13,7 @@ modul 01, och den använder allt du har lärt dig i modulen.
 
 Innan du börjar:
 
-- [ ] PocketBase är startad (`.\pocketbase.exe serve`).
+- [ ] PocketBase är startad (`.\pocketbase serve`).
 - [ ] Kvittras collections, testdata och API-regler från modul 01 finns.
 - [ ] Du har ett projekt med paketen från [README](README.md#installation).
 

@@ -35,8 +35,12 @@ PocketBase ger dig:
 3. Skriv det här och tryck Enter:
 
 ```powershell
-.\pocketbase.exe serve
+.\pocketbase serve
 ```
+
+💡 `.\` betyder "programmet i den här mappen". Det behövs i PowerShell, som är
+det som öppnas med **Öppna i terminal**. Använder du Kommandotolken (`cmd`)
+räcker det att skriva `pocketbase serve`.
 
 Du ser ungefär det här:
 
@@ -102,7 +106,7 @@ kvittra-pb/
 
 | Du vill … | Gör så här |
 |-----------|------------|
-| Starta PocketBase | Öppna terminal i mappen → `.\pocketbase.exe serve` |
+| Starta PocketBase | Öppna terminal i mappen → `.\pocketbase serve` |
 | Öppna Dashboard | <http://127.0.0.1:8090/_/> |
 | Stänga av | `Ctrl + C` i terminalen |
 

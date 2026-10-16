@@ -1,7 +1,7 @@
 # 5. Bygg Kvittra i PocketBase
 
 Nu bygger vi designen från [kapitel 3](03-databasdesign-med-kvittra.md) i
-PocketBase. Starta PocketBase (`.\pocketbase.exe serve`) och logga in i
+PocketBase. Starta PocketBase (`.\pocketbase serve`) och logga in i
 Dashboard på <http://127.0.0.1:8090/_/>.
 
 ## Ord i PocketBase

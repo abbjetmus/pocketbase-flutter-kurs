@@ -9,7 +9,7 @@ Koden i det här kapitlet är vanlig Dart. I kapitel 6 delar vi PocketBase med
 hela appen, och i kapitel 7 visar vi datan på skärmen.
 
 ⚠️ **Starta PocketBase först.** Öppna terminalen i mappen `kvittra-pb` och kör
-`.\pocketbase.exe serve`. Låt fönstret vara öppet.
+`.\pocketbase serve`. Låt fönstret vara öppet.
 
 ## Snabb repetition
 

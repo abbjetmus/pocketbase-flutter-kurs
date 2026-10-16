@@ -18,7 +18,7 @@ modul 01.
 Öppna mappen `kvittra-pb` från modul 01, öppna en terminal där och skriv:
 
 ```powershell
-.\pocketbase.exe serve
+.\pocketbase serve
 ```
 
 Gå till <http://127.0.0.1:8090/_/> och kontrollera att `posts` har de sex
