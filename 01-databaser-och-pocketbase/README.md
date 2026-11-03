@@ -11,6 +11,7 @@ varandra.
 - Bryta ner en app-idé i tabeller, fält och relationer
 - Skapa collections, fält och relationer i PocketBase
 - Lägga in data i PocketBase
+- Hämta och lägga till data från en Vue-app med PocketBase JavaScript-paket
 - Förklara vad SQL är och skriva enkla `SELECT`-frågor
 - Bestämma vem som får läsa och ändra data med API-regler
 
@@ -31,15 +32,16 @@ varandra.
 | Kapitel | Vad du gör |
 |---------|------------|
 | [06 – Lägg in data](06-lagg-in-data.md) | Fyller Kvittra med användare, inlägg, kommentarer och likes |
-| [07 – SQL och View collections](07-sql-och-view-collections.md) | Lär dig SQL och testar frågor som View collections |
+| [07 – Hämta och lägga till data med Vue](07-hamta-och-lagga-till-data-med-vue.md) | Hämtar, filtrerar och skapar data från Vue-projektet [`kvittra-vue`](kvittra-vue/) |
+| [08 – SQL och View collections](08-sql-och-view-collections.md) | Lär dig SQL och testar frågor som View collections |
 
 ### Del 3 – Vem får göra vad?
 
 | Kapitel | Vad du gör |
 |---------|------------|
-| [08 – Inloggning och API-regler](08-inloggning-och-api-regler.md) | Bestämmer vem som får göra vad |
+| [09 – Inloggning och API-regler](09-inloggning-och-api-regler.md) | Bestämmer vem som får göra vad |
 
-Lösningsförslag till SQL- och regelövningarna finns i [losningar.md](losningar.md).
+Lösningsförslag till Vue-, SQL- och regelövningarna finns i [losningar.md](losningar.md).
 Försök själv först!
 
 ## Det här behöver du
@@ -47,3 +49,4 @@ Försök själv först!
 - En Windows-dator (det går lika bra med Mac eller Linux)
 - En webbläsare
 - PocketBase, som du laddar ner i kapitel 1
+- [Node.js](https://nodejs.org/) och [VS Code](https://code.visualstudio.com/) (används i kapitel 7)

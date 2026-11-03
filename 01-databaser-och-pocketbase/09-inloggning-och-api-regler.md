@@ -1,4 +1,4 @@
-# 8. Inloggning och API-regler
+# 9. Inloggning och API-regler
 
 Hittills har du varit **superuser** i Dashboard. En superuser får göra allt.
 Men när Kvittra-appen används är det vanliga **användare** (records i `users`)
@@ -6,6 +6,10 @@ som loggar in. De ska bara få göra vissa saker. Till exempel ska Anna inte kun
 ta bort Bertils inlägg.
 
 Det styr man med **API-regler**.
+
+I [kapitel 7](07-hamta-och-lagga-till-data-med-vue.md) lämnade du många regler
+tomma, så att Vue-appen kunde läsa och skriva utan att logga in. Nu byter du ut
+dem mot riktiga regler.
 
 ## Två sorters konton
 
@@ -109,21 +113,22 @@ Webbläsaren är **inte inloggad**, så du är en okänd besökare.
 
 ## Övningar
 
-**8.1** Sätt List-regeln för `posts` till tom, och öppna länken ovan. Vad ser
+**9.1** Sätt List-regeln för `posts` till tom, och öppna länken ovan. Vad ser
 du? Ändra sedan till `@request.auth.id != ""` och ladda om sidan. Vad händer?
 
-**8.2** Skriv in reglerna för alla fem collections enligt tabellerna ovan.
+**9.2** Skriv in reglerna för alla fem collections enligt tabellerna ovan.
+Ladda sedan om Vue-appen från kapitel 7. Vad händer, och varför?
 
-**8.3** Varför räcker det inte att Create-regeln för `posts` är
+**9.3** Varför räcker det inte att Create-regeln för `posts` är
 `@request.auth.id != ""`? Vad skulle Anna kunna göra då?
 
-**8.4** Bertil vill ta bort Annas like på Höstpromenad. Vilken regel stoppar
+**9.4** Bertil vill ta bort Annas like på Höstpromenad. Vilken regel stoppar
 honom, och varför?
 
-**8.5 Ditt projekt.** Skriv en regeltabell för ditt eget projekt. Vem ska få
+**9.5 Ditt projekt.** Skriv en regeltabell för ditt eget projekt. Vem ska få
 se, skapa, ändra och ta bort i varje tabell?
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-8--inloggning-och-api-regler).
+Lösningar finns i [losningar.md](losningar.md#kapitel-9--inloggning-och-api-regler).
 
 Nästa modul: [02 – Flutter](../02-flutter/README.md). Hur en Flutter-app loggar in och
 hämtar data från PocketBase går vi igenom i

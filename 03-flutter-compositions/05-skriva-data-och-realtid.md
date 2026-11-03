@@ -65,7 +65,7 @@ class PbTestPage extends CompositionWidget {
 | `pb.authStore.clear()` | Loggar ut |
 
 Alla anrop görs som den som är inloggad, och API-reglerna från
-[modul 01, kapitel 8](../01-databaser-och-pocketbase/08-inloggning-och-api-regler.md)
+[modul 01, kapitel 9](../01-databaser-och-pocketbase/09-inloggning-och-api-regler.md)
 gäller.
 
 ## Filtrera

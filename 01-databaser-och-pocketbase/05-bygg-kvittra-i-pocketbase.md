@@ -18,7 +18,7 @@ Det finns tre sorters collections:
 |-----|--------------|
 | **Base** | Vanliga tabeller, t.ex. `posts` |
 | **Auth** | Användare som kan logga in, t.ex. `users` |
-| **View** | En sparad SQL-fråga. Den använder vi i kapitel 7 |
+| **View** | En sparad SQL-fråga. Den använder vi i kapitel 8 |
 
 💡 Varje ny collection får automatiskt fälten `id`, `created` och `updated`. Dem
 behöver du inte skapa.

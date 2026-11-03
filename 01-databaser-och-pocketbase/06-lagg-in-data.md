@@ -3,7 +3,7 @@
 Nu fyller vi Kvittra med data. Du skriver in allt för hand i Dashboard. Det tar
 en stund, men du ser tydligt hur relationerna fungerar.
 
-Samma data används i SQL-övningarna i nästa kapitel, så skriv in **exakt** det
+Samma data används i övningarna i de kommande kapitlen, så skriv in **exakt** det
 som står här.
 
 ## Så lägger du in en record
@@ -95,4 +95,4 @@ Så många records ska varje collection ha:
 | likes | 8 |
 | follows | 5 |
 
-Nästa kapitel: [SQL och View collections](07-sql-och-view-collections.md)
+Nästa kapitel: [Hämta och lägga till data med Vue](07-hamta-och-lagga-till-data-med-vue.md)

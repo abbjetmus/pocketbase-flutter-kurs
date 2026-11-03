@@ -8,7 +8,7 @@ PocketBase-backend.
 
 | Modul | Innehåll |
 |-------|----------|
-| [01 – Databaser och PocketBase](01-databaser-och-pocketbase/) | Vad en databas är, databasdesign, collections i PocketBase, SQL, API-regler |
+| [01 – Databaser och PocketBase](01-databaser-och-pocketbase/) | Vad en databas är, databasdesign, collections i PocketBase, hämta data från Vue, SQL, API-regler |
 | [02 – Flutter](02-flutter/) | Dart, widgets, layout, state, navigation, hämta data från PocketBase |
 | [03 – Flutter Compositions](03-flutter-compositions/) | Vue-liknande reaktivitet i Flutter, och en hel Kvittra-app mot PocketBase |
 
@@ -77,3 +77,4 @@ flöde, inlägg, kommentarer i realtid, likes och följningar.
 - [VS Code](https://code.visualstudio.com/) med tilläggen *Flutter* och *Dart*
 - [Flutter SDK](https://docs.flutter.dev/get-started/install) (stabil kanal)
 - [PocketBase](https://pocketbase.io/docs/) – en enda körbar fil som du laddar ner i modul 01. **Alla databasövningar görs direkt i PocketBase**: collections, data och regler skapas i PocketBase Dashboard, och SQL-frågor skrivs som *View collections*.
+- [Node.js](https://nodejs.org/) (LTS) – används i modul 01 för att köra Vue-projektet `kvittra-vue`, som hämtar och lägger till data i PocketBase

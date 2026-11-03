@@ -47,7 +47,7 @@ dator. Använd `http://10.0.2.2:8090` i stället. I Chrome fungerar `127.0.0.1`.
 
 ## Logga in först
 
-I modul 01 (kapitel 8) satte du API-regler. För `posts` gäller:
+I modul 01 (kapitel 9) satte du API-regler. För `posts` gäller:
 
 | Regel | Villkor | Betyder |
 |-------|---------|---------|
@@ -312,7 +312,7 @@ inlägg dyka upp direkt.
 
 **6.1** Öppna <http://127.0.0.1:8090/api/collections/posts/records> i Chrome.
 Vad ser du? Varför syns inga inlägg, fast appen kan visa dem? (Jämför med
-övning 8.1 i modul 01.)
+övning 9.1 i modul 01.)
 
 **6.2** Stoppa PocketBase med `Ctrl + C` i terminalen och gör en hot restart av
 appen. Vilket felmeddelande visas? Starta PocketBase igen och tryck på

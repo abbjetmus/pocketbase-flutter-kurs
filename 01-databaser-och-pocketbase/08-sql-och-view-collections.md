@@ -1,4 +1,4 @@
-# 7. SQL och View collections
+# 8. SQL och View collections
 
 ## Vad är SQL?
 
@@ -200,39 +200,39 @@ Delarna skrivs alltid i den här ordningen:
 ## Övningar
 
 Skapa en View collection för varje övning. Kontrollera att du får samma resultat
-som står här. Lösningar finns i [losningar.md](losningar.md#kapitel-7--sql-och-view-collections).
+som står här. Lösningar finns i [losningar.md](losningar.md#kapitel-8--sql-och-view-collections).
 
-**7.1** Visa titlarna på alla inlägg som `anna` har skrivit.
+**8.1** Visa titlarna på alla inlägg som `anna` har skrivit.
 *Svar: Höstpromenad, Morgondimma.*
 
-**7.2** Visa alla kommentarer med kommentarens text och användarnamnet på den
+**8.2** Visa alla kommentarer med kommentarens text och användarnamnet på den
 som skrev den.
 *Svar: 6 rader, t.ex. "Recept tack!" – cissi.*
 
-**7.3** Visa hur många kommentarer varje inlägg har. Inlägg utan kommentarer
+**8.3** Visa hur många kommentarer varje inlägg har. Inlägg utan kommentarer
 ska vara med och visa 0.
 *Svar: Höstpromenad 1, Mitt första surdegsbröd 2, Morgondimma 0, Tips på en
 bra bok? 2, Matchdag 1, Andra försöket 0.*
 
-**7.4** Visa hur många **följare** varje användare har.
+**8.4** Visa hur många **följare** varje användare har.
 *Svar: anna 2, bertil 2, cissi 1, david 0.*
 
-**7.5** Visa de inlägg som saknar likes.
+**8.5** Visa de inlägg som saknar likes.
 *Svar: Morgondimma, Tips på en bra bok?*
 Ledtråd: `LEFT JOIN` och `WHERE likes.id IS NULL`.
 
-**7.6 Annas flöde.** Visa inläggen från de användare som `anna` följer, med
+**8.6 Annas flöde.** Visa inläggen från de användare som `anna` följer, med
 titel och författare.
 *Svar: Mitt första surdegsbröd (bertil), Tips på en bra bok? (cissi), Andra
 försöket (bertil).*
 
-**7.7 Utmaning.** Vilka användare har gillat inlägg som `anna` har skrivit?
+**8.7 Utmaning.** Vilka användare har gillat inlägg som `anna` har skrivit?
 Visa inläggets titel och användarnamnet på den som gillade.
 *Svar: Höstpromenad – bertil, Höstpromenad – cissi.*
 Ledtråd: du behöver `users` två gånger. Ge dem olika namn med `AS`, t.ex.
 `JOIN users AS liker ON ...`.
 
-**7.8 Ditt projekt.** Skriv två View collections för ditt eget projekt: en med
+**8.8 Ditt projekt.** Skriv två View collections för ditt eget projekt: en med
 `JOIN` och en med `COUNT` och `GROUP BY`.
 
-Nästa kapitel: [Inloggning och API-regler](08-inloggning-och-api-regler.md)
+Nästa kapitel: [Inloggning och API-regler](09-inloggning-och-api-regler.md)
