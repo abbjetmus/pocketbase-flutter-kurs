@@ -40,13 +40,6 @@ body {
   padding: 0 1rem;
 }
 
-.error {
-  color: white;
-  background: #c0392b;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-}
-
 form {
   display: flex;
   flex-direction: column;

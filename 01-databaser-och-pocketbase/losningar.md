@@ -5,9 +5,9 @@ som ger samma resultat.
 
 ## Kapitel 7 – Hämta och lägga till data med Vue
 
-I lösningarna visas bara det du lägger till i `App.vue`. Kod i `<script setup>`
-skrivs under kommentaren `Skriv dina egna refs och funktioner här under`, och
-funktionerna som hämtar data anropas i `onMounted`. HTML skrivs i `<template>`.
+I lösningarna visas bara det du lägger till eller ändrar i `App.vue`. Kod i
+`<script setup>` skrivs under `loadUsers`, och funktionerna som hämtar data
+anropas i `onMounted`. HTML skrivs i `<template>`.
 
 **7.1** Lägg till i template:
 
@@ -16,20 +16,21 @@ funktionerna som hämtar data anropas i `onMounted`. HTML skrivs i `<template>`.
 ```
 
 `email` syns inte, eftersom PocketBase bara visar e-postadressen för användaren
-själv (eller om `emailVisibility` är på). `password` skickas aldrig ut.
+själv. Lösenordet skickas aldrig ut.
 
-**7.2** Alla inlägg, nyast först
+**7.2** Alla inlägg
 
 ```js
 const posts = ref([])
 
 async function loadPosts() {
-  try {
-    posts.value = await pb.collection('posts').getFullList({ sort: '-created' })
-  } catch (e) {
-    showError(e)
-  }
+  posts.value = await pb.collection('posts').getFullList()
 }
+
+onMounted(() => {
+  loadUsers()
+  loadPosts()
+})
 ```
 
 ```html
@@ -41,155 +42,113 @@ async function loadPosts() {
 </ul>
 ```
 
-**7.3** Byt frågan i `loadPosts` (eller gör en ny funktion):
+**7.3** Nyast först
 
 ```js
-posts.value = await pb.collection('posts').getFullList({ filter: 'title ~ "bröd"' })
-```
-
-**7.4** En användare
-
-```js
-const anna = ref(null)
-
-async function loadAnna() {
-  try {
-    anna.value = await pb.collection('users').getFirstListItem('username = "anna"')
-  } catch (e) {
-    showError(e)
-  }
+async function loadPosts() {
+  posts.value = await pb.collection('posts').getFullList({ sort: '-created' })
 }
 ```
 
-```html
-<p v-if="anna">{{ anna.name }} – {{ anna.bio }}</p>
-```
-
-`anna` är `null` tills svaret har kommit. `v-if` gör att raden inte visas
-förrän då.
-
-**7.5** Sidor
+**7.4** Filter
 
 ```js
-const page = ref(1)
-const postPage = ref(null)
-
-async function loadPage() {
-  try {
-    postPage.value = await pb.collection('posts').getList(page.value, 2, { sort: '-created' })
-  } catch (e) {
-    showError(e)
-  }
-}
-
-function nextPage() {
-  page.value++
-  loadPage()
-}
-
-function prevPage() {
-  page.value--
-  loadPage()
+async function loadPosts() {
+  posts.value = await pb.collection('posts').getFullList({
+    sort: '-created',
+    filter: 'title ~ "bröd"',
+  })
 }
 ```
 
-```html
-<div v-if="postPage">
-  <p>Sida {{ postPage.page }} av {{ postPage.totalPages }}</p>
-  <ul>
-    <li v-for="post in postPage.items" :key="post.id">{{ post.title }}</li>
-  </ul>
-  <button :disabled="page <= 1" @click="prevPage">Föregående</button>
-  <button :disabled="page >= postPage.totalPages" @click="nextPage">Nästa</button>
-</div>
-```
+Kommatecknet efter `'-created'` behövs mellan två inställningar.
 
-`:disabled` gör knappen grå när det inte finns någon sida åt det hållet.
-
-**7.6** Inlägg med författare
+**7.5** Författarens namn
 
 ```js
-posts.value = await pb.collection('posts').getFullList({
-  sort: '-created',
-  expand: 'author',
-})
+async function loadPosts() {
+  posts.value = await pb.collection('posts').getFullList({
+    sort: '-created',
+    expand: 'author',
+  })
+}
 ```
 
 ```html
 <li v-for="post in posts" :key="post.id">
-  {{ post.title }} – {{ post.expand?.author?.name }}
+  <strong>{{ post.title }}</strong> – {{ post.expand?.author?.name }}
 </li>
 ```
 
-**7.7** Kommentarer med författare och inlägg
+**7.6** Annas inlägg
+
+```js
+async function loadPosts() {
+  posts.value = await pb.collection('posts').getFullList({
+    sort: '-created',
+    expand: 'author',
+    filter: 'author.username = "anna"',
+  })
+}
+```
+
+Punkten går via relationen `author` till fältet `username` i `users`.
+
+**7.7** Antal kommentarer
+
+```js
+async function loadPosts() {
+  posts.value = await pb.collection('posts').getFullList({
+    sort: '-created',
+    expand: 'author,comments_via_post',
+  })
+}
+```
+
+```html
+<li v-for="post in posts" :key="post.id">
+  <strong>{{ post.title }}</strong> – {{ post.expand?.author?.name }}
+  ({{ post.expand?.comments_via_post?.length ?? 0 }} kommentarer)
+</li>
+```
+
+**7.8** Kommentarer
 
 ```js
 const comments = ref([])
 
 async function loadComments() {
-  try {
-    comments.value = await pb.collection('comments').getFullList({ expand: 'author,post' })
-  } catch (e) {
-    showError(e)
-  }
+  comments.value = await pb.collection('comments').getFullList({ expand: 'author' })
 }
+
+onMounted(() => {
+  loadUsers()
+  loadPosts()
+  loadComments()
+})
 ```
 
 ```html
 <h2>Kommentarer</h2>
 <ul>
   <li v-for="comment in comments" :key="comment.id">
-    {{ comment.body }} – {{ comment.expand?.author?.username }} –
-    {{ comment.expand?.post?.title }}
+    {{ comment.body }} – {{ comment.expand?.author?.username }}
   </li>
 </ul>
 ```
 
-**7.8** Annas inlägg
+**7.9** Koden står i avsnittet
+[Ett formulär](07-hamta-och-lagga-till-data-med-vue.md#ett-formulär).
 
-```js
-posts.value = await pb.collection('posts').getFullList({
-  filter: 'author.username = "anna"',
-})
-```
-
-Punkten går via relationen `author` till fältet `username` i `users`. Det
-motsvarar en `JOIN` i SQL, som du lär dig i nästa kapitel.
-
-**7.9** Antal likes och kommentarer
-
-```js
-posts.value = await pb.collection('posts').getFullList({
-  sort: 'created',
-  expand: 'likes_via_post,comments_via_post',
-})
-```
-
-```html
-<li v-for="post in posts" :key="post.id">
-  {{ post.title }}:
-  {{ post.expand?.likes_via_post?.length ?? 0 }} likes,
-  {{ post.expand?.comments_via_post?.length ?? 0 }} kommentarer
-</li>
-```
-
-**7.10** Se avsnittet [Ett formulär](07-hamta-och-lagga-till-data-med-vue.md#ett-formulär).
-Utan rubrik får du `Fel 400: Failed to create record.`, eftersom `title` är
-**Nonempty**. I konsolen står det under `response.data.title`.
-
-**7.11** Ny kommentar
+**7.10** Ny kommentar
 
 ```js
 const newComment = ref({ post: '', author: '', body: '' })
 
 async function createComment() {
-  try {
-    await pb.collection('comments').create(newComment.value)
-    newComment.value = { post: '', author: '', body: '' }
-    await loadPosts()
-  } catch (e) {
-    showError(e)
-  }
+  await pb.collection('comments').create(newComment.value)
+  newComment.value = { post: '', author: '', body: '' }
+  await loadComments()
 }
 ```
 
@@ -208,104 +167,102 @@ async function createComment() {
       {{ user.username }}
     </option>
   </select>
-  <input v-model="newComment.body" placeholder="Kommentar" />
+  <textarea v-model="newComment.body" placeholder="Kommentar"></textarea>
   <button>Skicka</button>
 </form>
 ```
 
+**7.11** Ta bort
+
+```html
+<li v-for="post in posts" :key="post.id">
+  <strong>{{ post.title }}</strong> – {{ post.expand?.author?.name }}
+  <button @click="deletePost(post)">Ta bort</button>
+</li>
+```
+
+Om inlägget hade kommentarer försvann de också. Relationen `comments.post` har
+**Cascade delete** (kapitel 5).
+
 **7.12** Gilla
 
 ```js
-const me = ref('')
+const annaId = 'klistra-in-annas-id-här'
 
 async function like(post) {
-  try {
-    await pb.collection('likes').create({ post: post.id, user: me.value })
-    await loadPosts()
-  } catch (e) {
-    showError(e)
-  }
+  await pb.collection('likes').create({ post: post.id, user: annaId })
+  await loadPosts()
+}
+
+async function loadPosts() {
+  posts.value = await pb.collection('posts').getFullList({
+    sort: '-created',
+    expand: 'author,comments_via_post,likes_via_post',
+  })
 }
 ```
 
 ```html
-<label>
-  Jag är:
-  <select v-model="me">
-    <option v-for="user in users" :key="user.id" :value="user.id">
-      {{ user.username }}
-    </option>
-  </select>
-</label>
-
-<ul>
-  <li v-for="post in posts" :key="post.id">
-    {{ post.title }} ({{ post.expand?.likes_via_post?.length ?? 0 }} likes)
-    <button @click="like(post)">Gilla</button>
-  </li>
-</ul>
+<li v-for="post in posts" :key="post.id">
+  <strong>{{ post.title }}</strong>
+  ({{ post.expand?.likes_via_post?.length ?? 0 }} likes)
+  <button @click="like(post)">Gilla</button>
+</li>
 ```
 
-Andra gången får du `Fel 400: Failed to create record.`. Det unika indexet på
-`post` och `user` i `likes` (kapitel 5) gör att samma användare inte kan gilla
-samma inlägg två gånger.
+Andra gången får du ett fel i konsolen (`400`). Det unika indexet på `post` och
+`user` i `likes` (kapitel 5) gör att samma användare inte kan gilla samma
+inlägg två gånger.
 
-**7.13** Ta bort
+**7.13** Sidor
 
 ```js
-async function deletePost(post) {
-  try {
-    await pb.collection('posts').delete(post.id)
-    await loadPosts()
-  } catch (e) {
-    showError(e)
-  }
+const page = ref(1)
+const totalPages = ref(1)
+
+async function loadPosts() {
+  const result = await pb.collection('posts').getList(page.value, 2, { sort: '-created' })
+  posts.value = result.items
+  totalPages.value = result.totalPages
+}
+
+function nextPage() {
+  page.value++
+  loadPosts()
+}
+
+function prevPage() {
+  page.value--
+  loadPosts()
 }
 ```
 
 ```html
-<button @click="deletePost(post)">Ta bort</button>
+<p>Sida {{ page }} av {{ totalPages }}</p>
+<button :disabled="page <= 1" @click="prevPage">Föregående</button>
+<button :disabled="page >= totalPages" @click="nextPage">Nästa</button>
 ```
 
-Kommentarerna och likesen försvann också. Relationerna `comments.post` och
-`likes.post` har **Cascade delete** (kapitel 5), så när inlägget tas bort tas
-allt som pekar på det bort.
+Listan med `v-for="post in posts"` fungerar som förut, eftersom `posts` får
+`result.items`.
 
 **7.14** Annas flöde
 
 ```js
-const feed = ref([])
+async function loadPosts() {
+  const follows = await pb.collection('follows').getFullList({
+    filter: 'follower.username = "anna"',
+  })
+  // t.ex. 'author = "abc123" || author = "def456"'
+  const filter = follows.map((follow) => `author = "${follow.following}"`).join(' || ')
 
-async function loadFeed() {
-  try {
-    const follows = await pb.collection('follows').getFullList({
-      filter: 'follower.username = "anna"',
-    })
-    // t.ex. 'author = "abc123" || author = "def456"'
-    const filter = follows.map((follow) => `author = "${follow.following}"`).join(' || ')
-
-    feed.value = await pb.collection('posts').getFullList({
-      filter: filter,
-      sort: 'created',
-      expand: 'author',
-    })
-  } catch (e) {
-    showError(e)
-  }
+  posts.value = await pb.collection('posts').getFullList({
+    filter: filter,
+    sort: 'created',
+    expand: 'author',
+  })
 }
 ```
-
-```html
-<h2>Annas flöde</h2>
-<ul>
-  <li v-for="post in feed" :key="post.id">
-    {{ post.title }} ({{ post.expand?.author?.username }})
-  </li>
-</ul>
-```
-
-⚠️ Om Anna inte följer någon blir filtret tomt, och då får du **alla** inlägg.
-I en riktig app kollar man det först.
 
 Det går också att göra i **en** fråga, med en bakåt-relation i filtret:
 
@@ -313,9 +270,8 @@ Det går också att göra i **en** fråga, med en bakåt-relation i filtret:
 filter: 'author.follows_via_following.follower.username ?= "anna"'
 ```
 
-Läs det som: "inläggets författare finns i någon rad i `follows` (som
-`following`) där `follower` är anna". `?=` betyder "minst en av dem är lika
-med".
+Läs det som: "inläggets författare står som `following` i någon rad i
+`follows` där `follower` är anna". `?=` betyder "minst en av dem är lika med".
 
 ## Kapitel 8 – SQL och View collections
 
@@ -409,7 +365,7 @@ inloggad.
 
 **9.2** Se tabellerna i kapitel 9. Vue-appen från kapitel 7 är inte inloggad,
 så `@request.auth.id != ""` är falskt. Listorna blir tomma, och formulären ger
-`Fel 400` eller `Fel 404`.
+fel i konsolen (`400` eller `404`).
 
 **9.3** Då skulle Anna kunna skapa ett inlägg där `author` är Bertil, alltså
 skriva i någon annans namn. `@request.body.author = @request.auth.id` ser till

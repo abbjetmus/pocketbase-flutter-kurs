@@ -9,20 +9,6 @@ paketet **`pocketbase`** installerat. Det är PocketBase eget JavaScript-paket
 (en *SDK*) som sköter allt prat med servern. Du skriver all din kod i en enda
 fil: `src/App.vue`.
 
-## Det här behöver du
-
-- PocketBase med Kvittras data från [kapitel 6](06-lagg-in-data.md)
-- [Node.js](https://nodejs.org/), version **22 eller senare** (välj **LTS**)
-- [VS Code](https://code.visualstudio.com/)
-
-Kontrollera att Node.js finns genom att skriva det här i en terminal:
-
-```powershell
-node -v
-```
-
-Du ska få ett versionsnummer, t.ex. `v22.12.0`.
-
 ## Steg 1 – Öppna API-reglerna tillfälligt
 
 Från början är nästan alla collections **låsta** 🔒. Då får bara superusers läsa
@@ -49,9 +35,7 @@ medan du testar, men så får det aldrig vara i en riktig app. I
 
 ## Steg 2 – Starta Vue-projektet
 
-1. Kopiera mappen `kvittra-vue` till din dator, t.ex. till `Dokument`.
-2. Öppna mappen i VS Code (**File → Open Folder…**).
-3. Öppna en terminal i VS Code (**Terminal → New Terminal**) och skriv:
+Öppna Vue-projektet i VS Code, öppna en terminal (**Terminal → New Terminal**) och skriv:
 
 ```powershell
 npm install
@@ -60,32 +44,20 @@ npm install
 `npm install` laddar ner allt projektet behöver (Vue, PocketBase-paketet och
 Vite) till mappen `node_modules`. Det behöver du bara göra en gång.
 
-4. Starta appen:
+Starta sedan appen:
 
 ```powershell
 npm run dev
 ```
 
-5. Öppna <http://localhost:5173> i webbläsaren.
+Öppna adressen som visas i terminalen (oftast <http://localhost:5173>) i
+webbläsaren.
 
 Du ska se rubriken **Kvittra** och de fyra användarna anna, bertil, cissi och
 david.
 
 ⚠️ **Två terminaler:** PocketBase (`.\pocketbase serve`) och Vue-appen
 (`npm run dev`) ska vara igång samtidigt, i var sitt terminalfönster.
-
-### Om det blir fel
-
-Appen visar felet i en röd ruta. Hela felet syns i webbläsarens konsol
-(**F12** → fliken **Console**).
-
-| Du ser | Det betyder |
-|--------|-------------|
-| `Fel 0: Something went wrong.` | PocketBase är inte igång, eller adressen är fel |
-| `Fel 403: Only superusers can perform this action.` | Regeln är fortfarande låst 🔒 |
-| `Fel 404: ...` | Fel namn på collectionen, eller så finns inte recorden |
-| `Fel 400: ...` | Fel i ett filter, eller i datan du försöker spara |
-| Ingen röd ruta, men listan är tom | Regeln för `users` har kvar sin text. Sudda ut den |
 
 ## Så fungerar App.vue
 
@@ -107,11 +79,7 @@ const pb = new PocketBase('http://127.0.0.1:8090')
 const users = ref([])
 
 async function loadUsers() {
-  try {
-    users.value = await pb.collection('users').getFullList({ sort: 'username' })
-  } catch (e) {
-    showError(e)
-  }
+  users.value = await pb.collection('users').getFullList({ sort: 'username' })
 }
 
 onMounted(() => {
@@ -124,7 +92,6 @@ onMounted(() => {
   sidan om. I JavaScript läser och ändrar du den med `.value`.
 - `pb.collection('users').getFullList()` hämtar alla records i `users`.
 - `await` väntar på svaret från servern. Därför måste funktionen vara `async`.
-- `try` / `catch` fångar fel, och `showError` visar dem i den röda rutan.
 - `onMounted` körs en gång när sidan har visats.
 
 Och i `<template>`:
@@ -144,17 +111,13 @@ Och i `<template>`:
 
 Varje gång gör du samma tre steg. Exempel: visa alla inlägg.
 
-**1. Skapa en `ref`** under kommentaren `Skriv dina egna refs och funktioner här under`:
+**1. Skapa en `ref` och en funktion** i `<script setup>`, under `loadUsers`:
 
 ```js
 const posts = ref([])
 
 async function loadPosts() {
-  try {
-    posts.value = await pb.collection('posts').getFullList()
-  } catch (e) {
-    showError(e)
-  }
+  posts.value = await pb.collection('posts').getFullList()
 }
 ```
 
@@ -331,13 +294,9 @@ för att välja författare.
 const newPost = ref({ author: '', title: '', body: '' })
 
 async function createPost() {
-  try {
-    await pb.collection('posts').create(newPost.value)
-    newPost.value = { author: '', title: '', body: '' }
-    await loadPosts()   // hämta listan igen så att det nya inlägget syns
-  } catch (e) {
-    showError(e)
-  }
+  await pb.collection('posts').create(newPost.value)
+  newPost.value = { author: '', title: '', body: '' }
+  await loadPosts()   // hämta listan igen så att det nya inlägget syns
 }
 ```
 
@@ -363,7 +322,7 @@ async function createPost() {
 - `@submit.prevent="createPost"` kör `createPost` när man klickar på knappen,
   utan att sidan laddas om.
 
-💡 Får du `Fel 400: Failed to create record.`? Öppna konsolen (**F12**). Under
+💡 Händer ingenting när du klickar **Skicka**? Öppna konsolen (**F12**). Under
 `response.data` står vilket fält som är fel, t.ex. att `title` inte får vara
 tom.
 
@@ -394,85 +353,135 @@ await pb.collection('posts').delete(post.id)
 
 ## Övningar
 
-Skriv all kod i `src/App.vue`. Lösningar finns i
+Skriv all kod i `src/App.vue`. Övningarna bygger vidare på varandra, så gör dem
+i ordning. Lösningar finns i
 [losningar.md](losningar.md#kapitel-7--hämta-och-lägga-till-data-med-vue).
+
+💡 Händer ingenting? Öppna konsolen i webbläsaren (**F12** → **Console**). Där
+står felet i rött.
 
 ### Hämta
 
-**7.1** Starta projektet och kontrollera att de fyra användarna syns. Lägg
-sedan till `<pre>{{ users }}</pre>` i template. Vilka fält har en användare?
-Syns `email` och `password`?
-*Svar: Nej. Du ser bland annat `id`, `username`, `name`, `bio`, `website`,
-`avatar`, `created` och `updated`, men inte `email` och `password`.*
+**7.1** Lägg till `<pre>{{ users }}</pre>` i template. Nu ser du allt som kom
+tillbaka för varje användare. Syns `email`?
+*Svar: Nej. E-postadressen visas inte för andra.*
 
-**7.2** Visa alla inlägg med rubrik och text, **nyast först**.
-*Svar: Andra försöket överst, Höstpromenad nederst (om du lade in dem i samma
-ordning som i kapitel 6).*
+**7.2** Visa alla inlägg. Gör precis som i avsnittet
+[Så lägger du till en egen fråga](#så-lägger-du-till-en-egen-fråga).
+*Svar: 6 inlägg.*
 
-**7.3** Visa bara de inlägg vars rubrik innehåller "bröd".
-*Svar: Mitt första surdegsbröd.*
+**7.3** Sortera inläggen så att det **nyaste** kommer först. Ändra i
+`loadPosts`:
 
-**7.4** Hämta **en** användare, `anna`, med `getFirstListItem` och visa hennes
-namn och bio.
-*Svar: Anna Andersson – Gillar promenader och foto.*
+```js
+posts.value = await pb.collection('posts').getFullList({ sort: '-created' })
+```
 
-**7.5** Hämta inläggen med `getList`, **två per sida**, nyast först. Visa
-"Sida 1 av 3" ovanför listan. Lägg till knapparna **Föregående** och **Nästa**
-som byter sida.
-*Svar: Sida 1 visar Andra försöket och Matchdag. Det finns 6 inlägg och 3
-sidor.*
+*Svar: Andra försöket överst, Höstpromenad nederst.*
+
+**7.4** Visa bara inlägg vars rubrik innehåller "bröd". Lägg till ett `filter`
+bredvid `sort`, inom samma `{ }`. Byt sedan "bröd" mot "bok".
+*Svar: Mitt första surdegsbröd. Med "bok": Tips på en bra bok?*
+
+Ta bort filtret igen innan du går vidare.
 
 ### Relationer
 
-**7.6** Visa alla inlägg med rubrik och författarens **namn**.
+**7.5** Visa författarens namn efter varje rubrik.
+
+1. Lägg till `expand: 'author'` i `loadPosts`.
+2. Skriv `{{ post.expand?.author?.name }}` i ditt `<li>`.
+
 *Svar: t.ex. "Matchdag – David Dahl".*
 
-**7.7** Visa alla kommentarer med kommentarens text, användarnamnet på den som
-skrev den **och** rubriken på inlägget den hör till.
-*Svar: 6 rader, t.ex. "Recept tack! – cissi – Mitt första surdegsbröd".*
-
-**7.8** Visa titlarna på alla inlägg som `anna` har skrivit. Använd ett filter
-via relationen, inte hennes id.
+**7.6** Visa bara inläggen som `anna` har skrivit. Använd ett filter via
+relationen, som i avsnittet [Filtrera via en relation](#filtrera-via-en-relation).
 *Svar: Höstpromenad, Morgondimma.*
 
-**7.9** Visa varje inlägg med antal likes och antal kommentarer.
-*Svar: Höstpromenad 2 / 1, Mitt första surdegsbröd 3 / 2, Morgondimma 0 / 0,
-Tips på en bra bok? 0 / 2, Matchdag 1 / 1, Andra försöket 2 / 0.*
-Ledtråd: bakåt-relationer.
+Ta bort filtret igen innan du går vidare.
+
+**7.7** Visa hur många kommentarer varje inlägg har. Byt `expand` till
+`'author,comments_via_post'` och skriv antalet i ditt `<li>`, som i avsnittet
+[Bakåt-relationer](#bakåt-relationer).
+*Svar: Höstpromenad 1, Mitt första surdegsbröd 2, Morgondimma 0, Tips på en bra
+bok? 2, Matchdag 1, Andra försöket 0.*
+
+**7.8** Visa alla kommentarer med text och användarnamnet på den som skrev
+dem. Gör samma tre steg som för inläggen, men med `comments`:
+
+```js
+const comments = ref([])
+
+async function loadComments() {
+  comments.value = await pb.collection('comments').getFullList({ expand: 'author' })
+}
+```
+
+Glöm inte att anropa `loadComments()` i `onMounted`, och att skriva en lista i
+template.
+*Svar: 6 kommentarer, t.ex. "Recept tack! – cissi".*
 
 ### Lägga till
 
-**7.10** Bygg formuläret för nya inlägg från avsnittet
-[Ett formulär](#ett-formulär). Skapa ett inlägg och kontrollera att det syns
-både i appen och i Dashboard. Vad händer om du skickar utan rubrik?
+**7.9** Kopiera formuläret från avsnittet [Ett formulär](#ett-formulär) till
+din app: koden till `<script setup>` och HTML:en till `<template>`. Skapa ett
+inlägg. Syns det i listan? Syns det i Dashboard?
 
-**7.11** Bygg ett formulär för nya **kommentarer**. Man ska välja inlägg och
-författare i var sin lista och skriva en text. Kontrollera att antalet
-kommentarer från 7.9 ökar.
+**7.10** Gör ett formulär för nya **kommentarer**. Utgå från formuläret för
+inlägg och ändra så här:
 
-**7.12** Lägg till en lista **"Jag är:"** överst där man väljer en användare,
-och en knapp **Gilla** på varje inlägg. Knappen skapar en like för den valda
-användaren. Vad händer om du gillar samma inlägg två gånger? Varför?
+| Inlägg | Kommentar |
+|--------|-----------|
+| `newPost` | `newComment` |
+| `{ author: '', title: '', body: '' }` | `{ post: '', author: '', body: '' }` |
+| `createPost` | `createComment` |
+| `pb.collection('posts')` | `pb.collection('comments')` |
+| `loadPosts()` | `loadComments()` |
+| `<input>` för rubrik | en `<select>` med alla inlägg (`v-for="post in posts"`) |
 
-### Städa upp
+Skriv en kommentar. Syns den i listan från 7.8?
 
-**7.13** Lägg till en knapp **Ta bort** på varje inlägg som tar bort det. Ta
-bort inläggen du skapade i 7.10. Vad hände med kommentarerna och likesen som
-hörde till dem? Varför?
+### Ta bort
+
+**7.11** Lägg till en knapp **Ta bort** på varje inlägg.
+
+```js
+async function deletePost(post) {
+  await pb.collection('posts').delete(post.id)
+  await loadPosts()
+}
+```
+
+```html
+<button @click="deletePost(post)">Ta bort</button>
+```
+
+Knappen ska ligga **inne i** ditt `<li v-for="post in posts">`, annars vet den
+inte vilket inlägg den ska ta bort. Ta bort inlägget du skapade i 7.9.
 
 ⚠️ **Viktigt:** SQL-övningarna i nästa kapitel räknar med **exakt** datan från
-kapitel 6. Ta bort allt du har lagt till, även likes och kommentarer på de
-gamla inläggen (det går att göra i Dashboard). Jämför sedan med tabellen i
+kapitel 6. Ta bort allt du har lagt till, även kommentarer och likes (det går
+att göra i Dashboard). Jämför sedan med tabellen i
 [kapitel 6](06-lagg-in-data.md#kontrollera).
 
-### Utmaning
+### Utmaningar
 
-**7.14 Annas flöde.** Visa inläggen från de användare som `anna` följer, med
-rubrik och författare.
+De här är frivilliga, för dig som vill ha mer.
+
+**7.12 Gilla.** Lägg till en knapp **Gilla** på varje inlägg som skapar en like
+från `anna`. Visa antalet likes med `likes_via_post`. Vad händer om du gillar
+samma inlägg två gånger? Varför?
+Ledtråd: du behöver Annas id. Kopiera det från Dashboard.
+
+**7.13 Sidor.** Ändra `loadPosts` så att den använder `getList` och hämtar
+**två** inlägg per sida. Visa "Sida 1 av 3" och knapparna **Föregående** och
+**Nästa**.
+
+**7.14 Annas flöde.** Ändra `loadPosts` så att den bara visar inlägg från dem
+som `anna` följer.
 *Svar: Mitt första surdegsbröd (bertil), Tips på en bra bok? (cissi), Andra
 försöket (bertil).*
-Ledtråd: hämta först de rader i `follows` där `follower.username = "anna"`. Där
-finns id:n på dem hon följer, i fältet `following`. Bygg sedan ett filter för
-`posts` av dem.
+Ledtråd: hämta först raderna i `follows` där `follower.username = "anna"`. Fältet
+`following` innehåller id:n på dem hon följer.
 
 Nästa kapitel: [SQL och View collections](08-sql-och-view-collections.md)
