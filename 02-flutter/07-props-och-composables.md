@@ -1,9 +1,11 @@
-# 4. Props och composables
+# 7. Props och composables
 
-I det här kapitlet lär du dig tre saker:
+I kapitel 3 använde du `widget()` utan att vi förklarade varför. I det här
+kapitlet lär du dig tre saker:
 
-1. Hur en widget tar emot **props** från sin förälder.
-2. Hur du gör ett **textfält** utan att städa controllers själv.
+1. Hur en widget tar emot **props** från sin förälder, och varför `widget()`
+   behövs.
+2. Hur du gör ett **textfält**.
 3. Hur du skriver en egen **composable**, alltså logik som går att återanvända.
 
 ## Props med widget()
@@ -46,22 +48,22 @@ med `props.value`:
 
 ### Exempel: PostCard
 
+Nu gör vi `PostCard` från kapitel 3 lite smartare. Användarnamnet och
+bokstaven i avataren räknas fram av propen, och kortet får en `onTap`:
+
 ```dart
+// lib/widgets/post_card.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
-class PostCard extends CompositionWidget {
-  const PostCard({
-    super.key,
-    required this.title,
-    required this.author,
-    required this.likeCount,
-    this.onTap,
-  });
+import '../data/sample_data.dart';
+import '../models/post.dart';
+import 'like_button.dart';
 
-  final String title;
-  final String author;
-  final int likeCount;
+class PostCard extends CompositionWidget {
+  const PostCard({super.key, required this.post, this.onTap});
+
+  final Post post;
   final VoidCallback? onTap; // som emit i Vue
 
   @override
@@ -69,18 +71,36 @@ class PostCard extends CompositionWidget {
     final props = widget();
     final theme = useTheme();
 
-    final likeLabel = computed(() => props.value.likeCount == 1
-        ? '1 gillning'
-        : '${props.value.likeCount} gillningar');
-    final titleStyle = computed(() => theme.value.textTheme.titleMedium);
+    final handle = computed(() => '@${props.value.post.author}');
+    final initial = computed(() => props.value.post.author[0].toUpperCase());
 
     return (context) {
-      final PostCard(:title, :author, :onTap) = props.value;
+      final PostCard(:post, :onTap) = props.value;
+      final textTheme = theme.value.textTheme;
+
       return Card(
-        child: ListTile(
-          title: Text(title, style: titleStyle.value),
-          subtitle: Text('av $author · ${likeLabel.value}'),
+        child: InkWell(
           onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(child: Text(initial.value)),
+                    const SizedBox(width: 12),
+                    Text(handle.value, style: textTheme.titleSmall),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(post.title, style: textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(post.body),
+                LikeButton(initialLikes: sampleLikes[post.id] ?? 0),
+              ],
+            ),
+          ),
         ),
       );
     };
@@ -92,20 +112,18 @@ Så här används kortet:
 
 ```dart
 PostCard(
-  title: 'Höstpromenad',
-  author: 'anna',
-  likeCount: 2,
+  post: samplePosts[0],
   onTap: () => debugPrint('Öppna inlägget'),
 )
 ```
 
 Lägg märke till tre saker:
 
-- `final PostCard(:title, :author, :onTap) = props.value;` plockar ut flera
-  props på en gång. `:title` betyder "skapa variabeln `title` från fältet
-  `title`".
+- `final PostCard(:post, :onTap) = props.value;` plockar ut flera props på en
+  gång. `:post` betyder "skapa variabeln `post` från fältet `post`".
 - `onTap` är en **callback-prop**. Så skickar barnet något uppåt till
-  föräldern, som `emit` i Vue.
+  föräldern, som `emit` i Vue. `VoidCallback` betyder "en funktion som inte tar
+  några parametrar", och `InkWell` gör en yta klickbar.
 - Temat läses med `useTheme()`, inte `Theme.of(context)`. Läser du
   `Theme.of(context)` i builder-funktionen märks det inte när temat ändras.
 
@@ -117,8 +135,7 @@ Lägg märke till tre saker:
 
 ## Textfält med useTextEditingController
 
-I modul 02 behövde ett textfält en `TextEditingController` som skapades i
-`initState` och städades i `dispose`. Här gör en rad allt:
+Ett `TextField` styrs av en **controller**. En rad ger dig allt du behöver:
 
 ```dart
 final (controller, text, _) = useTextEditingController();
@@ -134,16 +151,35 @@ Controllern städas **automatiskt** när widgeten försvinner. Och skriver du
 `text.value = ''` töms textfältet. Det fungerar åt båda hållen, som `v-model` i
 Vue.
 
-### Exempel: kommentarsfält
+### Exempel: en kommentarsdel
+
+Nu gör vi en kommentarsdel: ett textfält, en skicka-knapp och en lista med
+kommentarerna.
+
+```
+┌──────────────────────────────────────┐
+│ o  Fina färger!                      │
+│ o  Snyggt jobbat!                    │
+│                                      │
+│ ┌──────────────────────────────┐     │
+│ │ Skriv en kommentar…          │  >  │
+│ └──────────────────────────────┘     │
+└──────────────────────────────────────┘
+```
 
 ```dart
-class CommentBox extends CompositionWidget {
-  const CommentBox({super.key});
+// lib/widgets/comment_section.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+
+class CommentSection extends CompositionWidget {
+  const CommentSection({super.key});
 
   @override
   Widget Function(BuildContext) setup() {
     const maxLength = 280;
     final (controller, text, _) = useTextEditingController();
+    final comments = ref(<String>[]);
 
     final remaining = computed(() => maxLength - text.value.length);
     final error = computed(() =>
@@ -153,25 +189,41 @@ class CommentBox extends CompositionWidget {
     );
 
     void send() {
-      debugPrint('Skickar: ${text.value.trim()}');
+      comments.value = [...comments.value, text.value.trim()];
       text.value = ''; // tömmer textfältet
     }
 
-    return (context) => Row(
+    return (context) => Column(
           children: [
             Expanded(
-              child: TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  hintText: 'Skriv en kommentar…',
-                  errorText: error.value,
-                  suffixText: '${remaining.value}',
+              child: ListView.builder(
+                itemCount: comments.value.length,
+                itemBuilder: (context, index) => ListTile(
+                  leading: const Icon(Icons.chat_bubble_outline),
+                  title: Text(comments.value[index]),
                 ),
               ),
             ),
-            IconButton(
-              onPressed: canSend.value ? send : null, // null = gråtonad knapp
-              icon: const Icon(Icons.send),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      decoration: InputDecoration(
+                        hintText: 'Skriv en kommentar…',
+                        errorText: error.value,
+                        suffixText: '${remaining.value}',
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: canSend.value ? send : null, // null = grå knapp
+                    icon: const Icon(Icons.send),
+                  ),
+                ],
+              ),
             ),
           ],
         );
@@ -179,8 +231,18 @@ class CommentBox extends CompositionWidget {
 }
 ```
 
-Det finns ingen `setState`, ingen `addListener` och ingen `dispose`. Knappen
-blir grå av sig själv när fältet är tomt.
+Testa den genom att tillfälligt byta `home:` i `main.dart`:
+
+```dart
+home: Scaffold(
+  appBar: AppBar(title: const Text('Kommentarer')),
+  body: const CommentSection(),
+),
+```
+
+Knappen blir grå av sig själv när fältet är tomt, och controllern städas när
+widgeten försvinner. I nästa kapitel får kommentarsdelen en egen plats på
+inläggets sida.
 
 ### Andra controllers: använd .raw
 
@@ -273,27 +335,35 @@ varandra.
 
 ## Övningar
 
-**4.1** Bygg `PostCard` och visa tre kort i en `ListView`. Prova `likeCount: 1`
-och `likeCount: 5`. Står det "gillning" eller "gillningar"?
+**7.1** Ge `PostCard` en ny prop `likeCount` (`int`, `0` från början). Visa
+`1 gillning` eller `5 gillningar` under texten. Använd en `computed`.
 
-**4.2** Ge `PostCard` en ny callback-prop `onAuthorTap` som anropas när man
-trycker på författarens namn. Låt föräldern skriva ut namnet med `debugPrint`.
+**7.2** Ge `PostCard` en ny callback-prop `onAuthorTap` som anropas med
+användarnamnet när man trycker på raden med avatar och namn. Låt föräldern
+skriva ut namnet med `debugPrint`.
 
-**4.3** Ändra `CommentBox` så att max är 140 tecken. Lägg till en text under
+**7.3** Ändra `CommentSection` så att max är 140 tecken. Lägg till en text under
 fältet som visar "Du har skrivit X tecken". Använd en `computed`.
 
-**4.4** Bygg en inloggningsruta med två `useTextEditingController`: e-post och
+**7.4** Visa antalet kommentarer överst i `CommentSection`, till exempel
+`2 kommentarer`. Använd en `computed`.
+
+**7.5** Lägg till en papperskorg (`Icons.delete_outline`) till höger på varje
+kommentar. När man trycker ska kommentaren tas bort. Ledtråd: `ListTile` har
+`trailing`, och kom ihåg att **ersätta** listan.
+
+**7.6** Bygg en inloggningsruta med två `useTextEditingController`: e-post och
 lösenord. Knappen "Logga in" ska bara gå att trycka på när e-posten innehåller
 `@` och lösenordet har minst 8 tecken.
 
-**4.5** Skriv en composable `useToggle({bool initial = false})` som returnerar
+**7.7** Skriv en composable `useToggle({bool initial = false})` som returnerar
 `(ReadonlyRef<bool>, void Function())`. Använd den för att visa och dölja
 kommentarerna under ett inlägg.
 
-**4.6 Utmaning.** Skriv `useDebounced(ReadonlyRef<String> source)`. Den ska
+**7.8 Utmaning.** Skriv `useDebounced(ReadonlyRef<String> source)`. Den ska
 returnera en `ref` som får samma värde som `source`, men först 300 ms efter att
 användaren slutat skriva. Använd `watch`, en `Timer` och `onUnmounted`.
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-4--props-och-composables).
+Lösningar finns i [losningar.md](losningar.md#kapitel-7--props-och-composables).
 
-Nästa kapitel: [Skriva data och realtid](05-skriva-data-och-realtid.md)
+Nästa kapitel: [Navigation och formulär](08-navigation-och-formular.md)

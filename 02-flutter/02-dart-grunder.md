@@ -257,7 +257,7 @@ void main() {
 
 `as String` betyder "det här värdet är en String". Om det inte stämmer
 kraschar programmet, så det är viktigt att fältnamnen stavas exakt som i
-JSON:en. I kapitel 6 gör vi en liknande konstruktor för data från PocketBase.
+JSON:en. I kapitel 9 gör vi en liknande konstruktor för data från PocketBase.
 
 ## async och await
 

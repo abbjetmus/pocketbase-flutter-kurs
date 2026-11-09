@@ -111,8 +111,8 @@ fungerar inte.
    där och välj **Chrome**.
 2. Tryck `F5` (eller **Run → Start Debugging**).
 
-Efter en stund öppnas Chrome med en räknarapp. Klicka på **+**-knappen och se
-hur siffran ökar.
+Efter en stund öppnas Chrome med en exempelapp. Då vet du att allt är rätt
+installerat. Stoppa appen med den röda fyrkanten i VS Code.
 
 Från terminalen gör du samma sak med:
 
@@ -122,19 +122,70 @@ flutter run -d chrome
 
 💡 Första gången tar det lång tid. Sedan går det mycket snabbare.
 
+## Steg 6 – Lägg till Flutter Compositions
+
+I den här kursen skriver vi alla widgets med paketet
+[`flutter_compositions`](https://yoyo930021.github.io/flutter_compositions). Det
+gör det enkelt att bygga appar som ändrar sig, och det fungerar nästan som Vue.
+Öppna terminalen i projektet och skriv:
+
+```powershell
+flutter pub add flutter_compositions:^0.1.1
+```
+
+⚠️ Skriv `:^0.1.1` efter namnet. Nyare versioner (0.2 och uppåt) fungerar lite
+annorlunda än det som står här.
+
+Ta nu bort allt i `lib/main.dart` och skriv det här i stället:
+
+```dart
+// lib/main.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+
+void main() => runApp(const HelloKvittra());
+
+class HelloKvittra extends CompositionWidget {
+  const HelloKvittra({super.key});
+
+  @override
+  Widget Function(BuildContext) setup() {
+    final likes = ref(0);
+
+    return (context) => MaterialApp(
+          theme: ThemeData(colorSchemeSeed: Colors.deepPurple),
+          home: Scaffold(
+            appBar: AppBar(title: const Text('Hej Kvittra')),
+            body: Center(child: Text('Gillningar: ${likes.value}')),
+            floatingActionButton: FloatingActionButton(
+              onPressed: () => likes.value++,
+              child: const Icon(Icons.favorite),
+            ),
+          ),
+        );
+  }
+}
+```
+
+⚠️ Visar VS Code nu ett rött fel i filen `test/widget_test.dart`? Den filen
+skapades av `flutter create` och letar efter exempelappen som du tog bort. Vi
+använder den inte, så du kan ta bort hela mappen `test`.
+
+Starta appen med `F5` och tryck på hjärtat. Siffran ökar. Hur koden fungerar går
+vi igenom i kapitel 3 och 4.
+
 ## Hot reload – se ändringar direkt
 
-Låt appen vara igång. Öppna `lib/main.dart` och leta upp raden med
-`seedColor: Colors.deepPurple`. Byt till `Colors.green` och spara med
-`Ctrl + S`.
+Låt appen vara igång. Öppna `lib/main.dart` och byt
+`Colors.deepPurple` till `Colors.green`. Spara med `Ctrl + S`.
 
-Färgen byts direkt, och siffran på räknaren är kvar. Det kallas **hot reload**.
+Färgen byts direkt, och siffran är kvar. Det kallas **hot reload**.
 
 | | Hot reload | Hot restart |
 |---|---|---|
 | Så gör du | Spara filen (`Ctrl + S`) | Klicka på den gröna runda pilen i VS Code |
 | Vad händer | Ändringen syns, appen fortsätter där den var | Appen startar om från början |
-| Siffran på räknaren | Är kvar | Blir 0 igen |
+| Siffran | Är kvar | Blir 0 igen |
 
 💡 Om något beter sig konstigt efter en ändring, gör en **hot restart**.
 
@@ -161,7 +212,7 @@ exempel:
 flutter pub add go_router
 ```
 
-Det gör vi i kapitel 5 och 6.
+Det gör vi i kapitel 8 och 9.
 
 ## Kom ihåg
 
@@ -170,19 +221,19 @@ Det gör vi i kapitel 5 och 6.
 | Öppna kommandopaletten | `Ctrl + Shift + P` |
 | Skapa ett projekt | `Flutter: New Project` eller `flutter create namn` |
 | Välja Chrome | Klicka på enheten längst ner till höger |
+| Lägga till ett paket | `flutter pub add namn` |
 | Köra appen | `F5` eller `flutter run -d chrome` |
 | Se en ändring | Spara (`Ctrl + S`) = hot reload |
 | Stoppa appen | Röda fyrkanten i VS Code, eller `q` i terminalen |
 
 ## Övningar
 
-**1.1** Kör räknarappen i Chrome. Tryck på **+** några gånger. Byt färgen i
-`seedColor` och spara. Är siffran kvar? Gör sedan en hot restart. Vad händer
-med siffran?
+**1.1** Kör appen i Chrome. Tryck på hjärtat några gånger. Byt färgen i
+`colorSchemeSeed` och spara. Är siffran kvar? Gör sedan en hot restart. Vad
+händer med siffran?
 
-**1.2** Leta upp texten `'Flutter Demo Home Page'` i `main.dart` och byt den
-till `'Kvittra'`. Byt också `'You have pushed the button this many times:'`
-till en svensk text. Spara och titta.
+**1.2** Byt rubriken `'Hej Kvittra'` till `'Kvittra'`. Byt också
+`'Gillningar: ...'` till `'Så här många gillar: ...'`. Spara och titta.
 
 **1.3** Kör `flutter doctor` och skriv av vilka rader som har ✓ och vilka som
 har ✗ på din dator. Vilka av dem behöver du för kursen?

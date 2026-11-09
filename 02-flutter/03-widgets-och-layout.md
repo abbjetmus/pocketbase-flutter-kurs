@@ -26,29 +26,29 @@ skrivs i Dart, även det som i Vue står i `<template>`.
 Ta bort allt i `lib/main.dart` och skriv det här i stället:
 
 ```dart
+// lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
 
 void main() {
   runApp(const KvittraApp());
 }
 
-class KvittraApp extends StatelessWidget {
+class KvittraApp extends CompositionWidget {
   const KvittraApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Kvittra',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-      ),
-      home: Scaffold(
-        appBar: AppBar(title: const Text('Kvittra')),
-        body: const Center(
-          child: Text('Välkommen till Kvittra!'),
-        ),
-      ),
-    );
+  Widget Function(BuildContext) setup() {
+    return (context) => MaterialApp(
+          title: 'Kvittra',
+          theme: ThemeData(colorSchemeSeed: Colors.indigo),
+          home: Scaffold(
+            appBar: AppBar(title: const Text('Kvittra')),
+            body: const Center(
+              child: Text('Välkommen till Kvittra!'),
+            ),
+          ),
+        );
   }
 }
 ```
@@ -56,15 +56,15 @@ class KvittraApp extends StatelessWidget {
 | Del | Vad den gör |
 |-----|-------------|
 | `runApp(...)` | Startar appen och visar widgeten på skärmen |
-| `StatelessWidget` | En widget som bara visar något. Den har inget eget minne (mer om det i kapitel 4) |
-| `build` | Beskriver hur widgeten ser ut. Flutter anropar den när skärmen ska ritas |
+| `CompositionWidget` | Så skriver vi alla egna widgets i den här kursen |
+| `setup()` | Körs **en** gång, när widgeten skapas. Den returnerar builder-funktionen |
+| `(context) => ...` | **Builder-funktionen**. Den beskriver hur widgeten ser ut |
 | `MaterialApp` | Ligger överst i alla appar. Bestämmer bland annat färgerna (`theme`) |
 | `Scaffold` | Skelettet för en skärm: en `appBar` överst och en `body` |
 | `child` | Widgeten som ligger inuti. Har en widget flera barn heter det `children` |
 
-⚠️ Visar VS Code nu ett rött fel i filen `test/widget_test.dart`? Den filen
-skapades av `flutter create` och letar efter räknarappen som du tog bort. Vi
-använder den inte, så du kan ta bort hela mappen `test`.
+💡 Än så länge gör `setup()` inget annat än att returnera builder-funktionen. I
+kapitel 4 skapar vi data som kan ändras där.
 
 💡 `const` framför en widget betyder att den aldrig ändras. Då slipper Flutter
 bygga om den. VS Code föreslår ofta var du kan lägga till `const`.
@@ -186,14 +186,14 @@ lib/
 
 Lägg klassen `Post` med `fromJson` från kapitel 2 i `lib/models/post.dart`.
 
-Sedan några påhittade inlägg. De är samma som i modul 01. I kapitel 6 byter
+Sedan några påhittade inlägg. De är samma som i modul 01. I kapitel 9 byter
 vi ut dem mot riktiga inlägg från din PocketBase.
 
 ```dart
 // lib/data/sample_data.dart
 import '../models/post.dart';
 
-// final och inte const: i kapitel 5 lägger vi till nya inlägg i listan
+// final och inte const: i kapitel 8 lägger vi till nya inlägg i listan
 final samplePosts = [
   Post(id: 'p1', author: 'anna', title: 'Höstpromenad', body: 'Löven har börjat gulna i parken.'),
   Post(id: 'p2', author: 'bertil', title: 'Mitt första surdegsbröd', body: 'Det blev platt men gott!'),
@@ -209,48 +209,58 @@ Sedan kortet:
 ```dart
 // lib/widgets/post_card.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
 
 import '../models/post.dart';
 
-class PostCard extends StatelessWidget {
+class PostCard extends CompositionWidget {
   const PostCard({super.key, required this.post});
 
   final Post post;
 
   @override
-  Widget build(BuildContext context) {
-    final username = post.author;
-    final textTheme = Theme.of(context).textTheme;
+  Widget Function(BuildContext) setup() {
+    final props = widget();
+    final theme = useTheme();
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(child: Text(username[0].toUpperCase())),
-                const SizedBox(width: 12),
-                Text('@$username', style: textTheme.titleSmall),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(post.title, style: textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(post.body),
-          ],
+    return (context) {
+      final post = props.value.post;
+      final username = post.author;
+      final textTheme = theme.value.textTheme;
+
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(child: Text(username[0].toUpperCase())),
+                  const SizedBox(width: 12),
+                  Text('@$username', style: textTheme.titleSmall),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(post.title, style: textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text(post.body),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    };
   }
 }
 ```
 
 - `PostCard` får sitt inlägg via konstruktorn, precis som `Post` fick sina fält
-  i kapitel 2. Så kan samma kort visa vilket inlägg som helst.
+  i kapitel 2. Så kan samma kort visa vilket inlägg som helst. Värden som en
+  widget får på det här sättet kallas **props**.
+- `widget()` ger dig widgeten själv. `props.value.post` läser propen. Mer om
+  varför i kapitel 7.
 - `username[0]` är första bokstaven i namnet.
-- `Theme.of(context).textTheme` hämtar färdiga textstilar från temat, till
+- `useTheme()` hämtar temat. `textTheme` innehåller färdiga textstilar, till
   exempel `titleMedium` för rubriker.
 
 ## Flödet: en lista med kort
@@ -261,6 +271,7 @@ En `Column` kan inte scrolla. För en lista som kan bli lång använder vi
 ```dart
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
 
 import 'data/sample_data.dart';
 import 'widgets/post_card.dart';
@@ -269,36 +280,34 @@ void main() {
   runApp(const KvittraApp());
 }
 
-class KvittraApp extends StatelessWidget {
+class KvittraApp extends CompositionWidget {
   const KvittraApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Kvittra',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-      ),
-      home: const FeedScreen(),
-    );
+  Widget Function(BuildContext) setup() {
+    return (context) => MaterialApp(
+          title: 'Kvittra',
+          theme: ThemeData(colorSchemeSeed: Colors.indigo),
+          home: const FeedScreen(),
+        );
   }
 }
 
-class FeedScreen extends StatelessWidget {
+class FeedScreen extends CompositionWidget {
   const FeedScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Kvittra')),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(8),
-        itemCount: samplePosts.length,
-        itemBuilder: (context, index) {
-          return PostCard(post: samplePosts[index]);
-        },
-      ),
-    );
+  Widget Function(BuildContext) setup() {
+    return (context) => Scaffold(
+          appBar: AppBar(title: const Text('Kvittra')),
+          body: ListView.builder(
+            padding: const EdgeInsets.all(8),
+            itemCount: samplePosts.length,
+            itemBuilder: (context, index) {
+              return PostCard(post: samplePosts[index]);
+            },
+          ),
+        );
   }
 }
 ```
@@ -314,7 +323,7 @@ Spara och titta i Chrome. Du ska se sex kort som du kan scrolla mellan.
 
 ## Övningar
 
-**3.1** Byt `seedColor` till en annan färg, till exempel `Colors.teal`. Vad
+**3.1** Byt `colorSchemeSeed` till en annan färg, till exempel `Colors.teal`. Vad
 ändras i appen?
 
 **3.2** Lägg till två egna inlägg i `samplePosts`. Ge dem id:na `'p7'` och `'p8'`.

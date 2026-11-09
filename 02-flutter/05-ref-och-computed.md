@@ -1,4 +1,4 @@
-# 2. ref och computed
+# 5. ref och computed
 
 Allt state i Flutter Compositions bygger på två verktyg:
 
@@ -98,22 +98,22 @@ Så här gör du de vanligaste sakerna:
 
 ## Exempel: flöde med filter och sök
 
-Vi bygger ett flöde med Kvittras inlägg från modul 01. Man kan välja **Alla**,
-**Följer** (de Anna följer) eller **Mina**, och söka på rubrik. Datan ligger i
-appen tills vidare. I kapitel 7 hämtar vi den från PocketBase.
+Vi bygger ett flöde av `samplePosts` från kapitel 3. Man kan välja **Alla**,
+**Följer** (de Anna följer) eller **Mina**, och söka på rubrik. Skapa filen
+`lib/feed_demo.dart` och byt tillfälligt till `home: const FeedDemo()` i
+`main.dart`.
 
 ```dart
+// lib/feed_demo.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 
-class Post {
-  const Post({required this.author, required this.title, this.likes = 0});
-  final String author; // användarnamn
-  final String title;
-  final int likes;
-}
+import 'data/sample_data.dart';
+import 'models/post.dart';
 
 enum FeedFilter { all, following, mine }
+
+int likesOf(Post post) => sampleLikes[post.id] ?? 0;
 
 class FeedDemo extends CompositionWidget {
   const FeedDemo({super.key});
@@ -123,14 +123,7 @@ class FeedDemo extends CompositionWidget {
     const me = 'anna';
 
     // State
-    final posts = ref(const [
-      Post(author: 'anna', title: 'Höstpromenad', likes: 2),
-      Post(author: 'bertil', title: 'Mitt första surdegsbröd', likes: 3),
-      Post(author: 'anna', title: 'Morgondimma'),
-      Post(author: 'cissi', title: 'Tips på en bra bok?'),
-      Post(author: 'david', title: 'Matchdag', likes: 1),
-      Post(author: 'bertil', title: 'Andra försöket', likes: 2),
-    ]);
+    final posts = ref(samplePosts);
     final following = ref(<String>{'bertil', 'cissi'}); // de Anna följer
     final filter = ref(FeedFilter.all);
     final search = ref('');
@@ -157,7 +150,8 @@ class FeedDemo extends CompositionWidget {
     );
 
     void addPost() {
-      posts.value = [const Post(author: 'anna', title: 'Nytt inlägg'), ...posts.value];
+      final post = Post(id: 'ny', author: 'anna', title: 'Nytt inlägg', body: '');
+      posts.value = [post, ...posts.value];
     }
 
     return (context) => Scaffold(
@@ -211,19 +205,19 @@ Lägg märke till:
 
 Utgå från `FeedDemo`.
 
-**2.1** Lägg till en `computed` som heter `totalLikes`. Den ska räkna ihop
-`likes` för alla inlägg som syns. Visa den under `summary`.
+**5.1** Lägg till en `computed` som heter `totalLikes`. Den ska räkna ihop
+`likesOf(post)` för alla inlägg som syns. Visa den under `summary`.
 
-**2.2** Lägg till en knapp "Mest gillade först". Den ska sortera `posts` så att
+**5.2** Lägg till en knapp "Mest gillade först". Den ska sortera `posts` så att
 inlägget med flest likes kommer först. Tänk på att `sort()` ändrar listan.
 
-**2.3** Lägg till en knapp "Ta bort första". Prova först att skriva
+**5.3** Lägg till en knapp "Ta bort första". Prova först att skriva
 `posts.value.removeAt(0)`. Vad händer? Skriv sedan om det så att det fungerar.
 
-**2.4** Lägg till en `IconButton` vid varje inlägg som följer eller slutar
+**5.4** Lägg till en `IconButton` vid varje inlägg som följer eller slutar
 följa författaren. Den ska ändra `following`. Vad händer med listan när filtret
 **Följer** är valt?
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-2--ref-och-computed).
+Lösningar finns i [losningar.md](losningar.md#kapitel-5--ref-och-computed).
 
-Nästa kapitel: [watch och livscykel](03-watch-och-livscykel.md)
+Nästa kapitel: [watch och livscykel](06-watch-och-livscykel.md)

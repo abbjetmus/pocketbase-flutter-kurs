@@ -1,4 +1,4 @@
-# 6. Hämta data från PocketBase
+# 9. Hämta data från PocketBase
 
 Hittills har alla inlägg varit påhittade och skrivna direkt i koden. Nu hämtar
 vi de riktiga inläggen från **din egen PocketBase**, den Kvittra du byggde i
@@ -70,7 +70,7 @@ Future<void> loginAsAnna() async {
   frågor, så att API-reglerna släpper igenom dig.
 - `pb.authStore.isValid` är sant när någon är inloggad.
 
-💡 Ett lösenord skrivet direkt i koden är bara okej när man övar. I modul 03
+💡 Ett lösenord skrivet direkt i koden är bara okej när man övar. I kapitel 11
 bygger vi en riktig inloggningssida.
 
 ⚠️ Du *kan* i stället sätta List-regeln för `posts` till tom. Men då får hela
@@ -178,7 +178,7 @@ String errorMessage(ClientException e) {
 | `403` | API-regeln säger nej |
 | `404` | Det du frågade efter finns inte |
 
-## FutureBuilder: laddar, fel eller data
+## useAsyncData: laddar, fel eller data
 
 `fetchPosts()` ger en `Future`, alltså ett svar som kommer senare. Medan vi
 väntar ska användaren se att något händer. Och går det fel ska hen få veta det.
@@ -189,112 +189,115 @@ väntar ska användaren se att något händer. Och går det fel ska hen få veta
 | **Fel** | Ett felmeddelande och en knapp **Försök igen** |
 | **Data** | Listan med inlägg |
 
-Widgeten **FutureBuilder** håller koll på läget åt dig. Byt ut innehållet i
+`useAsyncData` håller koll på läget åt dig. Du får tillbaka två saker: ett
+**`AsyncValue`** med läget, och en funktion `refresh` som hämtar igen.
+
+```dart
+final (status, refresh) = useAsyncData<List<Post>, void>((_) => fetchPosts());
+```
+
+`<List<Post>, void>` betyder att du får tillbaka en `List<Post>`. Vad `void`
+betyder och hur `useAsyncData` kan hämta igen av sig själv tar vi i kapitel 12.
+
+Ett `AsyncValue` är alltid i ett av fyra lägen:
+
+| Läge | Betyder |
+|------|---------|
+| `AsyncIdle` | Har inte börjat än |
+| `AsyncLoading` | Väntar på svar |
+| `AsyncData` | Klart. Datan finns i `value` |
+| `AsyncError` | Något gick fel. Felet finns i `errorValue` |
+
+Du väljer vad som ska visas med en `switch`. Byt ut innehållet i
 `lib/screens/feed_screen.dart`:
 
 ```dart
 // lib/screens/feed_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
 import 'package:go_router/go_router.dart';
 
 import '../data/pocketbase.dart';
 import '../models/post.dart';
 import '../widgets/post_card.dart';
 
-class FeedScreen extends StatefulWidget {
+class FeedScreen extends CompositionWidget {
   const FeedScreen({super.key});
 
   @override
-  State<FeedScreen> createState() => _FeedScreenState();
-}
+  Widget Function(BuildContext) setup() {
+    final (status, refresh) = useAsyncData<List<Post>, void>((_) => fetchPosts());
 
-class _FeedScreenState extends State<FeedScreen> {
-  // Starta hämtningen EN gång, när skärmen skapas
-  Future<List<Post>> _future = fetchPosts();
+    return (context) => Scaffold(
+          appBar: AppBar(title: const Text('Kvittra')),
+          body: switch (status.value) {
+            // Läge 1: laddar
+            AsyncIdle() || AsyncLoading() =>
+              const Center(child: CircularProgressIndicator()),
 
-  void _retry() {
-    setState(() {
-      _future = fetchPosts(); // hämta igen
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Kvittra')),
-      body: FutureBuilder<List<Post>>(
-        future: _future,
-        builder: (context, snapshot) {
-          // Läge 1: laddar
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          // Läge 2: fel
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('${snapshot.error}'),
-                  const SizedBox(height: 12),
-                  FilledButton(onPressed: _retry, child: const Text('Försök igen')),
-                ],
+            // Läge 2: fel
+            AsyncError(:final errorValue) => Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('$errorValue'),
+                    const SizedBox(height: 12),
+                    FilledButton(onPressed: refresh, child: const Text('Försök igen')),
+                  ],
+                ),
               ),
-            );
-          }
 
-          // Läge 3: data
-          final posts = snapshot.data ?? [];
-          return ListView.builder(
-            padding: const EdgeInsets.all(8),
-            itemCount: posts.length,
-            itemBuilder: (context, index) {
-              final post = posts[index];
-              return PostCard(
-                post: post,
-                onTap: () => context.push('/posts/${post.id}'),
-              );
-            },
-          );
-        },
-      ),
-    );
+            // Läge 3: data
+            AsyncData(:final value) => ListView.builder(
+                padding: const EdgeInsets.all(8),
+                itemCount: value.length,
+                itemBuilder: (context, index) {
+                  final post = value[index];
+                  return PostCard(
+                    key: ValueKey(post.id),
+                    post: post,
+                    onTap: () => context.push('/posts/${post.id}'),
+                  );
+                },
+              ),
+          },
+        );
   }
 }
 ```
 
-- `snapshot` berättar hur det går: `connectionState`, `hasError`, `error` och
-  `data`.
+- `AsyncData(:final value)` betyder: "om det är `AsyncData`, ge mig `value`".
+  Glömmer du ett läge varnar Dart.
 - `mainAxisSize: MainAxisSize.min` gör att `Column` bara blir så hög som sitt
   innehåll, så att den hamnar mitt på skärmen.
-- `_retry` startar en ny hämtning. `setState` gör att `FutureBuilder` får den
-  nya `Future`:n och visar snurran igen.
+- `refresh` hämtar igen och visar snurran under tiden.
 
 Gör en hot restart. Först syns snurran en kort stund, sedan inläggen från din
 PocketBase, med det nyaste först.
-
-⚠️ **Skapa inte Future:n i `build`.** Skriver du `future: fetchPosts()` direkt
-i `FutureBuilder` hämtas allt igen varje gång `build` körs. Spara den i en
-variabel, som `_future` ovan.
 
 💡 Står det `@?` i stället för ett användarnamn? Då kom `expand` inte med.
 Kontrollera att View-regeln för `users` släpper in inloggade
 (`@request.auth.id != ""`).
 
+### useFuture: hämta en gång
+
+Behöver du aldrig hämta igen är `useFuture` ännu enklare. Den ger bara ett
+`AsyncValue`:
+
+```dart
+final post = useFuture(() => fetchPost('abc123'));
+```
+
+Du visar det med samma `switch`. `post.value.dataOrNull` ger datan, eller `null`
+om den inte har kommit än.
+
 ## Vad hände med resten av appen?
 
 | Det du ser | Varför |
 |------------|--------|
-| Knappen för nytt inlägg är borta | Att spara nya inlägg i PocketBase gör vi i modul 03 |
-| Trycker du på ett inlägg står det "Inlägget finns inte" | `PostDetailScreen` letar fortfarande i `samplePosts`. Det fixar du i övning 6.3 |
-| Gillningarna visar 0 | `sampleLikes` har påhittade id:n. Riktiga likes kommer i modul 03 |
-
-## Nästa steg
-
-I [modul 03](../03-flutter-compositions/README.md) bygger vi vidare på det här.
-Där gör vi en riktig inloggningssida, skapar och tar bort inlägg, och ser nya
-inlägg dyka upp direkt.
+| Knappen för nytt inlägg är borta | Att spara nya inlägg i PocketBase gör vi i kapitel 10 och 13 |
+| Trycker du på ett inlägg står det "Inlägget finns inte" | `PostDetailScreen` letar fortfarande i `samplePosts`. Det fixar du i övning 9.3 |
+| Gillningarna visar 0 | `sampleLikes` har påhittade id:n. Riktiga likes kommer i kapitel 13 |
 
 ## Sammanfattning
 
@@ -306,25 +309,26 @@ inlägg dyka upp direkt.
 | Ta med en relation | `expand: 'author'` |
 | Läsa ett fält | `record.get<String>('title')` |
 | Fånga fel | `on ClientException catch (e)` |
-| Visa laddar, fel och data | `FutureBuilder` |
+| Visa laddar, fel och data | `useAsyncData` och en `switch` på `AsyncValue` |
+| Hämta en gång | `useFuture` |
 
 ## Övningar
 
-**6.1** Öppna <http://127.0.0.1:8090/api/collections/posts/records> i Chrome.
+**9.1** Öppna <http://127.0.0.1:8090/api/collections/posts/records> i Chrome.
 Vad ser du? Varför syns inga inlägg, fast appen kan visa dem? (Jämför med
 övning 9.1 i modul 01.)
 
-**6.2** Stoppa PocketBase med `Ctrl + C` i terminalen och gör en hot restart av
+**9.2** Stoppa PocketBase med `Ctrl + C` i terminalen och gör en hot restart av
 appen. Vilket felmeddelande visas? Starta PocketBase igen och tryck på
 **Försök igen**.
 
-**6.3** Skriv en funktion `fetchPost(String id)` i `pocketbase.dart` som hämtar
-ett inlägg med `pb.collection('posts').getOne(id, expand: 'author')`. Gör om
-`PostDetailScreen` till en `StatefulWidget` som visar inlägget med en
-`FutureBuilder`. Ledtråd: skapa Future:n i `initState`, eftersom du behöver
-`widget.postId`.
+**9.3** Skriv en funktion `fetchPost(String id)` i `pocketbase.dart` som hämtar
+ett inlägg med `pb.collection('posts').getOne(id, expand: 'author')`. Ändra
+`PostDetailScreen` så att den visar inlägget med `useFuture`. Ledtråd:
+`useFuture(() => fetchPost(props.raw.postId))`. `.raw` läser värdet en gång,
+utan att bevaka det.
 
-**6.4** Visa inläggets kommentarer under inlägget i `PostDetailScreen`, i
+**9.4** Visa inläggets kommentarer under inlägget i `PostDetailScreen`, i
 stället för `CommentSection`. Ge `Comment` från övning 2.6 en
 `factory Comment.fromRecord`, och skriv `fetchComments(String postId)`. Ledtråd:
 
@@ -336,11 +340,11 @@ pb.collection('comments').getList(
 )
 ```
 
-**6.5 Utmaning.** Gör en `UsersScreen` på adressen `/users` som visar alla
+**9.5 Utmaning.** Gör en `UsersScreen` på adressen `/users` som visar alla
 användare i Kvittra, med `name` som rubrik och `@username` som undertext.
 Ledtråd: `pb.collection('users').getFullList(sort: 'username')` ger en lista
 med alla.
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-6--hämta-data-från-pocketbase).
+Lösningar finns i [losningar.md](losningar.md#kapitel-9--hämta-data-från-pocketbase).
 
-Nästa modul: [03 – Flutter Compositions](../03-flutter-compositions/README.md)
+Nästa kapitel: [Skriva data och realtid](10-skriva-data-och-realtid.md)

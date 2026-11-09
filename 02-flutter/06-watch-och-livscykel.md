@@ -1,4 +1,4 @@
-# 3. watch och livscykel
+# 6. watch och livscykel
 
 `computed` räknar fram **värden**. Ibland vill du i stället **göra något** när
 ett värde ändras: skriva ut något, spara, visa ett meddelande eller hämta data.
@@ -103,11 +103,6 @@ watchEffect(() {
 | `onMounted(() { ... })` | När widgeten har visats första gången | Starta en timer, hämta data, börja lyssna på något |
 | `onUnmounted(() { ... })` | Precis innan widgeten tas bort | Stoppa timern, sluta lyssna |
 
-| `StatefulWidget` | `CompositionWidget` |
-|------------------|---------------------|
-| `initState()` | Koden i `setup()`, eller `onMounted` |
-| `dispose()` | `onUnmounted` |
-
 ### Exempel: en timer
 
 ```dart
@@ -211,7 +206,7 @@ onMounted(() async {
 });
 ```
 
-I kapitel 7 lär du dig `useAsyncData`, som gör det här enklare och dessutom tar
+I kapitel 9 lär du dig `useAsyncData`, som gör det här enklare och dessutom tar
 hand om fel.
 
 ## När använder jag vad?
@@ -226,22 +221,22 @@ hand om fel.
 
 ## Övningar
 
-**3.1** Gör en widget med `final likes = ref(0)` och två knappar, "Gilla" och
+**6.1** Gör en widget med `final likes = ref(0)` och två knappar, "Gilla" och
 "Ta bort like". Lägg till en `watch` som skriver ut "ökade" eller "minskade"
 med `debugPrint`.
 
-**3.2** Lägg till en `watchEffect` i samma widget som skriver ut `likes`. Starta
+**6.2** Lägg till en `watchEffect` i samma widget som skriver ut `likes`. Starta
 om appen. Vilken av `watch` och `watchEffect` skriver ut något direkt? Lägg
 sedan till `immediate: true` på din `watch`. Vad är `oldValue` första gången?
 
-**3.3** Bygg `ReadingTimer` och `TimerPage`. Slå av och på switchen och titta i
+**6.3** Bygg `ReadingTimer` och `TimerPage`. Slå av och på switchen och titta i
 terminalen. Börjar sekunderna om från 0 när timern visas igen? Varför?
 
-**3.4** Ta bort `onUnmounted` från `ReadingTimer` och lägg till
+**6.4** Ta bort `onUnmounted` från `ReadingTimer` och lägg till
 `debugPrint('tick')` i timern. Vad händer när du slår av switchen? Lägg sedan
 tillbaka `onUnmounted`.
 
-**3.5** Vilket verktyg passar? Välj `computed`, `watch`, `watchEffect`,
+**6.5** Vilket verktyg passar? Välj `computed`, `watch`, `watchEffect`,
 `onMounted` eller `onUnmounted`:
 
 1. Visa "3 kommentarer" utifrån en lista med kommentarer.
@@ -249,6 +244,6 @@ tillbaka `onUnmounted`.
 3. Sluta lyssna på nya kommentarer när sidan stängs.
 4. Hämta inlägg när sidan öppnas.
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-3--watch-och-livscykel).
+Lösningar finns i [losningar.md](losningar.md#kapitel-6--watch-och-livscykel).
 
-Nästa kapitel: [Props och composables](04-props-och-composables.md)
+Nästa kapitel: [Props och composables](07-props-och-composables.md)

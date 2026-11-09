@@ -1,7 +1,7 @@
 # 4. State och interaktion
 
-Hittills visar appen bara saker. Nu ska man kunna **göra** något: gilla ett
-inlägg och skriva en kommentar.
+Hittills visar appen bara saker. Nu ska man kunna **göra** något, till exempel
+gilla ett inlägg.
 
 ## Vad är state?
 
@@ -15,17 +15,9 @@ vad som syns. Till exempel:
 När state ändras ska skärmen ritas om:
 
 ```
- du trycker      state ändras       build() körs        skärmen
- på hjärtat  ──►  _liked = true  ──►  igen          ──►  visar ♥
+ du trycker      state ändras         builder körs        skärmen
+ på hjärtat  ──►  liked.value = true ──► igen         ──►  visar ♥
 ```
-
-## Stateless eller Stateful?
-
-| | `StatelessWidget` | `StatefulWidget` |
-|---|---|---|
-| Har eget minne? | Nej | Ja |
-| Kan ändra sig själv? | Nej | Ja, med `setState` |
-| Exempel | `Text`, vårt `PostCard` | En gilla-knapp, ett textfält |
 
 ## En gilla-knapp
 
@@ -42,71 +34,48 @@ Sedan knappen:
 ```dart
 // lib/widgets/like_button.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
 
-// 1. Widgeten. Den tar emot startvärdet
-class LikeButton extends StatefulWidget {
+class LikeButton extends CompositionWidget {
   const LikeButton({super.key, this.initialLikes = 0});
 
   final int initialLikes;
 
   @override
-  State<LikeButton> createState() => _LikeButtonState();
-}
+  Widget Function(BuildContext) setup() {
+    final props = widget();
 
-// 2. State-klassen. Här bor det som ändras
-class _LikeButtonState extends State<LikeButton> {
-  bool _liked = false;
-  int _likes = 0;
+    // 1. State
+    final liked = ref(false);
 
-  @override
-  void initState() {
-    super.initState();
-    _likes = widget.initialLikes; // körs en gång, när knappen skapas
-  }
-
-  void _toggle() {
-    setState(() {
-      _liked = !_liked;
-      if (_liked) {
-        _likes++;
-      } else {
-        _likes--;
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton.icon(
-      onPressed: _toggle,
-      icon: Icon(
-        _liked ? Icons.favorite : Icons.favorite_border,
-        color: _liked ? Colors.red : null,
-      ),
-      label: Text('$_likes'),
+    // 2. Ett värde som räknas fram av sig själv
+    final count = computed(
+      () => props.value.initialLikes + (liked.value ? 1 : 0),
     );
+
+    // 3. En vanlig funktion
+    void toggle() => liked.value = !liked.value;
+
+    // 4. Builder-funktionen ritar UI:t
+    return (context) => TextButton.icon(
+          onPressed: toggle,
+          icon: Icon(
+            liked.value ? Icons.favorite : Icons.favorite_border,
+            color: liked.value ? Colors.red : null,
+          ),
+          label: Text('${count.value}'),
+        );
   }
 }
 ```
 
-Det är mycket kod för ett hjärta. Så här hänger delarna ihop:
+Det här är nytt:
 
-| Del | Vad den gör |
-|-----|-------------|
-| `LikeButton` | Själva widgeten. Den tar emot `initialLikes` |
-| `_LikeButtonState` | Håller det som ändras: `_liked` och `_likes` |
-| `createState()` | Kopplar ihop widgeten med sin State-klass |
-| `initState()` | Körs **en** gång, när knappen skapas |
-| `widget.initialLikes` | Så läser State-klassen värden från widgeten |
-| `setState(() { ... })` | Ändrar state **och** säger åt Flutter att köra `build` igen |
-
-- Namn som börjar med `_` är **privata**. De syns bara i den här filen.
-- `_liked ? Icons.favorite : Icons.favorite_border` betyder "om `_liked` är
-  sant, ta det första, annars det andra". Det fungerar som i JavaScript.
-
-⚠️ **Glöm inte `setState`!** Om du skriver `_liked = !_liked;` utan `setState`
-ändras variabeln, men skärmen ritas inte om. Det är ett av de vanligaste felen i
-Flutter.
+| Ord | Betyder |
+|-----|---------|
+| `ref(false)` | En "låda" med ett värde. Du läser och ändrar det med `.value` |
+| `computed(...)` | Ett värde som räknas fram av andra värden |
+| `liked.value ? a : b` | Om `liked.value` är sant, ta `a`, annars `b`. Det fungerar som i JavaScript |
 
 ### Sätt knappen i PostCard
 
@@ -124,159 +93,130 @@ Glöm inte att importera filerna överst i `post_card.dart`:
 
 Spara och klicka på hjärtana. Varje knapp minns sitt eget state.
 
-## Textfält och TextEditingController
+## Så fungerar det
 
-Nu gör vi en kommentarsdel: ett textfält, en skicka-knapp och en lista med
-kommentarerna.
+Det här är det viktigaste i hela modulen:
 
 ```
-┌──────────────────────────────────────┐
-│ o  Fina färger!                      │
-│ o  Snyggt jobbat!                    │
-│                                      │
-│ ┌──────────────────────────────┐     │
-│ │ Skriv en kommentar…          │  >  │
-│ └──────────────────────────────┘     │
-└──────────────────────────────────────┘
+  Widgeten skapas
+        │
+        ▼
+  ┌─────────────────────────────┐
+  │ setup()   körs EN gång      │
+  │  • skapar ref och computed  │
+  │  • returnerar builder ──┐   │
+  └─────────────────────────┼───┘
+                            ▼
+  ┌─────────────────────────────┐
+  │ builder  (context) => ...   │◄──┐
+  │  • läser liked.value        │   │ körs igen av sig själv
+  └─────────────────────────────┘   │
+                                    │
+  liked.value = true ───────────────┘
 ```
 
-Ett `TextField` styrs av en **controller**. Med den kan du läsa texten
-(`controller.text`) och tömma fältet (`controller.clear()`).
+1. **`setup()` körs en gång** när widgeten skapas. Allt du skapar där lever lika
+   länge som widgeten.
+2. **Builder-funktionen** ritar UI:t. Medan den körs kommer systemet ihåg vilka
+   `.value` den läste.
+3. **När ett av de värdena ändras** körs builder-funktionen igen, och skärmen
+   uppdateras av sig själv.
 
-```dart
-// lib/widgets/comment_section.dart
-import 'package:flutter/material.dart';
+💡 Läser builder-funktionen inte ett värde, så körs den inte heller om när det
+värdet ändras. Det gör appen snabb.
 
-class CommentSection extends StatefulWidget {
-  const CommentSection({super.key});
+## Kan du Vue?
 
-  @override
-  State<CommentSection> createState() => _CommentSectionState();
-}
+Då känner du igen nästan allt. Flutter Compositions bygger på Vue 3:s
+*Composition API*.
 
-class _CommentSectionState extends State<CommentSection> {
-  final _controller = TextEditingController();
-  final List<String> _comments = [];
+| Vue 3 (`<script setup>`) | Flutter Compositions | Kapitel |
+|--------------------------|----------------------|---------|
+| `<script setup>` | `setup()` | 3 |
+| `<template>` | builder-funktionen `(context) => ...` | 3 |
+| `const n = ref(0)` | `final n = ref(0);` | 5 |
+| `{{ n }}` i template | `Text('${n.value}')`, **alltid** `.value` | 5 |
+| `computed(() => ...)` | `computed(() => ...)` | 5 |
+| `watch` / `watchEffect` | `watch` / `watchEffect` | 6 |
+| `onMounted` / `onUnmounted` | `onMounted` / `onUnmounted` | 6 |
+| `defineProps` | fält i klassen + `widget()` | 7 |
+| `v-model` | `useTextEditingController()` | 7 |
+| `provide` / `inject` | `provide` / `inject` med `InjectionKey` | 11 |
+| `v-if` / `v-for` | `if` / `for` i en lista med widgets | 5 |
 
-  void _send() {
-    final text = _controller.text.trim(); // trim() tar bort mellanslag i kanterna
-    if (text.isEmpty) return;
-    setState(() {
-      _comments.add(text);
-    });
-    _controller.clear();
-  }
+⚠️ **Den största skillnaden:** I Vue packar templaten upp `ref` åt dig. I Dart
+gör ingen det. Skriver du `Text('$count')` i stället för
+`Text('${count.value}')` står det något i stil med `Instance of 'ComputedRef<int>'`
+på skärmen.
 
-  @override
-  void dispose() {
-    _controller.dispose(); // städa bort controllern
-    super.dispose();
-  }
+## Regler att komma ihåg
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            itemCount: _comments.length,
-            itemBuilder: (context, index) => ListTile(
-              leading: const Icon(Icons.chat_bubble_outline),
-              title: Text(_comments[index]),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  decoration: const InputDecoration(
-                    hintText: 'Skriv en kommentar…',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (_) => _send(), // Enter skickar också
-                ),
-              ),
-              IconButton(onPressed: _send, icon: const Icon(Icons.send)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-```
+Det här är de fem viktigaste reglerna. Vi förklarar dem mer i kapitlen som
+kommer.
 
-Testa den genom att tillfälligt byta `home:` i `main.dart`:
-
-```dart
-home: Scaffold(
-  appBar: AppBar(title: const Text('Kommentarer')),
-  body: const CommentSection(),
-),
-```
-
-I nästa kapitel får den en egen plats på inläggets sida.
-
-### Varför `dispose`?
-
-En controller tar upp minne. När widgeten försvinner måste den städas bort med
-`dispose()`. Glömmer du det märks inget direkt, men appen läcker minne.
-
-En `State`-klass har tre viktiga metoder:
-
-| Metod | När körs den? | Används till |
-|-------|---------------|--------------|
-| `initState()` | En gång, när widgeten skapas | Sätta startvärden |
-| `build()` | Varje gång något ändras | Rita skärmen |
-| `dispose()` | En gång, när widgeten tas bort | Städa, t.ex. `controller.dispose()` |
-
-⚠️ Skapa **aldrig** en controller inuti `build`. `build` körs många gånger, så
-du skulle få en ny controller varje gång, och texten skulle försvinna.
-
-## Det här blir jobbigt
-
-Det fungerar, och många appar är byggda så här. Men titta på vad du själv
-måste komma ihåg:
-
-| Jobbigt | Exempel |
-|---------|---------|
-| **Två klasser** för varje widget som ändrar sig | `LikeButton` och `_LikeButtonState` |
-| **`setState` överallt.** Glömmer du det uppdateras inte skärmen | `_toggle()` |
-| **`dispose`** för varje controller | `_controller.dispose()` |
-| **`initState`** för att kopiera startvärden | `_likes = widget.initialLikes` |
-| **State sitter fast** i en widget | Appens `AppBar` kan inte visa hur många inlägg du har gillat, för det vet bara varje knapp |
-
-Om du har skrivit Vue finns det enklare sätt: en `ref` uppdaterar skärmen av
-sig själv, och `onUnmounted` städar. I
-[modul 03 – Flutter Compositions](../03-flutter-compositions/README.md) får
-Flutter samma verktyg.
+| # | Regel | Varför |
+|---|-------|--------|
+| 1 | `setup()` körs **en gång** och får **aldrig** vara `async` | Den måste returnera builder-funktionen direkt. Hämta data med `onMounted` eller `useAsyncData` (kapitel 6 och 9) |
+| 2 | Läs och skriv alltid med **`.value`**. Skapa `ref` i `setup()`, **aldrig** i builder-funktionen | Builder-funktionen körs många gånger. En `ref` där skulle börja om från början varje gång |
+| 3 | **Ersätt** listor, ändra dem inte | `posts.value.add(x)` märks inte. Skriv `posts.value = [...posts.value, x]` (kapitel 5) |
+| 4 | Anropa `ref`, `computed`, `watch`, `onMounted`, `use...` och `inject` **direkt i `setup()`** | Inte i en `if`, inte i en knapp och inte inuti `onMounted` |
+| 5 | Läs props med **`widget()`** och temat med **`useTheme()`** | Annars ser du bara det första värdet (kapitel 7) |
 
 ## Övningar
 
-**4.1** Gör en `FollowButton` som `StatefulWidget`. Den visar en `FilledButton`
-med texten `Följ`. När man trycker blir den en `OutlinedButton` med texten
-`Följer`, och trycker man igen blir den `Följ`.
+**4.1** Sätt `LikeButton` i `PostCard` som i kapitlet. Tryck på hjärtat på två
+olika kort. Vad händer med siffrorna?
 
-**4.2** Ta bort `setState(() { ... })` runt koden i `_toggle()` i `LikeButton`
-(behåll koden inuti). Vad händer när du klickar? Varför? Lägg sedan tillbaka
-`setState`.
+**4.2** Skriv en `CompositionWidget` som heter `FollowButton`. Den ska ha en
+`ref` `following` (`false` från början) och en `ref` `followers` (`12` från
+början). När man trycker på knappen ska `following` växla, och `followers` öka
+eller minska med 1. Knappen ska visa texten "Följ" eller "Sluta följa". Använd
+en `computed` för texten.
 
-**4.3** Visa antalet kommentarer överst i `CommentSection`, till exempel
-`2 kommentarer`. Ledtråd: lägg en `Text` först i `Column` och använd
-`_comments.length`.
+**4.3** Ändra builder-funktionen i `FollowButton` så att den har en
+block-kropp, och lägg till `debugPrint('builder körs')` först:
 
-**4.4** Skicka-knappen ska vara grå när textfältet är tomt. Ledtråd: en knapp
-med `onPressed: null` är grå. Lägg till `onChanged: (_) => setState(() {})` på
-`TextField`, så att `build` körs när man skriver.
+```dart
+return (context) {
+  debugPrint('builder körs');
+  return Column(children: [ /* ... */ ]);
+};
+```
 
-**4.5 Utmaning.** Lägg till en papperskorg (`Icons.delete_outline`) till höger
-på varje kommentar. När man trycker ska kommentaren tas bort. Ledtråd:
-`ListTile` har `trailing`, och listor har `removeAt(index)`.
+Hur ofta skrivs texten ut? Lägg sedan till en `ref` som builder-funktionen
+**inte** läser, och en knapp som ändrar den. Skrivs något ut när du trycker?
+
+**4.4** Koden nedan kompilerar, men den fungerar inte. Hitta de tre felen.
+Använd reglerna ovan.
+
+```dart
+class TagList extends CompositionWidget {
+  const TagList({super.key});
+
+  @override
+  Widget Function(BuildContext) setup() {
+    final tags = ref(<String>['#kvittra']);
+
+    return (context) {
+      final clicks = ref(0);
+      return Column(
+        children: [
+          Text('Antal klick: $clicks'),
+          TextButton(
+            onPressed: () {
+              clicks.value++;
+              tags.value.add('#flutter');
+            },
+            child: const Text('Lägg till'),
+          ),
+          for (final t in tags.value) Text(t),
+        ],
+      );
+    };
+  }
+}
+```
 
 Lösningar finns i [losningar.md](losningar.md#kapitel-4--state-och-interaktion).
 
-Nästa kapitel: [Navigation och formulär](05-navigation-och-formular.md)
+Nästa kapitel: [ref och computed](05-ref-och-computed.md)

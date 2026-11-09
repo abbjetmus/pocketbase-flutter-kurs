@@ -1,4 +1,4 @@
-# 8. Bygg Kvittra-appen
+# 13. Bygg Kvittra-appen
 
 Nu bygger vi ihop allt till en riktig app. Den pratar med din PocketBase från
 modul 01, och den använder allt du har lärt dig i modulen.
@@ -15,7 +15,7 @@ Innan du börjar:
 
 - [ ] PocketBase är startad (`.\pocketbase serve`).
 - [ ] Kvittras collections, testdata och API-regler från modul 01 finns.
-- [ ] Du har ett projekt med paketen från [README](README.md#installation).
+- [ ] Du har projektet `kvittra_app` från [kapitel 11](11-provide-inject.md#ett-nytt-projekt).
 
 ## Steg 1 – Mappar
 
@@ -30,10 +30,10 @@ lib/
 │   ├── comment.dart
 │   └── user.dart
 ├── services/
-│   ├── auth_service.dart  ← samma som i kapitel 6
-│   └── keys.dart          ← samma som i kapitel 6
+│   ├── auth_service.dart  ← samma som i kapitel 11
+│   └── keys.dart          ← samma som i kapitel 11
 ├── pages/
-│   ├── login_page.dart    ← samma som i kapitel 6
+│   ├── login_page.dart    ← samma som i kapitel 11
 │   ├── feed_page.dart
 │   ├── post_page.dart
 │   ├── new_post_page.dart
@@ -53,7 +53,7 @@ lib/
 ## Steg 2 – Modeller
 
 Modellerna gör om en `RecordModel` från PocketBase till en vanlig Dart-klass,
-som `Post.fromRecord` i modul 02.
+som `Post.fromRecord` i kapitel 9.
 
 `Post` räknar också ut likes. Med `expand: 'likes_via_post'` får vi alla rader i
 `likes` som pekar på inlägget. Det kallas en **bakåtrelation**: `likes` har ett
@@ -162,7 +162,7 @@ class User {
 ## Steg 3 – Tjänster och inloggning
 
 Kopiera `auth_service.dart`, `keys.dart` och `login_page.dart` från
-[kapitel 6](06-provide-inject.md). De fungerar som de är.
+[kapitel 11](11-provide-inject.md). De fungerar som de är.
 
 <details>
 <summary>Visa koden igen</summary>
@@ -284,8 +284,8 @@ class LoginPage extends CompositionWidget {
 
 ## Steg 4 – Router med inloggningskrav
 
-I kapitel 6 valde `KvittraApp` sida med `auth.isLoggedIn.value ? ... : ...`.
-Nu har vi flera sidor, så vi använder `go_router` som i modul 02.
+I kapitel 11 valde `KvittraApp` sida med `auth.isLoggedIn.value ? ... : ...`.
+Nu har vi flera sidor, så vi använder `go_router` som i kapitel 8.
 
 `redirect` körs vid varje navigering. Är man inte inloggad skickas man till
 `/login`. Är man inloggad och står på `/login` skickas man till flödet.
@@ -390,12 +390,15 @@ Skapa dem först som tomma sidor, till exempel:
 ```dart
 // lib/pages/feed_page.dart (tillfälligt)
 import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
 
-class FeedPage extends StatelessWidget {
+class FeedPage extends CompositionWidget {
   const FeedPage({super.key});
 
   @override
-  Widget build(BuildContext context) => const Scaffold(body: Text('Flöde'));
+  Widget Function(BuildContext) setup() {
+    return (context) => const Scaffold(body: Text('Flöde'));
+  }
 }
 ```
 
@@ -407,7 +410,7 @@ inloggningen till den tomma flödessidan.
 
 `PostCard` visar ett inlägg och en gilla-knapp. Den används både i flödet, på
 inläggssidan och på profilen. Gilla-knappen är den optimistiska uppdateringen
-från [kapitel 7](07-hamta-data.md#gilla-direkt).
+från [kapitel 12](12-ladda-om-och-realtid.md#gilla-direkt).
 
 ```dart
 // lib/widgets/post_card.dart
@@ -682,7 +685,7 @@ class PostPage extends CompositionWidget {
 }
 ```
 
-`CommentsSection` är `LiveComments` från [kapitel 7](07-hamta-data.md#kommentarer-i-realtid),
+`CommentsSection` är `LiveComments` från [kapitel 12](12-ladda-om-och-realtid.md#kommentarer-i-realtid),
 med en modell och ett fält för att skriva en kommentar.
 
 <details>
@@ -1090,25 +1093,25 @@ minnet. Vill du spara den finns `AsyncAuthStore` i paketet `pocketbase`.
 
 ## Övningar
 
-**8.1** Lägg till en knapp **Följer** i flödet som bara visar inlägg från dem
+**13.1** Lägg till en knapp **Följer** i flödet som bara visar inlägg från dem
 du följer. Filtret är
 `pb.filter('author.follows_via_following.follower ?= {:me}', {'me': auth.myId})`.
 Använd en `ref` och `watch` i `useAsyncData`.
 
-**8.2** Visa antal kommentarer på varje `PostCard`. Tips: lägg till
+**13.2** Visa antal kommentarer på varje `PostCard`. Tips: lägg till
 `comments_via_post` i `expand` och ett fält `commentCount` i `Post`.
 
-**8.3** Låt författaren radera sitt eget inlägg från `PostPage`. Visa en
+**13.3** Låt författaren radera sitt eget inlägg från `PostPage`. Visa en
 `IconButton` i `AppBar` bara om inlägget är ditt, och gå tillbaka till flödet
 efteråt.
 
-**8.4** Gör en sida där man kan ändra sin egen `bio`. Använd
+**13.4** Gör en sida där man kan ändra sin egen `bio`. Använd
 `useTextEditingController` och `pb.collection('users').update(...)`. Öppna den
 från profilen när `isMe` är sant.
 
-**8.5 Ditt projekt.** Välj **en** sida i ditt eget projekt från modul 01. Bygg
+**13.5 Ditt projekt.** Välj **en** sida i ditt eget projekt från modul 01. Bygg
 den med en `CompositionWidget`, `useAsyncData` och `inject(pocketBaseKey)`.
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-8--bygg-kvittra-appen).
+Lösningar finns i [losningar.md](losningar.md#kapitel-13--bygg-kvittra-appen).
 
 Grattis! Du har byggt en hel app med Flutter Compositions och PocketBase. 🎉

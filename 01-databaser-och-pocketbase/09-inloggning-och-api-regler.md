@@ -132,4 +132,4 @@ Lösningar finns i [losningar.md](losningar.md#kapitel-9--inloggning-och-api-reg
 
 Nästa modul: [02 – Flutter](../02-flutter/README.md). Hur en Flutter-app loggar in och
 hämtar data från PocketBase går vi igenom i
-[modul 02, kapitel 6](../02-flutter/06-hamta-data-fran-pocketbase.md).
+[modul 02, kapitel 9](../02-flutter/09-hamta-data-fran-pocketbase.md).

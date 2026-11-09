@@ -1,85 +1,20 @@
-# 7. Hämta data
+# 12. Ladda om och realtid
 
-I modul 02 visade du data från PocketBase med `FutureBuilder`. Här gör vi
-samma sak med Flutter Compositions. Det blir kortare, och det blir lätt att
-ladda om.
+I [kapitel 9](09-hamta-data-fran-pocketbase.md) visade du data från PocketBase
+med `useFuture`, `useAsyncData` och en `switch` på `AsyncValue`. Nu bygger vi
+vidare på det: hämta igen när något ändras, dra för att ladda om och lyssna på
+ändringar i realtid.
 
 | Du vill … | Använd |
 |-----------|--------|
-| Hämta något en gång när sidan öppnas | `useFuture` |
-| Hämta igen när något ändras, eller när användaren drar för att ladda om | `useAsyncData` |
-| Visa laddning, fel eller data | `switch` på ett `AsyncValue` |
+| Hämta igen när något ändras, eller när användaren drar för att ladda om | `useAsyncData` med `watch` och `refresh` |
 | Lyssna på ändringar i realtid | `subscribe` i `onMounted`, `unsubscribe` i `onUnmounted` |
+| Visa ett gillande direkt, innan servern har svarat | En optimistisk uppdatering |
 
-## AsyncValue: fyra lägen
+## useAsyncData: hämta när något ändras
 
-Både `useFuture` och `useAsyncData` ger dig ett `AsyncValue`. Det är alltid i
-ett av fyra lägen:
-
-| Läge | Betyder |
-|------|---------|
-| `AsyncIdle` | Har inte börjat än |
-| `AsyncLoading` | Väntar på svar |
-| `AsyncData` | Klart. Datan finns i `value` |
-| `AsyncError` | Något gick fel. Felet finns i `errorValue` |
-
-Du väljer vad som ska visas med en `switch`:
-
-```dart
-return (context) => switch (posts.value) {
-      AsyncIdle() || AsyncLoading() =>
-        const Center(child: CircularProgressIndicator()),
-      AsyncError(:final errorValue) => Text('Fel: $errorValue'),
-      AsyncData(:final value) => Text('${value.length} inlägg'),
-    };
-```
-
-`AsyncData(:final value)` betyder: "om det är `AsyncData`, ge mig `value`".
-Glömmer du ett läge varnar Dart.
-
-💡 Behöver du bara datan, till exempel i en `computed`, finns
-`posts.value.dataOrNull`. Den är `null` tills datan har kommit.
-
-## useFuture: hämta en gång
-
-```dart
-class FeedSimple extends CompositionWidget {
-  const FeedSimple({super.key});
-
-  @override
-  Widget Function(BuildContext) setup() {
-    final pb = inject(pocketBaseKey);
-
-    final posts = useFuture(() => pb.collection('posts').getFullList(
-          sort: '-created',
-          expand: 'author',
-        ));
-
-    return (context) => switch (posts.value) {
-          AsyncIdle() || AsyncLoading() =>
-            const Center(child: CircularProgressIndicator()),
-          AsyncError(:final errorValue) => Center(child: Text('Fel: $errorValue')),
-          AsyncData(:final value) => ListView(
-              children: [
-                for (final r in value)
-                  ListTile(
-                    title: Text(r.getStringValue('title')),
-                    subtitle: Text(r.get<String>('expand.author.name', '?')),
-                  ),
-              ],
-            ),
-        };
-  }
-}
-```
-
-| `FutureBuilder` (modul 02) | `useFuture` |
-|----------------------------|-------------|
-| Spara Future i `initState` | Skriv funktionen direkt i `setup()` |
-| `snapshot.connectionState`, `snapshot.hasError` … | `switch` med fyra lägen |
-| Svårt att ladda om | Byt till `useAsyncData` och få `refresh` |
-
-## useAsyncData: hämta igen
+Till `useAsyncData` kan du lägga till en `watch`. Då hämtas datan igen när värdet
+ändras:
 
 ```dart
 final (posts, refresh) = useAsyncData<List<RecordModel>, bool>(
@@ -99,8 +34,7 @@ final (posts, refresh) = useAsyncData<List<RecordModel>, bool>(
 | `watch: () => onlyMine.value` | När det här ändras hämtas allt igen |
 | `refresh` | En funktion som hämtar igen när du anropar den |
 
-Behöver du ingen `watch` skriver du `void` som andra typ:
-`useAsyncData<List<RecordModel>, void>((_) => ...)`.
+I kapitel 9 skrev du `void` som andra typ, eftersom det inte fanns någon `watch`.
 
 Så här ser hela sidan ut, med en switch och "dra för att ladda om":
 
@@ -176,7 +110,7 @@ final (post, refresh) = useAsyncData<RecordModel, String>(
 );
 ```
 
-Hela detaljsidan bygger du i kapitel 8.
+Hela detaljsidan bygger du i kapitel 13.
 
 ## Kommentarer i realtid
 
@@ -262,7 +196,7 @@ Varför `disposed`? `subscribe` tar en stund. Stänger användaren sidan innan d
 kollar vi `disposed` när `subscribe` är klar, och avbryter direkt om sidan är
 borta.
 
-⚠️ Kom ihåg regeln från kapitel 3: `onUnmounted` registreras **direkt i
+⚠️ Kom ihåg regeln från kapitel 6: `onUnmounted` registreras **direkt i
 `setup()`**, aldrig inuti `onMounted`.
 
 💡 `props.raw.postId` läser id:t en gång. Byts inlägget ger vi widgeten en ny
@@ -313,7 +247,7 @@ lyssna själv när widgeten försvinner:
 final last = useStream<AuthStoreEvent?>(pb.authStore.onChange, initialValue: null);
 ```
 
-⚠️ Parametern heter `initialValue:`, inte `initialData:` som i `StreamBuilder`.
+⚠️ Parametern heter `initialValue:`.
 
 ## Vanliga misstag
 
@@ -326,26 +260,26 @@ final last = useStream<AuthStoreEvent?>(pb.authStore.onChange, initialValue: nul
 
 ## Övningar
 
-Gör övningarna i appen från kapitel 6, på `HomePage`.
+Gör övningarna i appen från kapitel 11, på `HomePage`.
 
-**7.1** Visa `FeedSimple`. Byt sedan till `useAsyncData` och lägg till "dra för
-att ladda om". Ändra en rubrik i Dashboard och dra. Syns ändringen?
+**12.1** Visa `FeedRefresh` på `HomePage`. Ändra en rubrik i Dashboard och dra
+för att ladda om. Syns ändringen?
 
-**7.2** Lägg till "Bara mina inlägg" som i `FeedRefresh`. Logga in som Bertil
-och prova.
+**12.2** Slå på "Bara mina inlägg". Logga sedan in som Bertil och prova igen.
+Vilka inlägg ser han?
 
-**7.3** Visa `LiveComments` för inlägget "Mitt första surdegsbröd". Kopiera
+**12.3** Visa `LiveComments` för inlägget "Mitt första surdegsbröd". Kopiera
 dess id från Dashboard. Skriv en kommentar i Dashboard. Dyker den upp i appen
 utan att du laddar om?
 
-**7.4** Lägg till en knapp som tar bort den senaste kommentaren med
+**12.4** Lägg till en knapp som tar bort den senaste kommentaren med
 `pb.collection('comments').delete(id)`. Försvinner den från listan av sig själv?
 Varför fungerar det bara på dina egna kommentarer?
 
-**7.5** Bygg en `LikeButton` med props `postId`, `likedByMe` och `likeCount`,
+**12.5** Bygg en `LikeButton` med props `postId`, `likedByMe` och `likeCount`,
 och `toggleLike` från kapitlet. Testa att ångra fungerar: lås Create-regeln för
 `likes` i Dashboard (🔒) och tryck på hjärtat. Vad händer? Lås upp regeln igen.
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-7--hämta-data).
+Lösningar finns i [losningar.md](losningar.md#kapitel-12--ladda-om-och-realtid).
 
-Nästa kapitel: [Bygg Kvittra-appen](08-bygg-kvittra-appen.md)
+Nästa kapitel: [Bygg Kvittra-appen](13-bygg-kvittra-appen.md)

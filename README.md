@@ -9,8 +9,7 @@ PocketBase-backend.
 | Modul | Innehåll |
 |-------|----------|
 | [01 – Databaser och PocketBase](01-databaser-och-pocketbase/) | Vad en databas är, databasdesign, collections i PocketBase, hämta data från Vue, SQL, API-regler |
-| [02 – Flutter](02-flutter/) | Dart, widgets, layout, state, navigation, hämta data från PocketBase |
-| [03 – Flutter Compositions](03-flutter-compositions/) | Vue-liknande reaktivitet i Flutter, och en hel Kvittra-app mot PocketBase |
+| [02 – Flutter](02-flutter/) | Dart, widgets, Vue-liknande state med `flutter_compositions`, navigation och en hel Kvittra-app mot PocketBase |
 
 Läs modulerna i ordning. Varje modul har en `README.md` med innehållsförteckning
 och numrerade kapitel. Övningarna står i slutet av varje kapitel, och
@@ -23,8 +22,7 @@ stil med Facebook. Användare skriver inlägg, kommenterar, gillar och följer
 varandra. Tack vare det gemensamma exemplet ser du samma data som:
 
 1. **tabeller, collections i PocketBase och SQL** (modul 01),
-2. **Dart-klasser och widgets som hämtar data från PocketBase** (modul 02),
-3. **en reaktiv app med `flutter_compositions`** (modul 03).
+2. **Dart-klasser och en reaktiv app med `flutter_compositions`** (modul 02).
 
 ### Datamodell
 
@@ -67,7 +65,7 @@ Relationerna i ord:
 | `likes` | En användare gillar ett inlägg. Unik per (`post`, `user`) | N:M via kopplingstabell |
 | `follows` | En användare följer en annan. Unik per (`follower`, `following`) | N:M mot samma tabell |
 
-I modul 03 bygger du en hel Kvittra-app mot just den här modellen: inloggning,
+I modul 02 bygger du en hel Kvittra-app mot just den här modellen: inloggning,
 flöde, inlägg, kommentarer i realtid, likes och följningar.
 
 ## Förkunskaper och verktyg

@@ -1,4 +1,21 @@
-# 6. Provide och inject
+# 11. Provide och inject
+
+## Ett nytt projekt
+
+Hittills har appen låtsats vara Anna, med lösenordet skrivet i koden. Nu bygger
+vi om den från grunden med en riktig inloggning. Vi gör det i ett **nytt
+projekt**, så har du det gamla kvar att titta i. Öppna en terminal i mappen där
+du har `kvittra` och skriv:
+
+```powershell
+flutter create kvittra_app
+cd kvittra_app
+flutter pub add flutter_compositions:^0.1.1 pocketbase go_router
+code .
+```
+
+Ta bort mappen `test`, precis som i kapitel 1. All kod i det här kapitlet och i
+kapitel 12 och 13 hamnar i `kvittra_app`.
 
 ## Problemet
 
@@ -141,12 +158,17 @@ class KvittraApp extends CompositionWidget {
 ```
 
 Builder-funktionen läser `auth.isLoggedIn.value`. När någon loggar in eller ut
-ritas appen om och visar rätt sida. I kapitel 8 byter vi till `go_router`.
+ritas appen om och visar rätt sida. I kapitel 13 byter vi till `go_router`.
 
 ## Hämta tjänsten i en widget
 
 ```dart
 // lib/widgets/logout_button.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_compositions/flutter_compositions.dart';
+
+import '../services/keys.dart';
+
 class LogoutButton extends CompositionWidget {
   const LogoutButton({super.key});
 
@@ -268,23 +290,23 @@ final themeMode = inject(themeModeKey);
 
 ## Övningar
 
-**6.1** Skapa `const counterKey = InjectionKey<Ref<int>>('counter');`. Lägg fram
+**11.1** Skapa `const counterKey = InjectionKey<Ref<int>>('counter');`. Lägg fram
 `ref(0)` i roten. Gör två olika widgets längre ner: en som visar talet och en
 knapp som ökar det. Håller de sig i synk?
 
-**6.2** Bygg `KvittraApp`, `LoginPage`, `LogoutButton` och en enkel `HomePage`
+**11.2** Bygg `KvittraApp`, `LoginPage`, `LogoutButton` och en enkel `HomePage`
 med `LogoutButton` i `AppBar`. Logga in som Anna och logga ut igen.
 
-**6.3** Gör en widget `WhoAmI` som visar "Inloggad som @anna". Använd
+**11.3** Gör en widget `WhoAmI` som visar "Inloggad som @anna". Använd
 `inject(authKey)` och en `computed` som läser `username` från `auth.user`.
 
-**6.4** Vad händer om du lägger `inject(authKey)` i en widget som **inte**
+**11.4** Vad händer om du lägger `inject(authKey)` i en widget som **inte**
 ligger under `KvittraApp`, till exempel i ett test med bara
 `MaterialApp(home: WhoAmI())`? Prova.
 
-**6.5** Lägg till mörkt läge. Lägg fram en `Ref<ThemeMode>` i `KvittraApp` och
+**11.5** Lägg till mörkt läge. Lägg fram en `Ref<ThemeMode>` i `KvittraApp` och
 gör en switch på `HomePage` som byter tema.
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-6--provide-och-inject).
+Lösningar finns i [losningar.md](losningar.md#kapitel-11--provide-och-inject).
 
-Nästa kapitel: [Hämta data](07-hamta-data.md)
+Nästa kapitel: [Ladda om och realtid](12-ladda-om-och-realtid.md)

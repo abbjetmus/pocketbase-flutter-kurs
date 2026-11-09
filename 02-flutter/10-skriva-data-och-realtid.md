@@ -1,12 +1,12 @@
-# 5. Skriva data och realtid
+# 10. Skriva data och realtid
 
-I [modul 02, kapitel 6](../02-flutter/06-hamta-data-fran-pocketbase.md) lärde du
+I [kapitel 9](09-hamta-data-fran-pocketbase.md) lärde du
 dig att ansluta till PocketBase, logga in och **hämta** inlägg med `getList`.
 Nu lär du dig resten: filtrera, **skapa, ändra och ta bort**, ta hand om fel
 och lyssna på ändringar i **realtid**.
 
-Koden i det här kapitlet är vanlig Dart. I kapitel 6 delar vi PocketBase med
-hela appen, och i kapitel 7 visar vi datan på skärmen.
+Koden i det här kapitlet är vanlig Dart. I kapitel 11 delar vi PocketBase med
+hela appen, och i kapitel 12 visar vi datan på skärmen.
 
 ⚠️ **Starta PocketBase först.** Öppna terminalen i mappen `kvittra-pb` och kör
 `.\pocketbase serve`. Låt fönstret vara öppet.
@@ -22,10 +22,12 @@ hela appen, och i kapitel 7 visar vi datan på skärmen.
 
 ## En sida att testa på
 
-Lägg koden i en knapp, så kan du köra den när du vill. Det som skrivs ut med
-`debugPrint` syns i terminalen där du körde `flutter run -d chrome`.
+Lägg koden i en knapp, så kan du köra den när du vill. Skapa filen
+`lib/pb_test.dart` och starta den med `flutter run -d chrome -t lib/pb_test.dart`.
+Det som skrivs ut med `debugPrint` syns i terminalen.
 
 ```dart
+// lib/pb_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 import 'package:pocketbase/pocketbase.dart';
@@ -223,7 +225,7 @@ final unsubscribe = await pb.collection('comments').subscribe(
 ```
 
 ⚠️ Glöm inte att anropa `unsubscribe()`. Annars fortsätter appen att lyssna
-fast sidan är stängd. I kapitel 7 ser du hur det görs i `onUnmounted`.
+fast sidan är stängd. I kapitel 12 ser du hur det görs i `onUnmounted`.
 
 💡 Realtid följer API-reglerna. Du får bara händelser för records du har rätt
 att se.
@@ -245,24 +247,24 @@ att se.
 
 Gör övningarna i `PbTestPage`, inne i `run()`.
 
-**5.1** Skriv ut alla kommentarer på inlägget "Mitt första surdegsbröd", med
+**10.1** Skriv ut alla kommentarer på inlägget "Mitt första surdegsbröd", med
 författarens namn. Tips: filtrera på `post.title` och använd `expand`.
 
-**5.2** Skapa ett inlägg som Anna, ändra rubriken och ta bort det. Kontrollera
+**10.2** Skapa ett inlägg som Anna, ändra rubriken och ta bort det. Kontrollera
 i Dashboard efter varje steg.
 
-**5.3** Prova att skapa ett inlägg där `author` är Bertils id. Vad händer, och
+**10.3** Prova att skapa ett inlägg där `author` är Bertils id. Vad händer, och
 vilken regel från modul 01 är det som stoppar dig?
 
-**5.4** Låt Anna gilla "Matchdag". Hon har redan gillat det i testdatan. Fånga
+**10.4** Låt Anna gilla "Matchdag". Hon har redan gillat det i testdatan. Fånga
 felet och skriv ut statuskoden. Ta sedan bort hennes like och gilla igen.
 
-**5.5** Skriv ut hur många följare Anna har, och hur många hon själv följer.
+**10.5** Skriv ut hur många följare Anna har, och hur många hon själv följer.
 
-**5.6** Starta en prenumeration på `comments` och låt bli att anropa
+**10.6** Starta en prenumeration på `comments` och låt bli att anropa
 `unsubscribe()`. Öppna Dashboard och skriv en ny kommentar. Vad skrivs ut i
 terminalen?
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-5--skriva-data-och-realtid).
+Lösningar finns i [losningar.md](losningar.md#kapitel-10--skriva-data-och-realtid).
 
-Nästa kapitel: [Provide och inject](06-provide-inject.md)
+Nästa kapitel: [Provide och inject](11-provide-inject.md)
