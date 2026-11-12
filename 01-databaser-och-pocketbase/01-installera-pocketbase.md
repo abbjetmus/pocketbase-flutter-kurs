@@ -13,7 +13,7 @@ PocketBase ger dig:
 
 1. Gå till <https://pocketbase.io/docs/>.
 2. Ladda ner zip-filen för **Windows**. Den heter ungefär
-   `pocketbase_0.xx.x_windows_amd64.zip`.|
+   `pocketbase_0.xx.x_windows_amd64.zip`.
 
 ## Steg 2 – Packa upp
 

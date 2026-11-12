@@ -15,8 +15,8 @@ anropas i `onMounted`. HTML skrivs i `<template>`.
 <pre>{{ users }}</pre>
 ```
 
-`email` syns inte, eftersom PocketBase bara visar e-postadressen för användaren
-själv. Lösenordet skickas aldrig ut.
+*Svar: Nej, `email` syns inte.* PocketBase visar bara e-postadressen för
+användaren själv. Lösenordet skickas aldrig ut.
 
 **7.2** Alla inlägg
 
@@ -42,6 +42,8 @@ onMounted(() => {
 </ul>
 ```
 
+*Svar: 6 inlägg.*
+
 **7.3** Nyast först
 
 ```js
@@ -49,6 +51,9 @@ async function loadPosts() {
   posts.value = await pb.collection('posts').getFullList({ sort: '-created' })
 }
 ```
+
+*Svar: Andra försöket överst, Höstpromenad nederst (om du lade in inläggen i
+samma ordning som i kapitel 6).*
 
 **7.4** Filter
 
@@ -60,6 +65,9 @@ async function loadPosts() {
   })
 }
 ```
+
+*Svar: Mitt första surdegsbröd. Med `filter: 'title ~ "bok"'` blir det Tips på
+en bra bok?*
 
 Kommatecknet efter `'-created'` behövs mellan två inställningar.
 
@@ -80,6 +88,8 @@ async function loadPosts() {
 </li>
 ```
 
+*Svar: t.ex. "Matchdag – David Dahl".*
+
 **7.6** Annas inlägg
 
 ```js
@@ -91,6 +101,8 @@ async function loadPosts() {
   })
 }
 ```
+
+*Svar: Höstpromenad, Morgondimma.*
 
 Punkten går via relationen `author` till fältet `username` i `users`.
 
@@ -111,6 +123,9 @@ async function loadPosts() {
   ({{ post.expand?.comments_via_post?.length ?? 0 }} kommentarer)
 </li>
 ```
+
+*Svar: Höstpromenad 1, Mitt första surdegsbröd 2, Morgondimma 0, Tips på en bra
+bok? 2, Matchdag 1, Andra försöket 0.*
 
 **7.8** Kommentarer
 
@@ -137,8 +152,13 @@ onMounted(() => {
 </ul>
 ```
 
+*Svar: 6 kommentarer, t.ex. "Recept tack! – cissi".*
+
 **7.9** Koden står i avsnittet
 [Ett formulär](07-hamta-och-lagga-till-data-med-vue.md#ett-formulär).
+
+*Svar: Ja. Inlägget syns i listan direkt, eftersom `createPost` anropar
+`loadPosts()` igen, och det syns i `posts` i Dashboard.*
 
 **7.10** Ny kommentar
 
@@ -172,7 +192,11 @@ async function createComment() {
 </form>
 ```
 
-**7.11** Ta bort
+*Svar: Ja, `createComment` anropar `loadComments()`, så kommentaren syns i
+listan från 7.8.*
+
+**7.11** Ta bort. Funktionen `deletePost` står i övningen. Knappen läggs inne i
+listan:
 
 ```html
 <li v-for="post in posts" :key="post.id">
@@ -183,95 +207,6 @@ async function createComment() {
 
 Om inlägget hade kommentarer försvann de också. Relationen `comments.post` har
 **Cascade delete** (kapitel 5).
-
-**7.12** Gilla
-
-```js
-const annaId = 'klistra-in-annas-id-här'
-
-async function like(post) {
-  await pb.collection('likes').create({ post: post.id, user: annaId })
-  await loadPosts()
-}
-
-async function loadPosts() {
-  posts.value = await pb.collection('posts').getFullList({
-    sort: '-created',
-    expand: 'author,comments_via_post,likes_via_post',
-  })
-}
-```
-
-```html
-<li v-for="post in posts" :key="post.id">
-  <strong>{{ post.title }}</strong>
-  ({{ post.expand?.likes_via_post?.length ?? 0 }} likes)
-  <button @click="like(post)">Gilla</button>
-</li>
-```
-
-Andra gången får du ett fel i konsolen (`400`). Det unika indexet på `post` och
-`user` i `likes` (kapitel 5) gör att samma användare inte kan gilla samma
-inlägg två gånger.
-
-**7.13** Sidor
-
-```js
-const page = ref(1)
-const totalPages = ref(1)
-
-async function loadPosts() {
-  const result = await pb.collection('posts').getList(page.value, 2, { sort: '-created' })
-  posts.value = result.items
-  totalPages.value = result.totalPages
-}
-
-function nextPage() {
-  page.value++
-  loadPosts()
-}
-
-function prevPage() {
-  page.value--
-  loadPosts()
-}
-```
-
-```html
-<p>Sida {{ page }} av {{ totalPages }}</p>
-<button :disabled="page <= 1" @click="prevPage">Föregående</button>
-<button :disabled="page >= totalPages" @click="nextPage">Nästa</button>
-```
-
-Listan med `v-for="post in posts"` fungerar som förut, eftersom `posts` får
-`result.items`.
-
-**7.14** Annas flöde
-
-```js
-async function loadPosts() {
-  const follows = await pb.collection('follows').getFullList({
-    filter: 'follower.username = "anna"',
-  })
-  // t.ex. 'author = "abc123" || author = "def456"'
-  const filter = follows.map((follow) => `author = "${follow.following}"`).join(' || ')
-
-  posts.value = await pb.collection('posts').getFullList({
-    filter: filter,
-    sort: 'created',
-    expand: 'author',
-  })
-}
-```
-
-Det går också att göra i **en** fråga, med en bakåt-relation i filtret:
-
-```js
-filter: 'author.follows_via_following.follower.username ?= "anna"'
-```
-
-Läs det som: "inläggets författare står som `following` i någon rad i
-`follows` där `follower` är anna". `?=` betyder "minst en av dem är lika med".
 
 ## Kapitel 8 – SQL och View collections
 
