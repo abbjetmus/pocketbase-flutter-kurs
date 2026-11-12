@@ -13,13 +13,7 @@ PocketBase ger dig:
 
 1. Gå till <https://pocketbase.io/docs/>.
 2. Ladda ner zip-filen för **Windows**. Den heter ungefär
-   `pocketbase_0.xx.x_windows_amd64.zip`.
-
-| Dator | Välj fil som slutar på |
-|-------|------------------------|
-| Windows (nästan alla datorer) | `windows_amd64.zip` |
-| Windows på ARM-processor (ovanligt) | `windows_arm64.zip` |
-| Mac med M-processor | `darwin_arm64.zip` |
+   `pocketbase_0.xx.x_windows_amd64.zip`.|
 
 ## Steg 2 – Packa upp
 
@@ -31,16 +25,12 @@ PocketBase ger dig:
 
 1. Öppna mappen `kvittra-pb` i Utforskaren.
 2. Högerklicka på en tom yta i mappen → **Öppna i terminal**.
-   (Saknas valet? Klicka i adressfältet, skriv `powershell` och tryck Enter.)
+   (Saknas valet? Klicka i adressfältet, skriv `cmd` och tryck Enter.)
 3. Skriv det här och tryck Enter:
 
 ```powershell
 .\pocketbase serve
 ```
-
-💡 `.\` betyder "programmet i den här mappen". Det behövs i PowerShell, som är
-det som öppnas med **Öppna i terminal**. Använder du Kommandotolken (`cmd`)
-räcker det att skriva `pocketbase serve`.
 
 Du ser ungefär det här:
 
@@ -55,7 +45,6 @@ Server started at http://127.0.0.1:8090
 
 💡 **Om Windows varnar:** Om du får rutan "Windows skyddade datorn" klickar du
 på **Mer information** → **Kör ändå**. På skoldatorer kan det vara blockerat.
-Fråga då din lärare.
 
 ## Steg 4 – Skapa ditt administratörskonto
 

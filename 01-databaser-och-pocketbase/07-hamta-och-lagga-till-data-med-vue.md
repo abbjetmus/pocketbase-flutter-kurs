@@ -364,11 +364,9 @@ står felet i rött.
 
 **7.1** Lägg till `<pre>{{ users }}</pre>` i template. Nu ser du allt som kom
 tillbaka för varje användare. Syns `email`?
-*Svar: Nej. E-postadressen visas inte för andra.*
 
 **7.2** Visa alla inlägg. Gör precis som i avsnittet
 [Så lägger du till en egen fråga](#så-lägger-du-till-en-egen-fråga).
-*Svar: 6 inlägg.*
 
 **7.3** Sortera inläggen så att det **nyaste** kommer först. Ändra i
 `loadPosts`:
@@ -377,11 +375,8 @@ tillbaka för varje användare. Syns `email`?
 posts.value = await pb.collection('posts').getFullList({ sort: '-created' })
 ```
 
-*Svar: Andra försöket överst, Höstpromenad nederst.*
-
 **7.4** Visa bara inlägg vars rubrik innehåller "bröd". Lägg till ett `filter`
 bredvid `sort`, inom samma `{ }`. Byt sedan "bröd" mot "bok".
-*Svar: Mitt första surdegsbröd. Med "bok": Tips på en bra bok?*
 
 Ta bort filtret igen innan du går vidare.
 
@@ -392,19 +387,15 @@ Ta bort filtret igen innan du går vidare.
 1. Lägg till `expand: 'author'` i `loadPosts`.
 2. Skriv `{{ post.expand?.author?.name }}` i ditt `<li>`.
 
-*Svar: t.ex. "Matchdag – David Dahl".*
-
 **7.6** Visa bara inläggen som `anna` har skrivit. Använd ett filter via
 relationen, som i avsnittet [Filtrera via en relation](#filtrera-via-en-relation).
-*Svar: Höstpromenad, Morgondimma.*
 
 Ta bort filtret igen innan du går vidare.
 
 **7.7** Visa hur många kommentarer varje inlägg har. Byt `expand` till
 `'author,comments_via_post'` och skriv antalet i ditt `<li>`, som i avsnittet
 [Bakåt-relationer](#bakåt-relationer).
-*Svar: Höstpromenad 1, Mitt första surdegsbröd 2, Morgondimma 0, Tips på en bra
-bok? 2, Matchdag 1, Andra försöket 0.*
+
 
 **7.8** Visa alla kommentarer med text och användarnamnet på den som skrev
 dem. Gör samma tre steg som för inläggen, men med `comments`:
@@ -419,7 +410,6 @@ async function loadComments() {
 
 Glöm inte att anropa `loadComments()` i `onMounted`, och att skriva en lista i
 template.
-*Svar: 6 kommentarer, t.ex. "Recept tack! – cissi".*
 
 ### Lägga till
 
@@ -463,25 +453,5 @@ inte vilket inlägg den ska ta bort. Ta bort inlägget du skapade i 7.9.
 kapitel 6. Ta bort allt du har lagt till, även kommentarer och likes (det går
 att göra i Dashboard). Jämför sedan med tabellen i
 [kapitel 6](06-lagg-in-data.md#kontrollera).
-
-### Utmaningar
-
-De här är frivilliga, för dig som vill ha mer.
-
-**7.12 Gilla.** Lägg till en knapp **Gilla** på varje inlägg som skapar en like
-från `anna`. Visa antalet likes med `likes_via_post`. Vad händer om du gillar
-samma inlägg två gånger? Varför?
-Ledtråd: du behöver Annas id. Kopiera det från Dashboard.
-
-**7.13 Sidor.** Ändra `loadPosts` så att den använder `getList` och hämtar
-**två** inlägg per sida. Visa "Sida 1 av 3" och knapparna **Föregående** och
-**Nästa**.
-
-**7.14 Annas flöde.** Ändra `loadPosts` så att den bara visar inlägg från dem
-som `anna` följer.
-*Svar: Mitt första surdegsbröd (bertil), Tips på en bra bok? (cissi), Andra
-försöket (bertil).*
-Ledtråd: hämta först raderna i `follows` där `follower.username = "anna"`. Fältet
-`following` innehåller id:n på dem hon följer.
 
 Nästa kapitel: [SQL och View collections](08-sql-och-view-collections.md)

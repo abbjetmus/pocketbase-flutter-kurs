@@ -106,8 +106,7 @@ Det är smidigt att läsa, men samma problem som i Excel kommer tillbaka: Annas
 namn kopieras in i varje inlägg.
 
 **PocketBase är en relationsdatabas.** Under huven använder den **SQLite**,
-som också finns i nästan alla mobiltelefoner. Därför jobbar vi med tabeller
-och relationer i resten av kursen.
+som också finns i nästan alla mobiltelefoner.
 
 ## Sammanfattning
 
