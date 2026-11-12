@@ -275,7 +275,82 @@ Läs det som: "inläggets författare står som `following` i någon rad i
 
 ## Kapitel 8 – SQL och View collections
 
-**8.1** Annas inlägg
+**8.1** Alla användare
+
+```sql
+SELECT id, username, name
+FROM users
+```
+
+*Svar: anna, bertil, cissi och david.*
+
+**8.2** Bara cissi
+
+```sql
+SELECT id, username, name, bio
+FROM users
+WHERE username = 'cissi'
+```
+
+*Svar: en rad, Cecilia Carlsson. Hennes `bio` är tom.*
+
+**8.3** Inlägg om bröd
+
+```sql
+SELECT id, title
+FROM posts
+WHERE title LIKE '%bröd%'
+```
+
+*Svar: Mitt första surdegsbröd.*
+
+`%` betyder "vad som helst". `'%bröd%'` matchar alltså alla titlar där "bröd"
+finns någonstans.
+
+**8.4** Titlar i bokstavsordning
+
+```sql
+SELECT id, title
+FROM posts
+ORDER BY title
+```
+
+*Svar: Andra försöket, Höstpromenad, Matchdag, Mitt första surdegsbröd,
+Morgondimma, Tips på en bra bok?*
+
+**8.5** De två senaste kommentarerna
+
+```sql
+SELECT id, body
+FROM comments
+ORDER BY created DESC
+LIMIT 2
+```
+
+*Svar: Grattis! och Harry Potter! (om du lade in kommentarerna i samma ordning
+som i kapitel 6).*
+
+**8.6** Inlägg med författarens namn
+
+```sql
+SELECT posts.id, posts.title, users.name AS author
+FROM posts
+JOIN users ON users.id = posts.author
+```
+
+*Svar: 6 rader, t.ex. Matchdag – David Dahl.*
+
+**8.7** Kommentarer med författare
+
+```sql
+SELECT comments.id, comments.body, users.username AS author
+FROM comments
+JOIN users ON users.id = comments.author
+```
+
+*Svar: 6 rader, t.ex. "Recept tack!" – cissi.*
+
+**8.8** Annas inlägg
 
 ```sql
 SELECT posts.id, posts.title
@@ -284,15 +359,20 @@ JOIN users ON users.id = posts.author
 WHERE users.username = 'anna'
 ```
 
-**8.2** Kommentarer med författare
+*Svar: Höstpromenad, Morgondimma.*
+
+**8.9** Antal inlägg per användare
 
 ```sql
-SELECT comments.id, comments.body, users.username AS author
-FROM comments
-JOIN users ON users.id = comments.author
+SELECT users.id, users.username, COUNT(posts.id) AS post_count
+FROM users
+LEFT JOIN posts ON posts.author = users.id
+GROUP BY users.id
 ```
 
-**8.3** Antal kommentarer per inlägg
+*Svar: anna 2, bertil 2, cissi 1, david 1.*
+
+**8.10** Antal kommentarer per inlägg
 
 ```sql
 SELECT posts.id, posts.title, COUNT(comments.id) AS comment_count
@@ -301,9 +381,12 @@ LEFT JOIN comments ON comments.post = posts.id
 GROUP BY posts.id
 ```
 
+*Svar: Höstpromenad 1, Mitt första surdegsbröd 2, Morgondimma 0, Tips på en bra
+bok? 2, Matchdag 1, Andra försöket 0.*
+
 `LEFT JOIN` behövs för att inlägg utan kommentarer ska vara med och visa 0.
 
-**8.4** Antal följare per användare
+**8.11** Antal följare per användare
 
 ```sql
 SELECT users.id, users.username, COUNT(follows.id) AS followers
@@ -313,49 +396,7 @@ GROUP BY users.id
 ORDER BY followers DESC, users.username
 ```
 
-Följarna är de rader där användaren står i `following`.
-
-**8.5** Inlägg utan likes
-
-```sql
-SELECT posts.id, posts.title
-FROM posts
-LEFT JOIN likes ON likes.post = posts.id
-WHERE likes.id IS NULL
-```
-
-När ett inlägg inte har någon like blir alla `likes`-kolumner tomma (`NULL`)
-efter `LEFT JOIN`. Dem plockar vi ut med `IS NULL`.
-
-**8.6** Annas flöde
-
-```sql
-SELECT posts.id, posts.title, users.username AS author
-FROM posts
-JOIN users ON users.id = posts.author
-JOIN follows ON follows.following = posts.author
-JOIN users AS me ON me.id = follows.follower
-WHERE me.username = 'anna'
-```
-
-Steg för steg: ta alla inlägg → koppla på författaren → koppla på de
-följningar där författaren blir följd → koppla på den som följer → behåll bara
-raderna där den som följer är Anna.
-
-**8.7** Vilka har gillat Annas inlägg?
-
-```sql
-SELECT likes.id, posts.title, liker.username AS liked_by
-FROM likes
-JOIN posts ON posts.id = likes.post
-JOIN users AS author ON author.id = posts.author
-JOIN users AS liker ON liker.id = likes.user
-WHERE author.username = 'anna'
-```
-
-Vi behöver `users` två gånger: en gång för inläggets författare och en gång för
-den som gillade. Med `AS` får de olika namn. Vi använder `likes.id` som `id`,
-eftersom varje like bara finns en gång.
+*Svar: anna 2, bertil 2, cissi 1, david 0.*
 
 ## Kapitel 9 – Inloggning och API-regler
 

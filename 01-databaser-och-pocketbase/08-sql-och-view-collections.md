@@ -199,40 +199,50 @@ Delarna skrivs alltid i den här ordningen:
 
 ## Övningar
 
-Skapa en View collection för varje övning. Kontrollera att du får samma resultat
-som står här. Lösningar finns i [losningar.md](losningar.md#kapitel-8--sql-och-view-collections).
+Skapa en View collection för varje övning. Övningarna börjar lätt och blir
+svårare, så gör dem i ordning. Svar och lösningar finns i
+[losningar.md](losningar.md#kapitel-8--sql-och-view-collections).
 
-**8.1** Visa titlarna på alla inlägg som `anna` har skrivit.
-*Svar: Höstpromenad, Morgondimma.*
+⚠️ Glöm inte kolumnen `id` i varje fråga, till exempel `SELECT id, ...` eller
+`SELECT posts.id, ...`.
 
-**8.2** Visa alla kommentarer med kommentarens text och användarnamnet på den
+### En tabell
+
+**8.1** Visa `username` och `name` för alla användare.
+
+**8.2** Visa bara användaren `cissi`. Ta med hennes `bio`.
+Ledtråd: `WHERE`.
+
+**8.3** Visa titlarna på de inlägg vars titel innehåller "bröd".
+Ledtråd: `LIKE '%bröd%'`.
+
+**8.4** Visa alla inläggs titlar i bokstavsordning.
+Ledtråd: `ORDER BY`.
+
+**8.5** Visa texten på de **två** senaste kommentarerna.
+Ledtråd: `ORDER BY created DESC` och `LIMIT`.
+
+### Två tabeller med JOIN
+
+**8.6** Visa alla inlägg med titel och författarens **namn** (`name`, inte
+`username`).
+Ledtråd: som exemplet i avsnittet om JOIN, men med `users.name`.
+
+**8.7** Visa alla kommentarer med kommentarens text och användarnamnet på den
 som skrev den.
-*Svar: 6 rader, t.ex. "Recept tack!" – cissi.*
 
-**8.3** Visa hur många kommentarer varje inlägg har. Inlägg utan kommentarer
+**8.8** Visa titlarna på alla inlägg som `anna` har skrivit.
+Ledtråd: `JOIN` och sedan `WHERE users.username = 'anna'`.
+
+### Räkna
+
+**8.9** Visa hur många inlägg varje användare har skrivit.
+Ledtråd: som exemplet med `COUNT` och `GROUP BY`, men börja `FROM users`.
+
+**8.10** Visa hur många kommentarer varje inlägg har. Inlägg utan kommentarer
 ska vara med och visa 0.
-*Svar: Höstpromenad 1, Mitt första surdegsbröd 2, Morgondimma 0, Tips på en
-bra bok? 2, Matchdag 1, Andra försöket 0.*
 
-**8.4** Visa hur många **följare** varje användare har.
-*Svar: anna 2, bertil 2, cissi 1, david 0.*
-
-**8.5** Visa de inlägg som saknar likes.
-*Svar: Morgondimma, Tips på en bra bok?*
-Ledtråd: `LEFT JOIN` och `WHERE likes.id IS NULL`.
-
-**8.6 Annas flöde.** Visa inläggen från de användare som `anna` följer, med
-titel och författare.
-*Svar: Mitt första surdegsbröd (bertil), Tips på en bra bok? (cissi), Andra
-försöket (bertil).*
-
-**8.7 Utmaning.** Vilka användare har gillat inlägg som `anna` har skrivit?
-Visa inläggets titel och användarnamnet på den som gillade.
-*Svar: Höstpromenad – bertil, Höstpromenad – cissi.*
-Ledtråd: du behöver `users` två gånger. Ge dem olika namn med `AS`, t.ex.
-`JOIN users AS liker ON ...`.
-
-**8.8 Ditt projekt.** Skriv två View collections för ditt eget projekt: en med
-`JOIN` och en med `COUNT` och `GROUP BY`.
+**8.11** Visa hur många **följare** varje användare har.
+Ledtråd: följarna är de rader i `follows` där användaren står i `following`.
 
 Nästa kapitel: [Inloggning och API-regler](09-inloggning-och-api-regler.md)
