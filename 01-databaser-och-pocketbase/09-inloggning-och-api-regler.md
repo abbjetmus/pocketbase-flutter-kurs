@@ -125,9 +125,6 @@ Ladda sedan om Vue-appen från kapitel 7. Vad händer, och varför?
 **9.4** Bertil vill ta bort Annas like på Höstpromenad. Vilken regel stoppar
 honom, och varför?
 
-**9.5 Ditt projekt.** Skriv en regeltabell för ditt eget projekt. Vem ska få
-se, skapa, ändra och ta bort i varje tabell?
-
 Lösningar finns i [losningar.md](losningar.md#kapitel-9--inloggning-och-api-regler).
 
 Nästa modul: [02 – Flutter](../02-flutter/README.md). Hur en Flutter-app loggar in och
