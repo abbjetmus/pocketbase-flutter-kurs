@@ -23,16 +23,13 @@ hela appen, och i kapitel 12 visar vi datan på skärmen.
 ## En sida att testa på
 
 Lägg koden i en knapp, så kan du köra den när du vill. Skapa filen
-`lib/pb_test.dart` och starta den med `flutter run -d chrome -t lib/pb_test.dart`.
-Det som skrivs ut med `debugPrint` syns i terminalen.
+`lib/pb_test.dart`:
 
 ```dart
 // lib/pb_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_compositions/flutter_compositions.dart';
 import 'package:pocketbase/pocketbase.dart';
-
-void main() => runApp(const MaterialApp(home: PbTestPage()));
 
 class PbTestPage extends CompositionWidget {
   const PbTestPage({super.key});
@@ -54,6 +51,19 @@ class PbTestPage extends CompositionWidget {
   }
 }
 ```
+
+Öppna sedan `lib/main.dart`. Lägg till `import 'pb_test.dart';` högst upp och
+byt `void main()` mot den här raden:
+
+```dart
+void main() => runApp(const MaterialApp(home: PbTestPage()));
+```
+
+Klicka **Build**. Nu visar appen bara knappen **Kör**. Det som skrivs ut med
+`debugPrint` syns i konsolen (`F12` → **Console**).
+
+💡 Spara den gamla `void main()`-raden som en kommentar (`//` först), så kan du
+byta tillbaka. I kapitel 11 börjar vi på ett nytt projekt.
 
 ## Vem är inloggad?
 
@@ -263,7 +273,7 @@ felet och skriv ut statuskoden. Ta sedan bort hennes like och gilla igen.
 
 **10.6** Starta en prenumeration på `comments` och låt bli att anropa
 `unsubscribe()`. Öppna Dashboard och skriv en ny kommentar. Vad skrivs ut i
-terminalen?
+konsolen?
 
 Lösningar finns i [losningar.md](losningar.md#kapitel-10--skriva-data-och-realtid).
 

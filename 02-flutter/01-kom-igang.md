@@ -1,8 +1,8 @@
 # 1. Kom igång
 
-I det här kapitlet installerar du Flutter, skapar projektet `kvittra` och kör
-det i Chrome. När du är klar har du en app som körs, och du vet hur du ser
-dina ändringar direkt.
+I det här kapitlet skapar du ett konto på FlutLab, skapar projektet `kvittra`
+och kör det i webbläsaren. När du är klar har du en app som körs, och du vet
+hur du ser dina ändringar direkt.
 
 ## Vad är Flutter?
 
@@ -19,124 +19,81 @@ dina ändringar direkt.
    Android    iPhone     Webben    Windows
 ```
 
-Vi kör appen i **Chrome** under hela modulen. Det kräver minst installation,
-och det fungerar på alla datorer.
+I den här kursen använder vi **bara webben**. Vi skriver och kör koden i
+**FlutLab**, en editor för Flutter som finns direkt i webbläsaren. Det har tre
+fördelar:
 
-## Steg 1 – Installera Git och VS Code
+- Du behöver **inte** installera något. Allt du behöver är **Chrome**.
+- Appen startar snabbt, och du ser dina ändringar direkt.
+- Det fungerar likadant på alla datorer, och du kommer åt dina projekt
+  hemifrån också.
 
-Flutter behöver programmet **Git** för att laddas ner.
+Koden du skriver är samma som i en mobilapp. Vill du senare köra appen på en
+telefon behöver du inte skriva om den.
 
-1. Ladda ner och installera **Git for Windows** från <https://git-scm.com/downloads/win>.
-   Du kan klicka **Next** på alla frågor.
-2. Ladda ner och installera **VS Code** från <https://code.visualstudio.com/>.
-3. Öppna VS Code. Klicka på ikonen **Extensions** till vänster (fyra rutor),
-   eller tryck `Ctrl + Shift + X`.
-4. Sök på **Flutter** och klicka **Install** på tillägget från *Dart Code*. Då
-   installeras tillägget *Dart* också.
+## Steg 1 – Skapa ett konto
 
-## Steg 2 – Ladda ner Flutter via VS Code
+1. Öppna <https://flutlab.io> i Chrome.
+2. Skapa ett konto. Det enklaste är att logga in med ditt Google- eller
+   GitHub-konto.
+3. Gå till <https://flutlab.io/editor>. Där ser du dina projekt.
 
-Det enklaste är att låta VS Code ladda ner Flutter åt dig.
+## Steg 2 – Skapa projektet
 
-1. Tryck `Ctrl + Shift + P`. Då öppnas **kommandopaletten**, en ruta där du kan
-   skriva kommandon.
-2. Skriv `Flutter: New Project` och tryck Enter.
-3. VS Code säger att den inte hittar Flutter. Klicka **Download SDK**.
-4. Välj en mapp, till exempel `C:\Users\dittnamn\dev`. Det tar några minuter.
-5. När VS Code frågar om du vill lägga till Flutter i **PATH**, klicka
-   **Add SDK to PATH**. Då hittar terminalen kommandot `flutter`.
-6. Stäng VS Code och öppna det igen.
+1. Skapa ett nytt projekt.
+2. Ge det namnet `kvittra`.
 
-⚠️ **Välj en enkel mapp.** Mappen får inte ligga i `C:\Program Files`, och
-sökvägen ska inte innehålla mellanslag eller å, ä, ö.
-
-💡 **Om det inte fungerar:** Följ den officiella guiden på
-<https://docs.flutter.dev/get-started/install/windows>. På skoldatorer kan
-installationen vara blockerad. Fråga då din lärare.
-
-## Steg 3 – Kontrollera med `flutter doctor`
-
-Öppna en terminal i VS Code med **Terminal → New Terminal**. Skriv:
-
-```powershell
-flutter doctor
-```
-
-Flutter kontrollerar din dator och visar en lista. Den kan se ut ungefär så här:
-
-```
-[✓] Flutter (Channel stable, 3.x.x)
-[✓] Windows Version
-[✗] Android toolchain - develop for Android devices
-[✓] Chrome - develop for the web
-[✗] Visual Studio - develop Windows apps
-[✓] VS Code
-[✓] Connected device (2 available)
-```
-
-Du behöver **inte** bocka av allt. Det här räcker för kursen:
-
-| Rad | Behövs? | Används till |
-|-----|---------|--------------|
-| Flutter | ✅ Ja | Allt |
-| Chrome | ✅ Ja | Köra appen i webbläsaren |
-| VS Code | ✅ Ja | Skriva koden |
-| Android toolchain | Frivilligt | Android-emulator. Kräver Android Studio |
-| Visual Studio | Frivilligt | Windows-appar. Det är ett annat program än VS Code |
-
-## Steg 4 – Skapa projektet
-
-1. Tryck `Ctrl + Shift + P` och välj `Flutter: New Project`.
-2. Välj **Application**.
-3. Välj en mapp där projektet ska ligga, till exempel `Dokument`.
-4. Skriv namnet `kvittra` och tryck Enter.
-
-VS Code skapar projektet och öppnar det.
-
-Vill du hellre använda terminalen fungerar det lika bra:
-
-```powershell
-flutter create kvittra
-cd kvittra
-code .
-```
+Projektet öppnas. Till vänster ser du projektets filer, i mitten koden och till
+höger appen när den körs.
 
 ⚠️ **Projektnamn** skrivs med små bokstäver och `_` mellan orden, till exempel
 `kvittra` eller `kvittra_app`. Namn som `Kvittra-App` eller `kvittra_åäö`
 fungerar inte.
 
-## Steg 5 – Kör appen
+## Steg 3 – Kör appen
 
-1. Längst ner till höger i VS Code står vilken **enhet** appen körs på. Klicka
-   där och välj **Chrome**.
-2. Tryck `F5` (eller **Run → Start Debugging**).
+1. Välj **Web** som plattform i verktygsfältet längst upp.
+2. Klicka **Build**.
 
-Efter en stund öppnas Chrome med en exempelapp. Då vet du att allt är rätt
-installerat. Stoppa appen med den röda fyrkanten i VS Code.
+Första gången tar det en stund. När appen är byggd startar **Web Emulator**,
+och du ser en exempelapp. Då vet du att allt fungerar.
 
-Från terminalen gör du samma sak med:
-
-```powershell
-flutter run -d chrome
-```
-
-💡 Första gången tar det lång tid. Sedan går det mycket snabbare.
-
-## Steg 6 – Lägg till Flutter Compositions
+## Steg 4 – Lägg till Flutter Compositions
 
 I den här kursen skriver vi alla widgets med paketet
 [`flutter_compositions`](https://yoyo930021.github.io/flutter_compositions). Det
 gör det enkelt att bygga appar som ändrar sig, och det fungerar nästan som Vue.
-Öppna terminalen i projektet och skriv:
 
-```powershell
-flutter pub add flutter_compositions:^0.1.1
+Öppna först filen **pubspec.yaml**. Leta upp `environment:` och ändra den så
+att den ser ut så här:
+
+```yaml
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.41.0"
 ```
 
-⚠️ Skriv `:^0.1.1` efter namnet. Nyare versioner (0.2 och uppåt) fungerar lite
-annorlunda än det som står här.
+Spara med `Ctrl + S`.
 
-Ta nu bort allt i `lib/main.dart` och skriv det här i stället:
+⚠️ **Indraget räknas.** I `pubspec.yaml` är det mellanslagen i början av raden
+som visar vad som hör ihop. Använd två mellanslag, aldrig tab.
+
+Lägg sedan till paketet. Det gör du i panelen längst ner:
+
+1. Välj fliken **Pub Commands**.
+2. Klicka **pub add** och skriv:
+
+   ```
+   flutter_compositions:^0.2.6
+   ```
+
+3. Klicka **pub get**. Vänta tills det står **Process finished successfully**.
+
+⚠️ Skriv `:^0.2.6` efter namnet. Då får du version 0.2.6 eller en senare
+0.2-version, men inte 0.3. Version 0.3 kan fungera annorlunda än det som står
+här.
+
+Öppna nu `lib/main.dart`. Ta bort allt i filen och skriv det här i stället:
 
 ```dart
 // lib/main.dart
@@ -167,27 +124,29 @@ class HelloKvittra extends CompositionWidget {
 }
 ```
 
-⚠️ Visar VS Code nu ett rött fel i filen `test/widget_test.dart`? Den filen
-skapades av `flutter create` och letar efter exempelappen som du tog bort. Vi
-använder den inte, så du kan ta bort hela mappen `test`.
+Klicka **Build** och tryck på hjärtat. Siffran ökar. Hur koden fungerar går vi
+igenom i kapitel 3 och 4.
 
-Starta appen med `F5` och tryck på hjärtat. Siffran ökar. Hur koden fungerar går
-vi igenom i kapitel 3 och 4.
+⚠️ Visar FlutLab ett rött fel i filen `test/widget_test.dart`? Den filen letar
+efter exempelappen som du tog bort. Vi använder den inte, så du kan ta bort hela
+mappen `test`.
 
 ## Hot reload – se ändringar direkt
 
-Låt appen vara igång. Öppna `lib/main.dart` och byt
-`Colors.deepPurple` till `Colors.green`. Spara med `Ctrl + S`.
+Låt appen vara igång. Byt `Colors.deepPurple` till `Colors.green` i
+`lib/main.dart`. Klicka sedan **Hot Reload**.
 
 Färgen byts direkt, och siffran är kvar. Det kallas **hot reload**.
 
 | | Hot reload | Hot restart |
 |---|---|---|
-| Så gör du | Spara filen (`Ctrl + S`) | Klicka på den gröna runda pilen i VS Code |
+| Så gör du | Klicka **Hot Reload** | Klicka **Build** igen |
 | Vad händer | Ändringen syns, appen fortsätter där den var | Appen startar om från början |
 | Siffran | Är kvar | Blir 0 igen |
 
 💡 Om något beter sig konstigt efter en ändring, gör en **hot restart**.
+
+💡 Har du lagt till ett paket? Klicka **Build**. Hot reload räcker inte då.
 
 ## Projektets filer
 
@@ -196,48 +155,35 @@ kvittra/
 ├── lib/
 │   └── main.dart      ← HÄR skriver du din kod. Appen startar här
 ├── pubspec.yaml       ← appens namn och vilka paket den använder
-├── web/               ← filer för webben
-├── windows/, android/ ← filer för andra plattformar (rör dem inte)
-└── ...
+├── web/               ← filer för webben, till exempel index.html (rör dem inte)
+└── ...                ← andra mappar, till exempel android/ (rör dem inte)
 ```
 
-Nästan allt arbete sker i mappen `lib/`.
+Nästan allt arbete sker i mappen `lib/`. Nya filer och mappar skapar du i
+filträdet till vänster. Högerklicka på mappen där filen ska ligga, till exempel
+`lib`.
 
 **pubspec.yaml** liknar `package.json` i JavaScript. Där står vilka **paket**
-appen använder. Ett paket är kod som någon annan har skrivit, och du hittar
-dem på <https://pub.dev>. Du lägger till ett paket med ett kommando, till
-exempel:
+appen använder. Ett paket är kod som någon annan har skrivit, och du hittar dem
+på <https://pub.dev>. När du klickar **pub add** skrivs paketet in i
+`pubspec.yaml` åt dig. Det gör vi igen i kapitel 8 och 9.
 
-```powershell
-flutter pub add go_router
-```
+## Se vad appen skriver ut
 
-Det gör vi i kapitel 8 och 9.
+Med `print` och `debugPrint` kan appen skriva ut text, till exempel för att du
+ska se vad som händer. Texten syns i Chromes **konsol**. Tryck `F12` och välj
+fliken **Console**.
 
 ## Kom ihåg
 
 | Du vill … | Gör så här |
 |-----------|------------|
-| Öppna kommandopaletten | `Ctrl + Shift + P` |
-| Skapa ett projekt | `Flutter: New Project` eller `flutter create namn` |
-| Välja Chrome | Klicka på enheten längst ner till höger |
-| Lägga till ett paket | `flutter pub add namn` |
-| Köra appen | `F5` eller `flutter run -d chrome` |
-| Se en ändring | Spara (`Ctrl + S`) = hot reload |
-| Stoppa appen | Röda fyrkanten i VS Code, eller `q` i terminalen |
-
-## Övningar
-
-**1.1** Kör appen i Chrome. Tryck på hjärtat några gånger. Byt färgen i
-`colorSchemeSeed` och spara. Är siffran kvar? Gör sedan en hot restart. Vad
-händer med siffran?
-
-**1.2** Byt rubriken `'Hej Kvittra'` till `'Kvittra'`. Byt också
-`'Gillningar: ...'` till `'Så här många gillar: ...'`. Spara och titta.
-
-**1.3** Kör `flutter doctor` och skriv av vilka rader som har ✓ och vilka som
-har ✗ på din dator. Vilka av dem behöver du för kursen?
-
-Lösningar finns i [losningar.md](losningar.md#kapitel-1--kom-igång).
+| Öppna dina projekt | <https://flutlab.io/editor> |
+| Köra appen | Välj **Web** och klicka **Build** |
+| Se en ändring | **Hot Reload** |
+| Starta om appen från början | **Build** igen (hot restart) |
+| Lägga till ett paket | **Pub Commands** → **pub add** → **pub get**, sedan **Build** |
+| Skapa en fil | Högerklicka på mappen i filträdet till vänster |
+| Se det appen skriver ut | `F12` → **Console** |
 
 Nästa kapitel: [Dart-grunder](02-dart-grunder.md)

@@ -230,7 +230,7 @@ om appen. Vilken av `watch` och `watchEffect` skriver ut något direkt? Lägg
 sedan till `immediate: true` på din `watch`. Vad är `oldValue` första gången?
 
 **6.3** Bygg `ReadingTimer` och `TimerPage`. Slå av och på switchen och titta i
-terminalen. Börjar sekunderna om från 0 när timern visas igen? Varför?
+konsolen (`F12` → **Console**). Börjar sekunderna om från 0 när timern visas igen? Varför?
 
 **6.4** Ta bort `onUnmounted` från `ReadingTimer` och lägg till
 `debugPrint('tick')` i timern. Vad händer när du slår av switchen? Lägg sedan

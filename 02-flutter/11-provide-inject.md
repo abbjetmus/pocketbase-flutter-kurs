@@ -4,15 +4,26 @@
 
 Hittills har appen låtsats vara Anna, med lösenordet skrivet i koden. Nu bygger
 vi om den från grunden med en riktig inloggning. Vi gör det i ett **nytt
-projekt**, så har du det gamla kvar att titta i. Öppna en terminal i mappen där
-du har `kvittra` och skriv:
+projekt**, så har du det gamla kvar att titta i. Skapa ett nytt projekt i
+FlutLab som heter `kvittra_app`. Ändra `environment:` i `pubspec.yaml` precis
+som i kapitel 1:
 
-```powershell
-flutter create kvittra_app
-cd kvittra_app
-flutter pub add flutter_compositions:^0.1.1 pocketbase go_router
-code .
+```yaml
+environment:
+  sdk: ^3.11.0
+  flutter: ">=3.41.0"
 ```
+
+Lägg sedan till tre paket under fliken **Pub Commands**. Klicka **pub add** en
+gång för varje paket:
+
+```
+flutter_compositions:^0.2.6
+pocketbase
+go_router
+```
+
+Klicka till sist **pub get**.
 
 Ta bort mappen `test`, precis som i kapitel 1. All kod i det här kapitlet och i
 kapitel 12 och 13 hamnar i `kvittra_app`.

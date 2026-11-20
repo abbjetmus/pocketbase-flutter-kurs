@@ -403,7 +403,7 @@ class FeedPage extends CompositionWidget {
 ```
 
 `PostPage` och `ProfilePage` behöver också fältet `postId` respektive `userId`.
-Kör sedan `flutter run -d chrome`. Du ska komma till inloggningen, och efter
+Klicka sedan **Build**. Du ska komma till inloggningen, och efter
 inloggningen till den tomma flödessidan.
 
 ## Steg 6 – Inläggskortet

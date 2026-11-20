@@ -6,22 +6,6 @@ Här visar vi bara den kod som är ny eller ändrad. Importerna
 `package:flutter_compositions/flutter_compositions.dart` och ibland
 `package:pocketbase/pocketbase.dart`) är ofta bortplockade för att spara plats.
 
-## Kapitel 1 – Kom igång
-
-**1.1** Efter en hot reload (`Ctrl + S`) byts färgen, men siffran är kvar.
-Efter en hot restart börjar appen om, och siffran blir 0 igen.
-
-**1.2**
-
-```dart
-appBar: AppBar(title: const Text('Kvittra')),
-body: Center(child: Text('Så här många gillar: ${likes.value}')),
-```
-
-**1.3** Du behöver **Flutter**, **Chrome** och **VS Code**. Android toolchain
-och Visual Studio behövs bara om du vill köra appen på en Android-emulator
-eller som Windows-app.
-
 ## Kapitel 2 – Dart-grunder
 
 **2.1**

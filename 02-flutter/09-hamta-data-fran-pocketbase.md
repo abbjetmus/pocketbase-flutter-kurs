@@ -27,11 +27,8 @@ inläggen från modul 01. Låt terminalen vara öppen medan du kör appen.
 ## Paketet pocketbase
 
 PocketBase har ett eget paket för Dart. Det sköter allt prat med servern åt
-dig. Öppna terminalen i VS Code (i projektet `kvittra`) och skriv:
-
-```powershell
-flutter pub add pocketbase
-```
+dig. Lägg till det i projektet `kvittra` under fliken **Pub Commands**: klicka
+**pub add**, skriv `pocketbase` och klicka sedan **pub get**.
 
 Skapa sedan en fil med **en** anslutning som hela appen använder:
 
@@ -42,8 +39,11 @@ import 'package:pocketbase/pocketbase.dart';
 final pb = PocketBase('http://127.0.0.1:8090');
 ```
 
-⚠️ **Android-emulator?** Där betyder `127.0.0.1` emulatorn själv, inte din
-dator. Använd `http://10.0.2.2:8090` i stället. I Chrome fungerar `127.0.0.1`.
+💡 `127.0.0.1` betyder *din egen dator*. Koden skriver du i FlutLab, men appen
+körs i Chrome på din dator. Därför hittar den PocketBase på den adressen.
+
+⚠️ **Frågar Chrome om FlutLab får komma åt enheter i ditt nätverk?** Klicka
+**Tillåt**. Annars kan appen inte prata med din PocketBase.
 
 ## Logga in först
 

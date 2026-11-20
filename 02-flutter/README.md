@@ -14,9 +14,14 @@ följa andra.
 **en** gång, och sedan kan appen köras på Android, iPhone, i webbläsaren och på
 Windows.
 
+I den här modulen kör vi **bara Flutter för webben**. Vi skriver koden i
+[FlutLab](https://flutlab.io/editor), en editor som finns i webbläsaren. Du
+behöver inte installera något, och du ser dina ändringar direkt. Koden är samma
+som i en mobilapp.
+
 ## Det här kan du efter modulen
 
-- Installera Flutter, skapa ett projekt och köra det i Chrome
+- Skapa ett Flutter-projekt i FlutLab och köra det i webbläsaren
 - Skriva enkel Dart-kod: variabler, listor, funktioner och klasser
 - Bygga ett gränssnitt av widgets, till exempel ett kort som visar ett inlägg
 - Förklara hur en `CompositionWidget` fungerar: `setup()` körs en gång, och
@@ -36,7 +41,7 @@ Windows.
 
 | Kapitel | Vad du gör |
 |---------|------------|
-| [01 – Kom igång](01-kom-igang.md) | Installerar Flutter, skapar projektet `kvittra` och kör det i Chrome |
+| [01 – Kom igång](01-kom-igang.md) | Skapar ett konto på FlutLab, skapar projektet `kvittra` och kör det |
 | [02 – Dart-grunder](02-dart-grunder.md) | Lär dig språket Dart och skriver klassen `Post` |
 | [03 – Widgets och layout](03-widgets-och-layout.md) | Bygger ett `PostCard` och ett flöde med inlägg |
 
@@ -70,13 +75,14 @@ Varje kapitel slutar med övningar. Lösningsförslag finns i
 
 ## Det här behöver du
 
-- En Windows-dator (det går lika bra med Mac eller Linux)
-- Internet, för att ladda ner Flutter
+- En Windows-dator
+- Internet
 - Din PocketBase från modul 01, med Kvittras collections (`users`, `posts`,
   `comments`, `likes` och `follows`), testdatan och API-reglerna
 - Webbläsaren **Chrome**. Där kör vi appen under hela modulen, och den når din
   PocketBase på `http://127.0.0.1:8090` direkt
-- VS Code och Flutter, som du installerar i kapitel 1
+- Ett konto på [FlutLab](https://flutlab.io), som du skapar i kapitel 1. Du
+  behöver **inte** installera Flutter eller VS Code
 
 💡 **Kan du lite JavaScript eller Vue?** Då känner du igen mycket. Vi jämför med
 Vue här och där, men du behöver inte kunna det.
@@ -85,7 +91,7 @@ Vue här och där, men du behöver inte kunna det.
 
 | Paket | Används till | Installeras i |
 |-------|--------------|---------------|
-| `flutter_compositions` | Reaktivt state, som i Vue. Vi använder version **0.1.x** | Kapitel 1 |
+| `flutter_compositions` | Reaktivt state, som i Vue. Vi använder version **0.2.6** | Kapitel 1 |
 | `go_router` | Flera sidor i appen | Kapitel 8 |
 | `pocketbase` | Prata med din PocketBase | Kapitel 9 |
 

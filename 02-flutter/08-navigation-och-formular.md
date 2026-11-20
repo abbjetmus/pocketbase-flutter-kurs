@@ -24,11 +24,9 @@ När du går tillbaka tas den översta bort.
 ## go_router
 
 Vi använder paketet **go_router** för att navigera. Där får varje skärm en
-adress, ungefär som sidor på en webbplats. Öppna terminalen i VS Code och skriv:
-
-```powershell
-flutter pub add go_router
-```
+adress, ungefär som sidor på en webbplats. Lägg till paketet under fliken
+**Pub Commands**: klicka **pub add**, skriv `go_router` och klicka sedan
+**pub get**.
 
 Skapa en mapp `lib/screens/` för skärmarna. Flytta `FeedScreen` från
 `main.dart` till `lib/screens/feed_screen.dart`.
@@ -347,8 +345,9 @@ class NewPostScreen extends CompositionWidget {
 Testa: klicka **+**, tryck **Publicera** utan att skriva något, och se
 felmeddelandena. Skriv sedan ett inlägg och publicera det.
 
-💡 Du kan också skriva adressen själv i Chrome. Lägg till `#/posts/p2` sist i
-adressen, till exempel `http://localhost:12345/#/posts/p2`.
+💡 Vill du att appen startar på en annan sida? Lägg till `initialLocation` i
+`GoRouter`, till exempel `initialLocation: '/posts/p2',`. Klicka **Build**, så
+öppnas inlägget direkt. Ta bort raden när du är klar.
 
 ## Övningar
 
@@ -364,8 +363,8 @@ nytt inlägg har lagts till. Ledtråd:
 
 **8.4** Lägg till adressen `/users/:username` och en
 `ProfileScreen(username: ...)`. Den visar `@användarnamn` i `AppBar` och
-användarens inlägg som `PostCard`. Testa genom att skriva `#/users/anna` sist i
-adressen i Chrome.
+användarens inlägg som `PostCard`. Testa genom att lägga till
+`initialLocation: '/users/anna',` i `GoRouter`.
 
 **8.5 Utmaning.** Gör så att man kommer till profilen när man trycker på
 användarnamnet i `PostCard`. Ledtråd: använd `onAuthorTap` från övning 7.2.
