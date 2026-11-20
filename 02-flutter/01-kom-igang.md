@@ -166,7 +166,7 @@ filträdet till vänster. Högerklicka på mappen där filen ska ligga, till exe
 **pubspec.yaml** liknar `package.json` i JavaScript. Där står vilka **paket**
 appen använder. Ett paket är kod som någon annan har skrivit, och du hittar dem
 på <https://pub.dev>. När du klickar **pub add** skrivs paketet in i
-`pubspec.yaml` åt dig. Det gör vi igen i kapitel 8 och 9.
+`pubspec.yaml` åt dig. Det gör vi igen i kapitel 7 och 8.
 
 ## Se vad appen skriver ut
 

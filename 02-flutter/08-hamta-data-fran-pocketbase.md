@@ -1,4 +1,4 @@
-# 9. Hämta data från PocketBase
+# 8. Hämta data från PocketBase
 
 Hittills har alla inlägg varit påhittade och skrivna direkt i koden. Nu hämtar
 vi de riktiga inläggen från **din egen PocketBase**, den Kvittra du byggde i
@@ -45,36 +45,25 @@ körs i Chrome på din dator. Därför hittar den PocketBase på den adressen.
 ⚠️ **Frågar Chrome om FlutLab får komma åt enheter i ditt nätverk?** Klicka
 **Tillåt**. Annars kan appen inte prata med din PocketBase.
 
-## Logga in först
+## Öppna databasen
 
-I modul 01 (kapitel 9) satte du API-regler. För `posts` gäller:
+I modul 01 (kapitel 9) satte du API-regler, så att bara den som är inloggad får
+läsa och skriva. I Flutter-modulen hoppar vi över inloggningen. Därför öppnar vi
+databasen, så att appen får läsa och skriva utan att logga in.
 
-| Regel | Villkor | Betyder |
-|-------|---------|---------|
-| List/Search | `@request.auth.id != ""` | Bara inloggade får se inlägg |
-| View | `@request.auth.id != ""` | |
+Gör så här för **alla fem** collections: `users`, `posts`, `comments`, `likes`
+och `follows`.
 
-Appen måste alltså **logga in** innan den får hämta inlägg. Vi loggar in som
-Anna, med lösenordet från modul 01:
+1. Öppna kugghjulet på collectionen och välj fliken **API Rules**.
+2. Lås upp alla fem regler: **List/Search**, **View**, **Create**, **Update**
+   och **Delete**.
+3. Töm textfältet i varje regel.
+4. Klicka **Save changes**.
 
-```dart
-// lib/data/pocketbase.dart (lägg till)
-Future<void> loginAsAnna() async {
-  if (pb.authStore.isValid) return; // redan inloggad
-  await pb.collection('users').authWithPassword('anna@example.com', 'kvittra123');
-}
-```
+En tom regel betyder att **alla** får göra det.
 
-- `pb.collection('users')` betyder "collectionen `users`".
-- `authWithPassword` loggar in. Sedan skickar paketet med inloggningen i alla
-  frågor, så att API-reglerna släpper igenom dig.
-- `pb.authStore.isValid` är sant när någon är inloggad.
-
-💡 Ett lösenord skrivet direkt i koden är bara okej när man övar. I kapitel 11
-bygger vi en riktig inloggningssida.
-
-⚠️ Du *kan* i stället sätta List-regeln för `posts` till tom. Men då får hela
-internet läsa inläggen. Logga hellre in.
+⚠️ En öppen databas är bara okej på din egen dator när du övar. I en riktig app
+loggar man in och använder regler, som i modul 01.
 
 ## Hur ser ett inlägg ut?
 
@@ -129,7 +118,6 @@ import '../models/post.dart'; // överst i filen
 
 Future<List<Post>> fetchPosts() async {
   try {
-    await loginAsAnna();
     final result = await pb.collection('posts').getList(
       page: 1,
       perPage: 20,
@@ -165,7 +153,6 @@ användaren förstår. `e.statusCode` säger vad som hände:
 // lib/data/pocketbase.dart (lägg till)
 String errorMessage(ClientException e) {
   if (e.statusCode == 0) return 'Kunde inte nå PocketBase. Är den igång?';
-  if (e.statusCode == 400) return 'Inloggningen misslyckades. Stämmer e-post och lösenord?';
   if (e.statusCode == 403) return 'Du får inte se det här. Kontrollera API-reglerna.';
   return 'Något gick fel (${e.statusCode})';
 }
@@ -174,7 +161,7 @@ String errorMessage(ClientException e) {
 | `statusCode` | Betyder |
 |--------------|---------|
 | `0` | Fick inget svar alls. PocketBase är troligen inte igång |
-| `400` | Något var fel i frågan, här: fel e-post eller lösenord |
+| `400` | Något var fel i frågan |
 | `403` | API-regeln säger nej |
 | `404` | Det du frågade efter finns inte |
 
@@ -197,7 +184,7 @@ final (status, refresh) = useAsyncData<List<Post>, void>((_) => fetchPosts());
 ```
 
 `<List<Post>, void>` betyder att du får tillbaka en `List<Post>`. Vad `void`
-betyder och hur `useAsyncData` kan hämta igen av sig själv tar vi i kapitel 12.
+betyder tar vi i kapitel 10.
 
 Ett `AsyncValue` är alltid i ett av fyra lägen:
 
@@ -276,8 +263,7 @@ Gör en hot restart. Först syns snurran en kort stund, sedan inläggen från di
 PocketBase, med det nyaste först.
 
 💡 Står det `@?` i stället för ett användarnamn? Då kom `expand` inte med.
-Kontrollera att View-regeln för `users` släpper in inloggade
-(`@request.auth.id != ""`).
+Kontrollera att View-regeln för `users` är upplåst och tom.
 
 ### useFuture: hämta en gång
 
@@ -295,16 +281,15 @@ om den inte har kommit än.
 
 | Det du ser | Varför |
 |------------|--------|
-| Knappen för nytt inlägg är borta | Att spara nya inlägg i PocketBase gör vi i kapitel 10 och 13 |
-| Trycker du på ett inlägg står det "Inlägget finns inte" | `PostDetailScreen` letar fortfarande i `samplePosts`. Det fixar du i övning 9.3 |
-| Gillningarna visar 0 | `sampleLikes` har påhittade id:n. Riktiga likes kommer i kapitel 13 |
+| Knappen för nytt inlägg är borta | Att spara nya inlägg i PocketBase gör vi i kapitel 9 och 11 |
+| Trycker du på ett inlägg står det "Inlägget finns inte" | `PostDetailScreen` letar fortfarande i `samplePosts`. Det fixar du i övning 8.3 |
+| Gillningarna visar 0 | `sampleLikes` har påhittade id:n. Riktiga likes kommer i kapitel 11 |
 
 ## Sammanfattning
 
 | Du vill … | Använd |
 |-----------|--------|
 | Ansluta till PocketBase | `PocketBase('http://127.0.0.1:8090')` |
-| Logga in | `pb.collection('users').authWithPassword(epost, lösenord)` |
 | Hämta en lista | `pb.collection('posts').getList(...)` |
 | Ta med en relation | `expand: 'author'` |
 | Läsa ett fält | `record.get<String>('title')` |
@@ -314,21 +299,20 @@ om den inte har kommit än.
 
 ## Övningar
 
-**9.1** Öppna <http://127.0.0.1:8090/api/collections/posts/records> i Chrome.
-Vad ser du? Varför syns inga inlägg, fast appen kan visa dem? (Jämför med
-övning 9.1 i modul 01.)
+**8.1** Öppna <http://127.0.0.1:8090/api/collections/posts/records> i Chrome.
+Ser du samma inlägg som i appen? Varför syns de, fast du inte är inloggad?
 
-**9.2** Stoppa PocketBase med `Ctrl + C` i terminalen och gör en hot restart av
+**8.2** Stoppa PocketBase med `Ctrl + C` i terminalen och gör en hot restart av
 appen. Vilket felmeddelande visas? Starta PocketBase igen och tryck på
 **Försök igen**.
 
-**9.3** Skriv en funktion `fetchPost(String id)` i `pocketbase.dart` som hämtar
+**8.3** Skriv en funktion `fetchPost(String id)` i `pocketbase.dart` som hämtar
 ett inlägg med `pb.collection('posts').getOne(id, expand: 'author')`. Ändra
 `PostDetailScreen` så att den visar inlägget med `useFuture`. Ledtråd:
 `useFuture(() => fetchPost(props.raw.postId))`. `.raw` läser värdet en gång,
 utan att bevaka det.
 
-**9.4** Visa inläggets kommentarer under inlägget i `PostDetailScreen`, i
+**8.4** Visa inläggets kommentarer under inlägget i `PostDetailScreen`, i
 stället för `CommentSection`. Ge `Comment` från övning 2.6 en
 `factory Comment.fromRecord`, och skriv `fetchComments(String postId)`. Ledtråd:
 
@@ -340,11 +324,11 @@ pb.collection('comments').getList(
 )
 ```
 
-**9.5 Utmaning.** Gör en `UsersScreen` på adressen `/users` som visar alla
+**8.5 Utmaning.** Gör en `UsersScreen` på adressen `/users` som visar alla
 användare i Kvittra, med `name` som rubrik och `@username` som undertext.
 Ledtråd: `pb.collection('users').getFullList(sort: 'username')` ger en lista
 med alla.
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-9--hämta-data-från-pocketbase).
+Lösningar finns i [losningar.md](losningar.md#kapitel-8--hämta-data-från-pocketbase).
 
-Nästa kapitel: [Skriva data och realtid](10-skriva-data-och-realtid.md)
+Nästa kapitel: [Skriva data och realtid](09-skriva-data-och-realtid.md)

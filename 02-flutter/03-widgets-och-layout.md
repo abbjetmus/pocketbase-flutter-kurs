@@ -186,14 +186,14 @@ lib/
 
 Lägg klassen `Post` med `fromJson` från kapitel 2 i `lib/models/post.dart`.
 
-Sedan några påhittade inlägg. De är samma som i modul 01. I kapitel 9 byter
+Sedan några påhittade inlägg. De är samma som i modul 01. I kapitel 8 byter
 vi ut dem mot riktiga inlägg från din PocketBase.
 
 ```dart
 // lib/data/sample_data.dart
 import '../models/post.dart';
 
-// final och inte const: i kapitel 8 lägger vi till nya inlägg i listan
+// final och inte const: i kapitel 7 lägger vi till nya inlägg i listan
 final samplePosts = [
   Post(id: 'p1', author: 'anna', title: 'Höstpromenad', body: 'Löven har börjat gulna i parken.'),
   Post(id: 'p2', author: 'bertil', title: 'Mitt första surdegsbröd', body: 'Det blev platt men gott!'),
@@ -258,10 +258,32 @@ class PostCard extends CompositionWidget {
   i kapitel 2. Så kan samma kort visa vilket inlägg som helst. Värden som en
   widget får på det här sättet kallas **props**.
 - `widget()` ger dig widgeten själv. `props.value.post` läser propen. Mer om
-  varför i kapitel 7.
+  varför strax nedanför.
 - `username[0]` är första bokstaven i namnet.
 - `useTheme()` hämtar temat. `textTheme` innehåller färdiga textstilar, till
   exempel `titleMedium` för rubriker.
+
+### Varför widget()?
+
+`setup()` körs bara **en** gång. Läser du `post` direkt i `setup()` får du bara
+det första inlägget. Skickar föräldern in ett nytt inlägg syns det inte.
+
+`widget()` ger dig alltid den **senaste** versionen av widgeten. Läs därför
+props med `props.value` inne i builder-funktionen, som i `PostCard`:
+
+```dart
+final props = widget();
+
+return (context) {
+  final post = props.value.post; // ✅ alltid det senaste inlägget
+  // ...
+};
+```
+
+| Vue | Flutter Compositions |
+|-----|----------------------|
+| `defineProps<{ post: Post }>()` | `final Post post;` i klassen |
+| `props.post` | `props.value.post` |
 
 ## Flödet: en lista med kort
 

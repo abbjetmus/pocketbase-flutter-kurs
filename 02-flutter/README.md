@@ -7,8 +7,8 @@ gör att state i Flutter fungerar nästan som i Vue.
 
 Du bygger **Kvittra**, den enkla sociala appen från modul 01. Först med
 påhittade inlägg, sedan mot din egen PocketBase. I slutet av modulen har du en
-hel app där man kan logga in, läsa flödet, skriva inlägg, kommentera, gilla och
-följa andra.
+enkel app som du kan visa upp: man kan läsa flödet, gilla, skriva inlägg och
+kommentera.
 
 **Flutter** är ett verktyg från Google för att bygga appar. Du skriver koden
 **en** gång, och sedan kan appen köras på Android, iPhone, i webbläsaren och på
@@ -26,14 +26,13 @@ som i en mobilapp.
 - Bygga ett gränssnitt av widgets, till exempel ett kort som visar ett inlägg
 - Förklara hur en `CompositionWidget` fungerar: `setup()` körs en gång, och
   builder-funktionen körs om när något ändras
-- Använda `ref`, `computed`, `watch` och `watchEffect`
+- Ta emot props med `widget()`
+- Använda `ref`, ändra listor och göra ett textfält
 - Använda `onMounted` och `onUnmounted`, till exempel för en timer
-- Ta emot props med `widget()` och skriva en egen composable
 - Navigera mellan skärmar och bygga ett formulär med kontroll av det man skriver
-- Logga in och hämta, skapa och ta bort data i PocketBase från Flutter
-- Dela PocketBase och den inloggade användaren med `provide` och `inject`
+- Hämta, skapa och ta bort data i PocketBase från Flutter
 - Visa laddning, fel och data med `useAsyncData` och `AsyncValue`
-- Bygga en hel liten app med flera sidor
+- Bygga en liten app med tre sidor
 
 ## Upplägg
 
@@ -43,32 +42,30 @@ som i en mobilapp.
 |---------|------------|
 | [01 – Kom igång](01-kom-igang.md) | Skapar ett konto på FlutLab, skapar projektet `kvittra` och kör det |
 | [02 – Dart-grunder](02-dart-grunder.md) | Lär dig språket Dart och skriver klassen `Post` |
-| [03 – Widgets och layout](03-widgets-och-layout.md) | Bygger ett `PostCard` och ett flöde med inlägg |
+| [03 – Widgets och layout](03-widgets-och-layout.md) | Bygger ett `PostCard` med props och ett flöde med inlägg |
 
 ### Del 2 – State
 
 | Kapitel | Vad du gör |
 |---------|------------|
 | [04 – State och interaktion](04-state-och-interaktion.md) | Gör en gilla-knapp och lär dig hur en `CompositionWidget` fungerar |
-| [05 – ref och computed](05-ref-och-computed.md) | Lär dig reaktivt state och bygger ett flöde med filter och sök |
-| [06 – watch och livscykel](06-watch-och-livscykel.md) | Reagerar på ändringar och startar och stoppar en timer |
-| [07 – Props och composables](07-props-och-composables.md) | Bygger ut inläggskortet, gör ett kommentarsfält och en egen composable |
-| [08 – Navigation och formulär](08-navigation-och-formular.md) | Lägger till fler skärmar och ett formulär för nya inlägg |
+| [05 – ref och listor](05-ref-och-listor.md) | Lär dig mer om `ref` och listor, bygger ett flöde med filter och sök och gör ett kommentarsfält |
+| [06 – Livscykel](06-livscykel.md) | Startar och stoppar en timer med `onMounted` och `onUnmounted` |
+| [07 – Navigation och formulär](07-navigation-och-formular.md) | Lägger till fler skärmar och ett formulär för nya inlägg |
 
 ### Del 3 – Prata med PocketBase
 
 | Kapitel | Vad du gör |
 |---------|------------|
-| [09 – Hämta data från PocketBase](09-hamta-data-fran-pocketbase.md) | Loggar in och hämtar Kvittras inlägg från din PocketBase |
-| [10 – Skriva data och realtid](10-skriva-data-och-realtid.md) | Filtrerar, skapar, ändrar och tar bort data, och lyssnar på ändringar |
-| [11 – Provide och inject](11-provide-inject.md) | Delar PocketBase och den inloggade användaren med hela appen |
-| [12 – Ladda om och realtid](12-ladda-om-och-realtid.md) | Hämtar igen när något ändras, visar kommentarer i realtid och gör gilla-knappen snabb |
+| [08 – Hämta data från PocketBase](08-hamta-data-fran-pocketbase.md) | Öppnar databasen och hämtar Kvittras inlägg från din PocketBase |
+| [09 – Skriva data och realtid](09-skriva-data-och-realtid.md) | Filtrerar, skapar, ändrar och tar bort data, och lyssnar på ändringar |
+| [10 – Ladda om och realtid](10-ladda-om-och-realtid.md) | Laddar om, visar kommentarer i realtid och gör gilla-knappen snabb |
 
 ### Del 4 – Bygg appen
 
 | Kapitel | Vad du gör |
 |---------|------------|
-| [13 – Bygg Kvittra-appen](13-bygg-kvittra-appen.md) | Bygger hela appen steg för steg |
+| [11 – Bygg Kvittra-appen](11-bygg-kvittra-appen.md) | Bygger ihop en enkel app med tre sidor som du kan visa upp |
 
 Varje kapitel slutar med övningar. Lösningsförslag finns i
 [losningar.md](losningar.md). Försök själv först!
@@ -78,7 +75,8 @@ Varje kapitel slutar med övningar. Lösningsförslag finns i
 - En Windows-dator
 - Internet
 - Din PocketBase från modul 01, med Kvittras collections (`users`, `posts`,
-  `comments`, `likes` och `follows`), testdatan och API-reglerna
+  `comments`, `likes` och `follows`) och testdatan. API-reglerna öppnar du i
+  kapitel 8, så att appen inte behöver logga in
 - Webbläsaren **Chrome**. Där kör vi appen under hela modulen, och den når din
   PocketBase på `http://127.0.0.1:8090` direkt
 - Ett konto på [FlutLab](https://flutlab.io), som du skapar i kapitel 1. Du
@@ -92,8 +90,8 @@ Vue här och där, men du behöver inte kunna det.
 | Paket | Används till | Installeras i |
 |-------|--------------|---------------|
 | `flutter_compositions` | Reaktivt state, som i Vue. Vi använder version **0.2.6** | Kapitel 1 |
-| `go_router` | Flera sidor i appen | Kapitel 8 |
-| `pocketbase` | Prata med din PocketBase | Kapitel 9 |
+| `go_router` | Flera sidor i appen | Kapitel 7 |
+| `pocketbase` | Prata med din PocketBase | Kapitel 8 |
 
 ## Snabbreferens
 
@@ -101,12 +99,10 @@ Vue här och där, men du behöver inte kunna det.
 |-----------|-------|
 | Skapa state | `final n = ref(0);` |
 | Läsa och ändra state | `n.value` och `n.value++` |
-| Räkna fram ett värde | `final dubbel = computed(() => n.value * 2);` |
-| Göra något när ett värde ändras | `watch(() => n.value, (nytt, gammalt) { … });` |
+| Räkna fram ett värde | Direkt i builder-funktionen: `Text('${n.value * 2}')` |
 | Köra kod när widgeten visas och försvinner | `onMounted(() { … });` och `onUnmounted(() { … });` |
 | Läsa props | `final props = widget();` och `props.value.title` |
 | Textfält | `final (controller, text, _) = useTextEditingController();` |
-| Dela något med hela appen | `provide(key, värde);` och `inject(key);` |
 | Hämta data | `final (status, refresh) = useAsyncData(…);` |
 
 Nästa kapitel: [Kom igång](01-kom-igang.md)

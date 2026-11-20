@@ -1,4 +1,4 @@
-# 8. Navigation och formulär
+# 7. Navigation och formulär
 
 En riktig app har flera skärmar. I det här kapitlet får Kvittra tre:
 
@@ -128,7 +128,7 @@ Post? findPost(String id) {
 }
 ```
 
-Sedan skärmen. Den visar kortet överst och `CommentSection` från kapitel 7
+Sedan skärmen. Den visar kortet överst och `CommentSection` från kapitel 5
 under:
 
 ```dart
@@ -148,10 +148,8 @@ class PostDetailScreen extends CompositionWidget {
   @override
   Widget Function(BuildContext) setup() {
     final props = widget();
-    final found = computed(() => findPost(props.value.postId));
-
     return (context) {
-      final post = found.value;
+      final post = findPost(props.value.postId);
 
       if (post == null) {
         return Scaffold(
@@ -173,6 +171,40 @@ class PostDetailScreen extends CompositionWidget {
   }
 }
 ```
+
+## Gör kortet klickbart
+
+När man trycker på ett kort ska inlägget öppnas. Men det är **flödet** som vet
+vart man ska, inte kortet. Därför får `PostCard` en ny prop, `onTap`, som är en
+funktion. Föräldern skickar in vad som ska hända.
+
+Ändra början av `PostCard` och lägg ett `InkWell` runt `Padding`:
+
+```dart
+// lib/widgets/post_card.dart (ändra)
+class PostCard extends CompositionWidget {
+  const PostCard({super.key, required this.post, this.onTap});
+
+  final Post post;
+  final VoidCallback? onTap; // en funktion som föräldern skickar in
+```
+
+```dart
+      return Card(
+        child: InkWell(
+          onTap: props.value.onTap, // anropas när man trycker på kortet
+          child: Padding(
+            // ... samma som förut
+          ),
+        ),
+      );
+```
+
+- `VoidCallback` betyder "en funktion som inte tar några parametrar".
+- `InkWell` gör en yta klickbar.
+- `?` betyder att `onTap` får saknas. Då går kortet inte att trycka på.
+
+💡 Kan du Vue? En callback-prop fungerar som `emit` i Vue.
 
 ## Flödet
 
@@ -351,24 +383,21 @@ felmeddelandena. Skriv sedan ett inlägg och publicera det.
 
 ## Övningar
 
-**8.1** Lägg till en knapp **Avbryt** (`TextButton`) under **Publicera** i
+**7.1** Lägg till en knapp **Avbryt** (`TextButton`) under **Publicera** i
 formuläret. Den ska stänga formuläret utan att skapa något inlägg.
 
-**8.2** Rubriken får vara högst 60 tecken. Lägg till det i `validateTitle` med
+**7.2** Rubriken får vara högst 60 tecken. Lägg till det i `validateTitle` med
 felmeddelandet `Högst 60 tecken`.
 
-**8.3** Visa en `SnackBar` med texten `Inlägget är publicerat` i flödet när ett
+**7.3** Visa en `SnackBar` med texten `Inlägget är publicerat` i flödet när ett
 nytt inlägg har lagts till. Ledtråd:
 `ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('...')));`
 
-**8.4** Lägg till adressen `/users/:username` och en
+**7.4** Lägg till adressen `/users/:username` och en
 `ProfileScreen(username: ...)`. Den visar `@användarnamn` i `AppBar` och
 användarens inlägg som `PostCard`. Testa genom att lägga till
 `initialLocation: '/users/anna',` i `GoRouter`.
 
-**8.5 Utmaning.** Gör så att man kommer till profilen när man trycker på
-användarnamnet i `PostCard`. Ledtråd: använd `onAuthorTap` från övning 7.2.
+Lösningar finns i [losningar.md](losningar.md#kapitel-7--navigation-och-formulär).
 
-Lösningar finns i [losningar.md](losningar.md#kapitel-8--navigation-och-formulär).
-
-Nästa kapitel: [Hämta data från PocketBase](09-hamta-data-fran-pocketbase.md)
+Nästa kapitel: [Hämta data från PocketBase](08-hamta-data-fran-pocketbase.md)

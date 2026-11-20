@@ -48,22 +48,17 @@ class LikeButton extends CompositionWidget {
     // 1. State
     final liked = ref(false);
 
-    // 2. Ett värde som räknas fram av sig själv
-    final count = computed(
-      () => props.value.initialLikes + (liked.value ? 1 : 0),
-    );
-
-    // 3. En vanlig funktion
+    // 2. En vanlig funktion
     void toggle() => liked.value = !liked.value;
 
-    // 4. Builder-funktionen ritar UI:t
+    // 3. Builder-funktionen ritar UI:t
     return (context) => TextButton.icon(
           onPressed: toggle,
           icon: Icon(
             liked.value ? Icons.favorite : Icons.favorite_border,
             color: liked.value ? Colors.red : null,
           ),
-          label: Text('${count.value}'),
+          label: Text('${props.value.initialLikes + (liked.value ? 1 : 0)}'),
         );
   }
 }
@@ -74,7 +69,7 @@ Det här är nytt:
 | Ord | Betyder |
 |-----|---------|
 | `ref(false)` | En "låda" med ett värde. Du läser och ändrar det med `.value` |
-| `computed(...)` | Ett värde som räknas fram av andra värden |
+| `initialLikes + (liked.value ? 1 : 0)` | Antalet räknas fram varje gång builder-funktionen körs |
 | `liked.value ? a : b` | Om `liked.value` är sant, ta `a`, annars `b`. Det fungerar som i JavaScript |
 
 ### Sätt knappen i PostCard
@@ -103,7 +98,7 @@ Det här är det viktigaste i hela modulen:
         ▼
   ┌─────────────────────────────┐
   │ setup()   körs EN gång      │
-  │  • skapar ref och computed  │
+  │  • skapar ref               │
   │  • returnerar builder ──┐   │
   └─────────────────────────┼───┘
                             ▼
@@ -136,17 +131,15 @@ Då känner du igen nästan allt. Flutter Compositions bygger på Vue 3:s
 | `<template>` | builder-funktionen `(context) => ...` | 3 |
 | `const n = ref(0)` | `final n = ref(0);` | 5 |
 | `{{ n }}` i template | `Text('${n.value}')`, **alltid** `.value` | 5 |
-| `computed(() => ...)` | `computed(() => ...)` | 5 |
-| `watch` / `watchEffect` | `watch` / `watchEffect` | 6 |
+| `computed(() => ...)` | en uträkning i builder-funktionen | 5 |
 | `onMounted` / `onUnmounted` | `onMounted` / `onUnmounted` | 6 |
-| `defineProps` | fält i klassen + `widget()` | 7 |
-| `v-model` | `useTextEditingController()` | 7 |
-| `provide` / `inject` | `provide` / `inject` med `InjectionKey` | 11 |
+| `defineProps` | fält i klassen + `widget()` | 3 |
+| `v-model` | `useTextEditingController()` | 5 |
 | `v-if` / `v-for` | `if` / `for` i en lista med widgets | 5 |
 
 ⚠️ **Den största skillnaden:** I Vue packar templaten upp `ref` åt dig. I Dart
 gör ingen det. Skriver du `Text('$count')` i stället för
-`Text('${count.value}')` står det något i stil med `Instance of 'ComputedRef<int>'`
+`Text('${count.value}')` står det något i stil med `Instance of 'Ref<int>'`
 på skärmen.
 
 ## Regler att komma ihåg
@@ -156,11 +149,11 @@ kommer.
 
 | # | Regel | Varför |
 |---|-------|--------|
-| 1 | `setup()` körs **en gång** och får **aldrig** vara `async` | Den måste returnera builder-funktionen direkt. Hämta data med `onMounted` eller `useAsyncData` (kapitel 6 och 9) |
+| 1 | `setup()` körs **en gång** och får **aldrig** vara `async` | Den måste returnera builder-funktionen direkt. Hämta data med `onMounted` eller `useAsyncData` (kapitel 6 och 8) |
 | 2 | Läs och skriv alltid med **`.value`**. Skapa `ref` i `setup()`, **aldrig** i builder-funktionen | Builder-funktionen körs många gånger. En `ref` där skulle börja om från början varje gång |
 | 3 | **Ersätt** listor, ändra dem inte | `posts.value.add(x)` märks inte. Skriv `posts.value = [...posts.value, x]` (kapitel 5) |
-| 4 | Anropa `ref`, `computed`, `watch`, `onMounted`, `use...` och `inject` **direkt i `setup()`** | Inte i en `if`, inte i en knapp och inte inuti `onMounted` |
-| 5 | Läs props med **`widget()`** och temat med **`useTheme()`** | Annars ser du bara det första värdet (kapitel 7) |
+| 4 | Anropa `ref`, `onMounted`, `onUnmounted` och `use...` **direkt i `setup()`** | Inte i en `if`, inte i en knapp och inte inuti `onMounted` |
+| 5 | Läs props med **`widget()`** och temat med **`useTheme()`** | Annars ser du bara det första värdet (kapitel 3) |
 
 ## Övningar
 
@@ -170,8 +163,7 @@ olika kort. Vad händer med siffrorna?
 **4.2** Skriv en `CompositionWidget` som heter `FollowButton`. Den ska ha en
 `ref` `following` (`false` från början) och en `ref` `followers` (`12` från
 början). När man trycker på knappen ska `following` växla, och `followers` öka
-eller minska med 1. Knappen ska visa texten "Följ" eller "Sluta följa". Använd
-en `computed` för texten.
+eller minska med 1. Knappen ska visa texten "Följ" eller "Sluta följa".
 
 **4.3** Ändra builder-funktionen i `FollowButton` så att den har en
 block-kropp, och lägg till `debugPrint('builder körs')` först:
@@ -219,4 +211,4 @@ class TagList extends CompositionWidget {
 
 Lösningar finns i [losningar.md](losningar.md#kapitel-4--state-och-interaktion).
 
-Nästa kapitel: [ref och computed](05-ref-och-computed.md)
+Nästa kapitel: [ref och listor](05-ref-och-listor.md)
