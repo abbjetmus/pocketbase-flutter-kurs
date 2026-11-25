@@ -67,7 +67,7 @@ class KvittraApp extends CompositionWidget {
 kapitel 4 skapar vi data som kan ändras där.
 
 💡 `const` framför en widget betyder att den aldrig ändras. Då slipper Flutter
-bygga om den. FlutLab föreslår ofta var du kan lägga till `const`.
+bygga om den. VS Code föreslår ofta var du kan lägga till `const`.
 
 ## Vanliga widgets
 

@@ -57,8 +57,8 @@ byt `void main()` mot den här raden:
 void main() => runApp(const MaterialApp(home: PbTestPage()));
 ```
 
-Klicka **Build**. Nu visar appen bara knappen **Kör**. Det som skrivs ut med
-`debugPrint` syns i konsolen (`F12` → **Console**).
+Starta appen med `F5`. Nu visar appen bara knappen **Kör**. Det som skrivs ut
+med `debugPrint` syns i **Debug Console** i VS Code.
 
 💡 Spara den gamla `void main()`-raden som en kommentar (`//` först), så kan du
 byta tillbaka. I kapitel 11 börjar vi på ett nytt projekt.

@@ -27,20 +27,13 @@ inläggen från modul 01. Låt terminalen vara öppen medan du kör appen.
 ## Paketet pocketbase
 
 PocketBase har ett eget paket för Dart. Det sköter allt prat med servern åt
-dig. Lägg till det i projektet `kvittra`, precis som `go_router` i kapitel 7:
+dig. Stoppa appen och skriv i terminalen i projektet `kvittra`:
 
-1. Välj fliken **Pub Commands** i panelen längst ner.
-2. Klicka **pub add** och skriv:
+```powershell
+flutter pub add pocketbase
+```
 
-   ```
-   pocketbase
-   ```
-
-3. Klicka **pub get**. Vänta tills det står **Process finished successfully**.
-4. Klicka **Build**.
-
-💡 **Använder du VS Code?** Skriv `flutter pub add pocketbase` i terminalen i
-stället.
+Starta sedan appen igen med `F5`.
 
 Skapa sedan en fil med **en** anslutning som hela appen använder:
 
@@ -51,11 +44,8 @@ import 'package:pocketbase/pocketbase.dart';
 final pb = PocketBase('http://127.0.0.1:8090');
 ```
 
-💡 `127.0.0.1` betyder *din egen dator*. Koden skriver du i FlutLab, men appen
-körs i Chrome på din dator. Därför hittar den PocketBase på den adressen.
-
-⚠️ **Frågar Chrome om FlutLab får komma åt enheter i ditt nätverk?** Klicka
-**Tillåt**. Annars kan appen inte prata med din PocketBase.
+💡 `127.0.0.1` betyder *din egen dator*. Både appen och PocketBase körs på din
+dator, så appen hittar PocketBase på den adressen.
 
 ## Öppna databasen
 

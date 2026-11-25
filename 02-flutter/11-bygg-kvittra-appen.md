@@ -501,7 +501,7 @@ Future<void> publish(BuildContext context) async {
 
 ## Steg 6 – Testa
 
-Klicka **Build** och gå igenom listan. Fungerar allt?
+Starta appen med `F5` och gå igenom listan. Fungerar allt?
 
 - [ ] Flödet visar inläggen från modul 01, nyaste först.
 - [ ] Hjärtat ändras direkt, och antalet stämmer med Dashboard.

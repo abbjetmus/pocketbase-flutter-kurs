@@ -131,7 +131,7 @@ hand om fel.
 ## Övningar
 
 **6.1** Bygg `ReadingTimer` och `TimerPage`. Slå av och på switchen och titta i
-konsolen (`F12` → **Console**). Börjar sekunderna om från 0 när timern visas
+**Debug Console** i VS Code. Börjar sekunderna om från 0 när timern visas
 igen? Varför?
 
 **6.2** Ta bort `onUnmounted` från `ReadingTimer` och lägg till

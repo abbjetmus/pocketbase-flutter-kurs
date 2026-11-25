@@ -14,14 +14,14 @@ kommentera.
 **en** gång, och sedan kan appen köras på Android, iPhone, i webbläsaren och på
 Windows.
 
-I den här modulen kör vi **bara Flutter för webben**. Vi skriver koden i
-[FlutLab](https://flutlab.io/editor), en editor som finns i webbläsaren. Du
-behöver inte installera något, och du ser dina ändringar direkt. Koden är samma
-som i en mobilapp.
+I den här modulen kör vi **bara Flutter för webben**. Du skriver koden i VS Code
+på din egen dator och kör appen i Chrome. Din PocketBase körs också på din
+dator. Du behöver inte Android Studio, och du ser dina ändringar direkt. Koden
+är samma som i en mobilapp.
 
 ## Det här kan du efter modulen
 
-- Skapa ett Flutter-projekt i FlutLab och köra det i webbläsaren
+- Installera Flutter, skapa ett projekt och köra det i Chrome
 - Skriva enkel Dart-kod: variabler, listor, funktioner och klasser
 - Bygga ett gränssnitt av widgets, till exempel ett kort som visar ett inlägg
 - Förklara hur en `CompositionWidget` fungerar: `setup()` körs en gång, och
@@ -40,7 +40,7 @@ som i en mobilapp.
 
 | Kapitel | Vad du gör |
 |---------|------------|
-| [01 – Kom igång](01-kom-igang.md) | Skapar ett konto på FlutLab, skapar projektet `kvittra` och kör det |
+| [01 – Kom igång](01-kom-igang.md) | Installerar Flutter, skapar projektet `kvittra` och kör det i Chrome |
 | [02 – Dart-grunder](02-dart-grunder.md) | Lär dig språket Dart och skriver klassen `Post` |
 | [03 – Widgets och layout](03-widgets-och-layout.md) | Bygger ett `PostCard` med props och ett flöde med inlägg |
 
@@ -73,14 +73,14 @@ Varje kapitel slutar med övningar. Lösningsförslag finns i
 ## Det här behöver du
 
 - En Windows-dator
-- Internet
+- Internet, för att ladda ner Flutter
 - Din PocketBase från modul 01, med Kvittras collections (`users`, `posts`,
   `comments`, `likes` och `follows`) och testdatan. API-reglerna öppnar du i
   kapitel 8, så att appen inte behöver logga in
 - Webbläsaren **Chrome**. Där kör vi appen under hela modulen, och den når din
   PocketBase på `http://127.0.0.1:8090` direkt
-- Ett konto på [FlutLab](https://flutlab.io), som du skapar i kapitel 1. Du
-  behöver **inte** installera Flutter eller VS Code
+- VS Code, Git och Flutter, som du installerar i kapitel 1. Du behöver **inte**
+  Android Studio eller Visual Studio
 
 💡 **Kan du lite JavaScript eller Vue?** Då känner du igen mycket. Vi jämför med
 Vue här och där, men du behöver inte kunna det.

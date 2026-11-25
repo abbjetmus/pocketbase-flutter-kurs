@@ -28,23 +28,16 @@ adress, ungefär som sidor på en webbplats.
 
 ### Installera go_router
 
-Lägg till paketet i panelen längst ner i FlutLab, precis som
-`flutter_compositions` i kapitel 1:
+Stoppa appen och skriv i terminalen, precis som med `flutter_compositions` i
+kapitel 1:
 
-1. Välj fliken **Pub Commands**.
-2. Klicka **pub add** och skriv:
-
-   ```
-   go_router
-   ```
-
-3. Klicka **pub get**. Vänta tills det står **Process finished successfully**.
-4. Klicka **Build**. Hot reload räcker inte när du har lagt till ett paket.
+```powershell
+flutter pub add go_router
+```
 
 Öppna `pubspec.yaml`. Under `dependencies:` står nu en rad med `go_router`.
-
-💡 **Använder du VS Code?** Skriv `flutter pub add go_router` i terminalen i
-stället.
+Starta appen igen med `F5`. Hot reload räcker inte när du har lagt till ett
+paket.
 
 I varje fil där du använder go_router skriver du den här raden överst:
 
@@ -403,9 +396,8 @@ class NewPostScreen extends CompositionWidget {
 Testa: klicka **+**, tryck **Publicera** utan att skriva något, och se
 felmeddelandena. Skriv sedan ett inlägg och publicera det.
 
-💡 Vill du att appen startar på en annan sida? Lägg till `initialLocation` i
-`GoRouter`, till exempel `initialLocation: '/posts/p2',`. Klicka **Build**, så
-öppnas inlägget direkt. Ta bort raden när du är klar.
+💡 Du kan också skriva adressen själv i Chrome. Lägg till `#/posts/p2` sist i
+adressen, till exempel `http://localhost:12345/#/posts/p2`.
 
 ## Övningar
 
@@ -421,8 +413,8 @@ nytt inlägg har lagts till. Ledtråd:
 
 **7.4** Lägg till adressen `/users/:username` och en
 `ProfileScreen(username: ...)`. Den visar `@användarnamn` i `AppBar` och
-användarens inlägg som `PostCard`. Testa genom att lägga till
-`initialLocation: '/users/anna',` i `GoRouter`.
+användarens inlägg som `PostCard`. Testa genom att skriva `#/users/anna` sist i
+adressen i Chrome.
 
 Lösningar finns i [losningar.md](losningar.md#kapitel-7--navigation-och-formulär).
 
