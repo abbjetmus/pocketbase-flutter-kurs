@@ -174,6 +174,54 @@ Med `print` och `debugPrint` kan appen skriva ut text, till exempel för att du
 ska se vad som händer. Texten syns i Chromes **konsol**. Tryck `F12` och välj
 fliken **Console**.
 
+## Alternativ: Flutter för webben i VS Code
+
+Vill du hellre skriva koden i **VS Code** på din egen dator? Det går också. Du
+behöver bara Flutter för webben, så du behöver **inte** Android Studio eller
+Visual Studio.
+
+1. **Installera tillägget Flutter.** Öppna VS Code och klicka på
+   **Extensions** till vänster (fyra rutor), eller tryck `Ctrl + Shift + X`.
+   Sök på **Flutter** och klicka **Install** på tillägget från *Dart Code*.
+2. **Skapa ett projekt.** Tryck `Ctrl + Shift + P` och skriv
+   `Flutter: New Project`. VS Code säger att den inte hittar Flutter. Klicka
+   **Download SDK** och välj en mapp, till exempel `C:\Users\dittnamn\dev`.
+3. **Lägg Flutter i PATH.** När nedladdningen är klar frågar VS Code om
+   Flutter ska läggas i **PATH**. Klicka **Add SDK to PATH**. Då hittar
+   terminalen kommandot `flutter`.
+4. **Starta om VS Code.** Stäng VS Code och öppna det igen.
+5. **Skapa projektet igen.** Tryck `Ctrl + Shift + P`, välj
+   `Flutter: New Project` och sedan **Application**. Välj en mapp och skriv
+   namnet `kvittra`.
+6. **Välj Chrome.** Längst ner till höger i VS Code står vilken enhet appen
+   körs på. Klicka där och välj **Chrome**.
+7. **Kör appen.** Tryck `F5`. Efter en stund öppnas Chrome med exempelappen.
+8. **Lägg till paketet.** Öppna en terminal med **Terminal → New Terminal** och
+   skriv:
+
+   ```powershell
+   flutter pub add flutter_compositions:^0.2.6
+   ```
+
+Sedan gör du som i steg 4 ovan: byt ut koden i `lib/main.dart` och tryck `F5`.
+
+⚠️ **Välj en enkel mapp för Flutter.** Den får inte ligga i
+`C:\Program Files`, och sökvägen ska inte innehålla mellanslag eller å, ä, ö.
+
+💡 Säger VS Code att **Git** saknas? Installera **Git for Windows** från
+<https://git-scm.com/downloads/win> och klicka **Next** på alla frågor. Starta
+sedan om VS Code.
+
+Resten av kursen beskriver knapparna i FlutLab. I VS Code gör du så här:
+
+| I FlutLab | I VS Code |
+|-----------|-----------|
+| **Build** | `F5` |
+| **Hot Reload** | Spara filen med `Ctrl + S` |
+| **Build** igen (hot restart) | Den gröna runda pilen högst upp |
+| **Pub Commands** → **pub add** → **pub get** | `flutter pub add namn` i terminalen |
+| Högerklicka i filträdet | Högerklicka i **Explorer** till vänster |
+
 ## Kom ihåg
 
 | Du vill … | Gör så här |
