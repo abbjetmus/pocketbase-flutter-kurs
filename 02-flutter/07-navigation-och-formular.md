@@ -110,10 +110,10 @@ class KvittraApp extends CompositionWidget {
   @override
   Widget Function(BuildContext) setup() {
     return (context) => MaterialApp.router(
-          title: 'Kvittra',
-          theme: ThemeData(colorSchemeSeed: Colors.indigo),
-          routerConfig: router,
-        );
+      title: 'Kvittra',
+      theme: ThemeData(colorSchemeSeed: Colors.indigo),
+      routerConfig: router,
+    );
   }
 }
 ```
