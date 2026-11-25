@@ -27,8 +27,20 @@ inläggen från modul 01. Låt terminalen vara öppen medan du kör appen.
 ## Paketet pocketbase
 
 PocketBase har ett eget paket för Dart. Det sköter allt prat med servern åt
-dig. Lägg till det i projektet `kvittra` under fliken **Pub Commands**: klicka
-**pub add**, skriv `pocketbase` och klicka sedan **pub get**.
+dig. Lägg till det i projektet `kvittra`, precis som `go_router` i kapitel 7:
+
+1. Välj fliken **Pub Commands** i panelen längst ner.
+2. Klicka **pub add** och skriv:
+
+   ```
+   pocketbase
+   ```
+
+3. Klicka **pub get**. Vänta tills det står **Process finished successfully**.
+4. Klicka **Build**.
+
+💡 **Använder du VS Code?** Skriv `flutter pub add pocketbase` i terminalen i
+stället.
 
 Skapa sedan en fil med **en** anslutning som hela appen använder:
 

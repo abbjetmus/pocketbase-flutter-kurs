@@ -24,9 +24,35 @@ När du går tillbaka tas den översta bort.
 ## go_router
 
 Vi använder paketet **go_router** för att navigera. Där får varje skärm en
-adress, ungefär som sidor på en webbplats. Lägg till paketet under fliken
-**Pub Commands**: klicka **pub add**, skriv `go_router` och klicka sedan
-**pub get**.
+adress, ungefär som sidor på en webbplats.
+
+### Installera go_router
+
+Lägg till paketet i panelen längst ner i FlutLab, precis som
+`flutter_compositions` i kapitel 1:
+
+1. Välj fliken **Pub Commands**.
+2. Klicka **pub add** och skriv:
+
+   ```
+   go_router
+   ```
+
+3. Klicka **pub get**. Vänta tills det står **Process finished successfully**.
+4. Klicka **Build**. Hot reload räcker inte när du har lagt till ett paket.
+
+Öppna `pubspec.yaml`. Under `dependencies:` står nu en rad med `go_router`.
+
+💡 **Använder du VS Code?** Skriv `flutter pub add go_router` i terminalen i
+stället.
+
+I varje fil där du använder go_router skriver du den här raden överst:
+
+```dart
+import 'package:go_router/go_router.dart';
+```
+
+### Skärmarna får egna filer
 
 Skapa en mapp `lib/screens/` för skärmarna. Flytta `FeedScreen` från
 `main.dart` till `lib/screens/feed_screen.dart`.
