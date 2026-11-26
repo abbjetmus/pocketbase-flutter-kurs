@@ -79,7 +79,7 @@ Varje kapitel slutar med övningar. Lösningsförslag finns i
   kapitel 8, så att appen inte behöver logga in
 - Webbläsaren **Chrome**. Där kör vi appen under hela modulen, och den når din
   PocketBase på `http://127.0.0.1:8090` direkt
-- VS Code, Git och Flutter, som du installerar i kapitel 1. Du behöver **inte**
+- VS Code och Flutter, som du installerar i kapitel 1. Du behöver **inte**
   Android Studio eller Visual Studio
 
 💡 **Kan du lite JavaScript eller Vue?** Då känner du igen mycket. Vi jämför med

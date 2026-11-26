@@ -30,14 +30,10 @@ din egen dator, och appen körs i **Chrome**. Det har tre fördelar:
 Koden du skriver är samma som i en mobilapp. Vill du senare köra appen på en
 telefon behöver du inte skriva om den.
 
-## Steg 1 – Installera Git, VS Code och Chrome
+## Steg 1 – Installera VS Code och Chrome
 
-Flutter behöver programmet **Git** för att laddas ner.
-
-1. Ladda ner och installera **Git for Windows** från <https://git-scm.com/downloads/win>.
-   Du kan klicka **Next** på alla frågor.
-2. Ladda ner och installera **VS Code** från <https://code.visualstudio.com/>.
-3. Har du inte **Chrome** installerar du det från <https://www.google.com/chrome/>.
+1. Ladda ner och installera **VS Code** från <https://code.visualstudio.com/>.
+2. Har du inte **Chrome** installerar du det från <https://www.google.com/chrome/>.
 
 ## Steg 2 – Installera tillägget Flutter
 
